@@ -64,6 +64,17 @@ Get Free API: [Try API](https://memos-dashboard.openmem.net/quickstart/?source=g
 
 <br>
 
+## 🦞 Enhanced OpenClaw with MemOS Plugin
+![](https://cdn.memtensor.com.cn/img/1770612303123_mnaisk_compressed.png)
+
+- [**72% lower token usage**](https://x.com/MemOS_dev/status/2020854044583924111) – intelligent memory retrieval instead of loading full chat history
+- [**Multi-agent memory sharing**](https://x.com/MemOS_dev/status/2020538135487062094) – multi-instance agents share memory via same user_id. Automatic context handoff.  
+
+🦞 Your lobster now has a working memory system.
+
+Get your API key: [MemOS Dashboard](https://memos-dashboard.openmem.net/cn/login/)  
+Try it: Full tutorial → [MemOS-Cloud-OpenClaw-Plugin](https://github.com/MemTensor/MemOS-Cloud-OpenClaw-Plugin)
+
 ## 📌 MemOS: Memory Operating System for AI Agents
 
 **MemOS** is a Memory Operating System for LLMs and AI agents that unifies **store / retrieve / manage** for long-term memory, enabling **context-aware and personalized** interactions with **KB**, **multi-modal**, **tool memory**, and **enterprise-grade** optimizations built in.
