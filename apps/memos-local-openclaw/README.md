@@ -1,0 +1,579 @@
+# 🧠 MemOS — OpenClaw Memory Plugin
+
+Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/openclaw) AI Agents. Every conversation is automatically captured, semantically indexed, and instantly recallable — with **task summarization & skill evolution**, and **multi-agent collaborative memory**.
+
+**Full-write | Hybrid Search | Task Summarization & Skill Evolution | Multi-Agent Collaboration | Memory Viewer**
+
+## Why MemOS
+
+| Problem | Solution |
+|---------|----------|
+| Agent forgets everything between sessions | **Persistent memory** — every conversation auto-captured to local SQLite |
+| Fragmented context, repeated mistakes | **Task summarization & skill evolution** — conversations organized into structured tasks, then distilled into reusable skills that auto-upgrade |
+| Multi-agent teams work in isolation | **Multi-agent collaboration** — memory isolation + public memory + skill sharing enables collective evolution |
+| No visibility into what the agent remembers | **Memory Viewer** — full visualization of all memories, tasks, and skills |
+| Privacy concerns with cloud storage | **100% local** — zero cloud uploads, anonymous opt-out telemetry only, password-protected |
+
+## Features
+
+### Memory Engine
+- **Auto-capture** — Stores user, assistant, and tool messages after each agent turn via `agent_end` event (consecutive assistant messages merged into one)
+- **Smart deduplication** — Exact content-hash skip; then Top-5 similar chunks (threshold 0.75) with LLM judge: DUPLICATE (skip), UPDATE (merge summary + append content), or NEW (create). Evolved chunks track merge history.
+- **Semantic chunking** — Splits by code blocks, function bodies, paragraphs; never cuts mid-function
+- **Hybrid retrieval** — FTS5 keyword + vector semantic dual-channel search with RRF fusion
+- **MMR diversity** — Maximal Marginal Relevance reranking prevents near-duplicate results
+- **Recency decay** — Configurable time-based decay (half-life: 14 days) biases recent memories
+- **Multi-provider embedding** — OpenAI-compatible, Gemini, Cohere, Voyage, Mistral, or local offline (Xenova/all-MiniLM-L6-v2)
+
+### Task Summarization & Skill Evolution
+- **Auto task boundary detection** — LLM topic judgment + 2-hour idle timeout segments conversations into tasks
+- **Structured summaries** — LLM generates Goal, Key Steps, Result, Key Details for each completed task
+- **Key detail preservation** — Code, commands, URLs, file paths, error messages retained in summaries
+- **Quality filtering** — Tasks with too few chunks, too few turns, or trivial content are auto-skipped
+- **Task status** — `active` (in progress), `completed` (with LLM summary), `skipped` (too brief, excluded from search)
+- **Automatic evaluation** — After task completion, rule filter + LLM evaluates if the task is worth distilling into a skill
+- **Skill generation** — Multi-step LLM pipeline creates SKILL.md + scripts + references + evals from real execution records
+- **Skill upgrading** — When similar tasks appear, existing skills are auto-upgraded (refine / extend / fix)
+- **Quality scoring** — 0-10 quality assessment; scores below 6 marked as draft
+- **Version management** — Full version history with changelog, change summary, and upgrade type tracking
+- **Auto-install** — Generated skills can be auto-installed into the workspace for immediate use
+- **Dedicated model** — Optional separate LLM model for skill generation (e.g., Claude 4.6 for higher quality)
+
+### Multi-Agent Collaboration
+- **Memory isolation** — Each agent's memories are tagged with `owner`. During search, agents only see their own private memories and explicitly shared `public` memories
+- **Public memory** — `memory_write_public` tool allows agents to write shared knowledge accessible to all agents (e.g., team decisions, conventions, shared configs)
+- **Skill sharing** — Skills have a `visibility` toggle (`private`/`public`). Public skills are discoverable by all agents via `skill_search`
+- **Skill discovery** — `skill_search` combines FTS (name + description) and vector search (description embedding) with RRF fusion, followed by LLM relevance judgment. Supports `scope` parameter: `mix` (default), `self`, or `public`
+- **Publish/unpublish** — `skill_publish` / `skill_unpublish` tools toggle skill visibility. Other agents can search, preview, and install public skills
+- **Agent-aware capture** — `agent_end` event extracts `agentId` to tag all captured messages with the correct owner
+
+### Memory Migration — Reconnect 🦐
+- **One-click import** — Seamlessly migrate OpenClaw's native built-in memories (SQLite + JSONL) into the MemOS intelligent memory system
+- **Smart deduplication** — Vector similarity + LLM judgment prevents duplicate imports; similar content auto-merged
+- **Resume anytime** — Pause and resume at any time; refreshing the page auto-restores progress; already processed items are skipped
+- **Post-import processing** — Optionally generate task summaries and evolve skills from imported memories, with serial processing per session
+- **Source tagging** — All migrated memories are tagged with 🦐, visually distinguishing them from conversation-generated memories
+- **Real-time progress** — Live progress bar, stats (stored/skipped/merged/errors), and scrolling log via SSE
+
+### Memory Viewer
+- **7 management pages** — Memories, Tasks, Skills, Analytics, **Logs**, **Import**, Settings
+- **Full CRUD** — Create, edit, delete, search memories; evolution badges and merge history on memory cards
+- **Task browser** — Status filters, chat-bubble chunk view, structured summaries, skill generation status
+- **Skill browser** — Version history, quality scores, one-click download as ZIP
+- **Analytics dashboard** — Daily read/write activity, memory breakdown charts
+- **Logs** — Tool call log (memory_search, auto_recall, memory_add, etc.) with input/output and duration; filter by tool, auto-refresh
+- **Online configuration** — Modify embedding, summarizer, skill evolution settings via web UI
+- **Security** — Password-protected, localhost-only (127.0.0.1), session cookies
+- **i18n** — Chinese / English toggle
+- **Themes** — Light / Dark mode
+
+### Privacy & Security
+- **100% on-device** — All data in local SQLite, no cloud uploads
+- **Anonymous telemetry** — Enabled by default, opt-out via config. Only sends tool names, latencies, and version info. Never sends memory content, queries, or personal data. See [Telemetry](#telemetry) section.
+- **Viewer security** — Binds to 127.0.0.1 only, password-protected with session cookies
+- **Auto-recall + Skill** — Each turn, relevant memories are injected via `before_agent_start` hook (invisible to user). When nothing is recalled (e.g. long or unclear query), the agent is prompted to call `memory_search` with a self-generated short query. The bundled skill `memos-memory-guide` documents all tools and when to use them.
+
+## Quick Start
+
+### 1. Install
+
+**From npm (recommended):**
+
+```bash
+openclaw plugins install @memtensor/memos-local-openclaw-plugin
+```
+
+The plugin is installed under `~/.openclaw/extensions/memos-local-openclaw-plugin` and registered as `memos-local-openclaw-plugin`. Dependencies and native modules are built automatically during installation.
+
+> **Note:** The Memory Viewer starts only when the **OpenClaw gateway** is running. After install, **configure** `openclaw.json` (step 2) and **start the gateway** (step 3); the viewer will then be available at `http://127.0.0.1:18799`.
+>
+> If better-sqlite3 fails to build automatically, ensure you have C++ build tools installed: macOS: `xcode-select --install`, Linux: `sudo apt install build-essential`.
+
+**From source (development):**
+
+```bash
+git clone https://github.com/MemTensor/MemOS.git
+cd MemOS/apps/memos-local-openclaw
+npm install && npm run build
+openclaw plugins install .
+```
+
+### 2. Configure
+
+Add the plugin config to `~/.openclaw/openclaw.json`:
+
+```jsonc
+{
+  "agents": {
+    "defaults": {
+      // IMPORTANT: Disable OpenClaw's built-in memory to avoid conflicts
+      "memorySearch": {
+        "enabled": false
+      }
+    }
+  },
+  "plugins": {
+    "slots": {
+      "memory": "memos-local-openclaw-plugin"
+    },
+    "entries": {
+      "memos-local-openclaw-plugin": {
+        "enabled": true,
+        "config": {
+          "embedding": {
+            "provider": "openai_compatible",
+            "endpoint": "https://your-api-endpoint/v1",
+            "apiKey": "sk-••••••",
+            "model": "bge-m3"
+          },
+          "summarizer": {
+            "provider": "openai_compatible",
+            "endpoint": "https://your-api-endpoint/v1",
+            "apiKey": "sk-••••••",
+            "model": "gpt-4o-mini",
+            "temperature": 0
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+> **Critical:** You must set `agents.defaults.memorySearch.enabled` to `false`. Otherwise OpenClaw's built-in memory search runs alongside this plugin, causing duplicate retrieval and wasted tokens.
+
+#### Embedding Provider Options
+
+| Provider | `provider` value | Example `model` | Notes |
+|---|---|---|---|
+| OpenAI / compatible | `openai_compatible` | `bge-m3`, `text-embedding-3-small` | Any OpenAI-compatible API |
+| Gemini | `gemini` | `text-embedding-004` | Requires `apiKey` |
+| Cohere | `cohere` | `embed-english-v3.0` | Separates document/query embedding |
+| Voyage | `voyage` | `voyage-2` | |
+| Mistral | `mistral` | `mistral-embed` | |
+| Local (offline) | `local` | — | Uses `Xenova/all-MiniLM-L6-v2`, no API needed |
+
+> **No embedding config?** The plugin falls back to the local model automatically. You can start with zero configuration and add a cloud provider later for better quality.
+
+#### Summarizer Provider Options
+
+| Provider | `provider` value | Example `model` |
+|---|---|---|
+| OpenAI / compatible | `openai_compatible` | `gpt-4o-mini` |
+| Anthropic | `anthropic` | `claude-3-haiku-20240307` |
+| Gemini | `gemini` | `gemini-1.5-flash` |
+| AWS Bedrock | `bedrock` | `anthropic.claude-3-haiku-20240307-v1:0` |
+
+> **No summarizer config?** A rule-based fallback generates summaries from the first sentence + key entities. Good enough to start.
+
+#### Skill Evolution Configuration (Optional)
+
+You can optionally configure a dedicated model for skill generation (for higher quality skills):
+
+```jsonc
+{
+  "config": {
+    "skillSummarizer": {
+      "provider": "anthropic",
+      "apiKey": "sk-ant-xxx",
+      "model": "claude-sonnet-4-20250514",
+      "temperature": 0
+    },
+    "skillEvolution": {
+      "enabled": true,
+      "autoEvaluate": true,
+      "autoInstall": false
+    }
+  }
+}
+```
+
+If `skillSummarizer` is not configured, the plugin uses the regular `summarizer` model for skill generation.
+
+#### Environment Variable Support
+
+Use `${ENV_VAR}` placeholders in config to avoid hardcoding keys:
+
+```jsonc
+{
+  "apiKey": "${OPENAI_API_KEY}"
+}
+```
+
+### 3. Start or Restart the Gateway
+
+```bash
+openclaw gateway stop    # if already running
+openclaw gateway install # ensure LaunchAgent is installed (macOS)
+openclaw gateway start
+```
+
+Once the gateway is up, the plugin loads and starts the Memory Viewer at `http://127.0.0.1:18799`.
+
+### 4. Verify Installation
+
+```bash
+tail -20 ~/.openclaw/logs/gateway.log
+```
+
+You should see:
+
+```
+memos-local: initialized (db: ~/.openclaw/memos-local/memos.db)
+memos-local: started (embedding: openai_compatible)
+╔══════════════════════════════════════════╗
+║  MemOS Memory Viewer                     ║
+║  → http://127.0.0.1:18799               ║
+║  Open in browser to manage memories       ║
+╚══════════════════════════════════════════╝
+```
+
+### 5. Verify Memory is Working
+
+**Step A** — Have a conversation with your OpenClaw agent about anything.
+
+**Step B** — Open the Memory Viewer at `http://127.0.0.1:18799` and check that the conversation appears.
+
+**Step C** — In a new conversation, ask the agent to recall what you discussed:
+
+```
+You: 你还记得我之前让你帮我处理过什么事情吗？
+Agent: (calls memory_search) 是的，我们之前讨论过...
+```
+
+## How It Works
+
+### Three Intelligent Pipelines
+
+MemOS Lite operates through three interconnected pipelines that form a continuous learning loop:
+
+```
+Conversation → Memory Write Pipeline → Task Generation Pipeline → Skill Evolution Pipeline
+                                                                          ↓
+                              Smart Retrieval Pipeline ← ← ← ← ← ← ← ← ←
+```
+
+### Pipeline 1: Memory Write (auto on every agent turn)
+
+```
+Conversation → Capture (filter roles, strip system prompts)
+→ Semantic chunking (code blocks, paragraphs, error stacks)
+→ Content hash dedup → LLM summarize each chunk
+→ Vector embedding → Store (SQLite + FTS5 + Vector)
+```
+
+- System messages are skipped; tool results from the plugin's own tools are not re-stored
+- Evidence wrapper blocks (`[STORED_MEMORY]...[/STORED_MEMORY]`) are stripped to prevent feedback loops
+- Content hash (SHA-256, first 16 hex chars) prevents duplicate chunk ingestion within the same session+role
+
+### Pipeline 2: Task Generation (auto after memory write)
+
+```
+New chunks → Task boundary detection (LLM topic judge / 2h idle / session change)
+→ Boundary crossed? → Finalize previous task
+  → Chunks ≥ 4 & turns ≥ 2? → LLM structured summary → status = "completed"
+  → Otherwise → status = "skipped" (excluded from search)
+```
+
+**Why Tasks matter:**
+- Raw memory chunks are fragmented — a single conversation about "deploying Nginx" might span 20 chunks
+- Task summarization organizes these fragments into a structured record: Goal → Steps → Result → Key Details
+- When the agent searches memory, it can quickly locate the complete experience via `task_summary`, not just fragments
+- Task summaries preserve code, commands, URLs, configs, and error messages
+
+### Pipeline 3: Skill Evolution (auto after task completion)
+
+```
+Completed task → Rule filter (min chunks, non-trivial content)
+→ Search for related existing skills
+  → Related skill found (confidence ≥ 0.7)?
+    → Evaluate upgrade (refine/extend/fix) → Merge new experience → Version bump
+  → No related skill (or confidence < 0.3)?
+    → Evaluate create → Generate SKILL.md + scripts + evals
+    → Quality score (0-10) → Install if score ≥ 6
+```
+
+**Why Skills matter:**
+- Without skills, agents rediscover solutions every time they encounter similar problems
+- Skills crystallize successful executions into reusable guides with steps, pitfall warnings, and verification checks
+- Skills auto-upgrade when new tasks bring improved approaches — getting faster, more accurate, and more token-efficient
+- The evolution is automatic: task completes → evaluate → create/upgrade → install
+
+### Pipeline 4: Smart Retrieval
+
+**Auto-recall (every turn):** The plugin hooks `before_agent_start`, runs a memory search with the user's message, then uses an LLM to filter which candidates are relevant and whether they are sufficient to answer. The filtered memories are injected into the agent's system context (invisible to the user). If no memories are found or the query is long/unclear, the agent is prompted to call `memory_search` with a self-generated short query.
+
+**On-demand search (`memory_search`):**
+```
+Query → FTS5 + Vector dual recall → RRF Fusion → MMR Rerank
+→ Recency Decay → Score Filter → Top-K (e.g. 20)
+→ LLM relevance filter (minimum information) → Dedup by excerpt overlap
+→ Return excerpts + chunkId / task_id (no summaries)
+  → sufficient=false → suggest task_summary(taskId), skill_get(taskId), memory_timeline(chunkId)
+```
+
+- **RRF (Reciprocal Rank Fusion):** Merges FTS5 and vector search rankings into a unified score
+- **MMR (Maximal Marginal Relevance):** Re-ranks to balance relevance with diversity
+- **Recency Decay:** Recent memories get a boost (half-life: 14 days by default)
+- **LLM filter:** Only memories that are genuinely useful for the query are returned; sufficiency determines whether follow-up tool tips are appended
+
+## Retrieval Strategy
+
+1. **Auto-recall (hook)** — On every turn, the plugin runs a memory search using the user's message and injects LLM-filtered relevant memories into the agent's context (via `before_agent_start`). The agent sees this as system context; the user does not.
+2. **When nothing is recalled** — If the user's message is long, vague, or no matches are found, the plugin injects a short hint telling the agent to call **`memory_search`** with a **self-generated short query** (e.g. key topics or a rephrased question).
+3. **Bundled skill** — The plugin installs `memos-memory-guide` into `~/.openclaw/workspace/skills/memos-memory-guide/` and `~/.openclaw/skills/memos-memory-guide/`. This skill documents all memory tools, when to call them, and how to write good search queries. Add `skills.load.extraDirs: ["~/.openclaw/skills"]` in `openclaw.json` if you want the skill to appear in the OpenClaw skills dashboard.
+4. **Search results** — `memory_search` returns **excerpts** (original content snippets) and IDs (`chunkId`, `task_id`), not summaries. The agent uses `memory_get(chunkId)` for full original text, `task_summary(taskId)` for structured task context, `memory_timeline(chunkId)` for surrounding conversation, and `skill_get(skillId|taskId)` for reusable experience guides.
+
+## Agent Tools
+
+The plugin provides **12 smart tools** (11 registered tools + auto-recall) and auto-installs the **memos-memory-guide** skill:
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `auto_recall` | Automatically injects relevant memories into agent context each turn (via `before_agent_start` hook) | Runs automatically — no manual call needed |
+| `memory_search` | Search memories (auto-filtered to current agent + public); returns excerpts + `chunkId` / `task_id` | When auto-recall returned nothing or you need a different query |
+| `memory_get` | Get full original text of a memory chunk | When you need to verify exact details from a search hit |
+| `memory_timeline` | Surrounding conversation around a chunk | When you need the exact dialogue before/after a hit |
+| `memory_write_public` | Write a memory to the shared public space (owner="public") | When the agent discovers knowledge all agents should access |
+| `task_summary` | Full structured summary of a completed task | When a hit has `task_id` and you need the full story (goal, steps, result) |
+| `skill_get` | Get skill content by `skillId` or `taskId` | When a hit has a linked task/skill and you want the reusable experience guide |
+| `skill_install` | Install a skill into the agent workspace | When the skill should be permanently available for future turns |
+| `skill_search` | Search skills via FTS + vector + LLM relevance; scope: `mix` / `self` / `public` | When an agent needs to discover existing skills for a task |
+| `skill_publish` | Set a skill's visibility to public | When a skill should be discoverable by other agents |
+| `skill_unpublish` | Set a skill's visibility back to private | When a skill should no longer be shared |
+| `memory_viewer` | Get the URL of the Memory Viewer web UI | When the user asks where to view or manage their memories |
+
+### Search Parameters
+
+| Parameter | Default | Range | Description |
+|-----------|---------|-------|-------------|
+| `query` | — | — | Natural language search query (keep it short and focused) |
+| `maxResults` | 20 | 1–20 | Maximum candidates before LLM filter |
+| `minScore` | 0.45 | 0.35–1.0 | Minimum relevance score |
+| `role` | — | `user` / `assistant` / `tool` | Filter by message role (e.g. `user` to find what the user said) |
+
+## Memory Viewer
+
+Open `http://127.0.0.1:18799` in your browser after starting the gateway.
+
+**Pages:**
+
+| Page | Features |
+|------|----------|
+| **Memories** | Timeline view, pagination, session/role/kind/date filters, CRUD, semantic search; evolution badges and merge history on cards |
+| **Tasks** | Task list with status filters (active/completed/skipped), chat-bubble chunk view, structured summaries, skill generation status |
+| **Skills** | Skill list with status badges, version history with changelogs, quality scores, related tasks, one-click ZIP download |
+| **Analytics** | Daily write/read activity charts, memory/task/skill totals, role breakdown |
+| **Logs** | Tool call log (memory_search, auto_recall, memory_add, etc.) with input/output, duration, and tool filter; auto-refresh |
+| **Import** | 🦐 OpenClaw native memory migration — scan, one-click import with real-time SSE progress, smart dedup, pause/resume; post-processing for task & skill generation |
+| **Settings** | Online configuration for embedding model, summarizer model, skill evolution settings, viewer port |
+
+**Viewer won't open?**
+
+- The viewer is started by the plugin when the **gateway** starts. It does **not** run at install time.
+- Ensure the gateway is running: `openclaw gateway start`
+- Ensure the plugin is enabled in `~/.openclaw/openclaw.json`
+- Check the log: `tail -30 ~/.openclaw/logs/gateway.log` — look for `MemOS Memory Viewer`
+
+**Forgot password?** Click "Forgot password?" on the login page and use the reset token:
+
+```bash
+grep "password reset token:" ~/.openclaw/logs/gateway.log 2>/dev/null | tail -1
+```
+
+Copy the 32-character hex string after `password reset token:`.
+
+## Advanced Configuration
+
+All optional — shown with defaults:
+
+```jsonc
+{
+  "config": {
+    "recall": {
+      "maxResultsDefault": 6,     // Default search results
+      "maxResultsMax": 20,        // Max search results
+      "minScoreDefault": 0.45,    // Default min score threshold
+      "minScoreFloor": 0.35,      // Lowest allowed min score
+      "rrfK": 60,                 // RRF fusion constant
+      "mmrLambda": 0.7,           // MMR relevance vs diversity (0-1)
+      "recencyHalfLifeDays": 14,  // Time decay half-life
+      "vectorSearchMaxChunks": 0  // 0 = search all (default). Set 200000–300000 only if search is slow on huge DBs
+    },
+    "dedup": {
+      "similarityThreshold": 0.75,  // Cosine similarity for smart-dedup candidates (Top-5)
+      "enableSmartMerge": true,     // LLM judge: DUPLICATE / UPDATE / NEW
+      "maxCandidates": 5            // Max similar chunks to send to LLM
+    },
+    "skillEvolution": {
+      "enabled": true,            // Enable skill evolution
+      "autoEvaluate": true,       // Auto-evaluate tasks for skill generation
+      "minChunksForEval": 6,      // Min chunks for a task to be evaluated
+      "minConfidence": 0.7,       // Min LLM confidence to create/upgrade skill
+      "autoInstall": false        // Auto-install generated skills
+    },
+    "viewerPort": 18799,          // Memory Viewer port
+    "telemetry": {
+      "enabled": true              // Anonymous usage analytics (default: true, set false to opt-out)
+    }
+  }
+}
+```
+
+## Telemetry
+
+MemOS Lite collects **anonymous** usage analytics to help us understand how the plugin is used and improve it. Telemetry is **enabled by default** and can be disabled at any time.
+
+### What is collected
+
+- Plugin version, OS, Node.js version, architecture
+- Tool call names and latencies (e.g. "memory_search took 120ms")
+- Aggregate counts (chunks ingested, skills installed)
+- Daily active ping
+
+### What is NEVER collected
+
+- Memory content, search queries, or conversation text
+- API keys, file paths, or any personally identifiable information
+- Any data stored in your local database
+
+### How to disable
+
+Add `telemetry` to your plugin config in `~/.openclaw/openclaw.json`:
+
+```jsonc
+{
+  "plugins": {
+    "entries": {
+      "memos-local-openclaw-plugin": {
+        "enabled": true,
+        "config": {
+          "telemetry": {
+            "enabled": false
+          }
+          // ... other config
+        }
+      }
+    }
+  }
+}
+```
+
+Or set the environment variable:
+
+```bash
+TELEMETRY_ENABLED=false
+```
+
+### Technical details
+
+- Uses [PostHog](https://posthog.com) for event collection
+- Each installation gets a random anonymous UUID (stored at `~/.openclaw/memos-local/.anonymous-id`)
+- Events are batched and sent in the background; failures are silently ignored
+- The anonymous ID is never linked to any personal information
+
+## Upgrade
+
+```bash
+openclaw plugins update memos-local-openclaw-plugin
+```
+
+The plugin will automatically install dependencies, clean up legacy versions, and rebuild the native SQLite module. After update, restart the gateway:
+
+```bash
+openclaw gateway stop && openclaw gateway start
+```
+
+> **Tip:** To update all plugins at once: `openclaw plugins update --all`
+
+**If `openclaw plugins update` doesn't work** (plugin not in install registry), reinstall:
+
+```bash
+rm -rf ~/.openclaw/extensions/memos-local-openclaw-plugin
+openclaw plugins install @memtensor/memos-local-openclaw-plugin
+```
+
+> **Note:** `openclaw plugins install` requires the target directory to not exist. If you see `plugin already exists`, delete the directory first. Your memory data is stored separately at `~/.openclaw/memos-local/memos.db` and will not be affected.
+
+## Troubleshooting
+
+> 📖 **详细排查指南 / Detailed troubleshooting guide:** [docs/troubleshooting.html](https://memtensor.github.io/MemOS/apps/memos-local-openclaw/docs/troubleshooting.html) — 包含逐步排查流程、日志查看方法、完全重装步骤等。
+
+### Common Issues
+
+1. **Note the exact error** — e.g. `plugin not found`, `Cannot find module 'xxx'`, `Invalid config`.
+
+2. **Check plugin status**
+   ```bash
+   openclaw plugins list
+   ```
+   - Status is **error** → note the error message
+   - Not listed → not installed or not placed in `~/.openclaw/extensions/memos-local-openclaw-plugin`
+
+3. **Check gateway logs**
+   ```bash
+   tail -50 ~/.openclaw/logs/gateway.log
+   ```
+   Search for `memos-local`, `failed to load`, `Error`, `Cannot find module`.
+
+4. **Check environment**
+   - Node version: `node -v` (requires **>= 18**)
+   - Plugin directory exists: `ls ~/.openclaw/extensions/memos-local-openclaw-plugin/package.json`
+   - Dependencies installed: `ls ~/.openclaw/extensions/memos-local-openclaw-plugin/node_modules/@sinclair/typebox`
+     If missing: `cd ~/.openclaw/extensions/memos-local-openclaw-plugin && npm install --omit=dev`
+
+5. **Check configuration** — Open `~/.openclaw/openclaw.json` and verify:
+   - `agents.defaults.memorySearch.enabled` = `false` (disable built-in memory)
+   - `plugins.slots.memory` = `"memos-local-openclaw-plugin"`
+   - `plugins.entries.memos-local-openclaw-plugin.enabled` = `true`
+
+6. **better-sqlite3 native module error** — `Could not locate the bindings file` means the native SQLite addon was not compiled for your Node.js version.
+   ```bash
+   cd ~/.openclaw/extensions/memos-local-openclaw-plugin
+   npm rebuild better-sqlite3
+   ```
+   If rebuild fails, install C++ build tools first:
+   - **macOS:** `xcode-select --install`
+   - **Linux:** `sudo apt install build-essential python3`
+   - **Windows:** Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+
+   Then retry `npm rebuild better-sqlite3` and restart the gateway.
+
+7. **Memory conflict with built-in search** — If the agent calls both the built-in memory search and the plugin's `memory_search`, it means `agents.defaults.memorySearch.enabled` is not set to `false`.
+
+8. **Skills not generating** — Check:
+   - `skillEvolution.enabled` is `true`
+   - Tasks have enough content (default requires >= 6 chunks)
+   - Look for `SkillEvolver` output in the gateway log
+
+## Data Location
+
+| File | Path |
+|---|---|
+| Database | `~/.openclaw/memos-local/memos.db` |
+| Viewer auth | `~/.openclaw/memos-local/viewer-auth.json` |
+| Gateway log | `~/.openclaw/logs/gateway.log` |
+| Plugin code | `~/.openclaw/extensions/memos-local-openclaw-plugin/` |
+| Memory-guide skill | `~/.openclaw/workspace/skills/memos-memory-guide/SKILL.md` (and `~/.openclaw/skills/memos-memory-guide/`) |
+| Generated skills | `~/.openclaw/memos-local/skills-store/<skill-name>/` |
+| Installed skills | `~/.openclaw/workspace/skills/<skill-name>/` |
+
+## Testing
+
+Run the test suite:
+
+```bash
+cd MemOS/apps/memos-local-openclaw
+npm test
+```
+
+Test coverage includes:
+- **Policy tests** — Verifies retrieval strategy, search filtering, evidence extraction, instruction stripping
+- **Recall tests** — RRF fusion, recency decay correctness
+- **Capture tests** — Message filtering, evidence block stripping, self-tool exclusion
+- **Storage tests** — SQLite CRUD, FTS5, vector storage, content hash dedup
+- **Task processor tests** — Task boundary detection, skip logic, summary generation
+
+## License
+
+MIT — See [LICENSE](../../LICENSE) for details.
