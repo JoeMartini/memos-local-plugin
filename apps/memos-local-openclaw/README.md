@@ -558,21 +558,189 @@ openclaw plugins install @memtensor/memos-local-openclaw-plugin
 | Generated skills | `~/.openclaw/memos-local/skills-store/<skill-name>/` |
 | Installed skills | `~/.openclaw/workspace/skills/<skill-name>/` |
 
-## Testing
+## Development Guide
 
-Run the test suite:
+This section is for contributors who want to develop, test, or modify the plugin from source.
+
+### Prerequisites
+
+- **Node.js >= 18** (`node -v`)
+- **npm >= 9** (`npm -v`)
+- **C++ build tools** (for `better-sqlite3` native module):
+  - macOS: `xcode-select --install`
+  - Linux: `sudo apt install build-essential python3`
+  - Windows: [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+- **OpenClaw CLI** installed and available in PATH (`openclaw --version`)
+
+### Clone & Setup
 
 ```bash
+git clone https://github.com/tangbotony/MemOS.git
 cd MemOS/apps/memos-local-openclaw
-npm test
+npm install
+```
+
+> `npm install` triggers the `postinstall` script which automatically rebuilds `better-sqlite3` for your Node.js version.
+
+### Project Structure
+
+```
+apps/memos-local-openclaw/
+├── index.ts                 # Plugin entry — hooks, tool registration, lifecycle
+├── plugin-impl.ts           # OpenClaw plugin SDK implementation
+├── src/
+│   ├── index.ts             # Module re-exports
+│   ├── config.ts            # Configuration schema & defaults
+│   ├── types.ts             # TypeScript type definitions
+│   ├── capture/index.ts     # Message capture & filtering logic
+│   ├── embedding/           # Embedding providers (OpenAI, Gemini, Cohere, etc.)
+│   ├── ingest/
+│   │   ├── chunker.ts       # Semantic chunking (code blocks, paragraphs)
+│   │   ├── dedup.ts         # Content-hash + vector deduplication
+│   │   ├── worker.ts        # Async ingestion pipeline
+│   │   ├── task-processor.ts # Task boundary detection & summarization
+│   │   └── providers/       # LLM providers for summarization
+│   ├── recall/
+│   │   ├── engine.ts        # Hybrid retrieval engine (FTS5 + Vector)
+│   │   ├── rrf.ts           # Reciprocal Rank Fusion
+│   │   ├── mmr.ts           # Maximal Marginal Relevance
+│   │   └── recency.ts       # Time-decay scoring
+│   ├── skill/               # Skill evolution pipeline (evaluator, generator, upgrader)
+│   ├── storage/
+│   │   ├── sqlite.ts        # SQLite database layer (chunks, tasks, skills, FTS5)
+│   │   └── vector.ts        # Vector similarity search
+│   ├── tools/               # Tool implementations (memory-search, memory-get, etc.)
+│   ├── viewer/              # Memory Viewer web server & HTML templates
+│   └── telemetry.ts         # Anonymous usage analytics
+├── tests/                   # Test suite (vitest)
+├── scripts/                 # Utility scripts (seed data, smoke test, viewer)
+├── skill/                   # Bundled skill definitions (SKILL.md files)
+├── openclaw.plugin.json     # Plugin metadata for OpenClaw registry
+├── package.json             # Dependencies & scripts
+├── tsconfig.json            # TypeScript configuration
+└── vitest.config.ts         # Test runner configuration
+```
+
+**Files NOT in the repository** (generated locally, excluded via `.gitignore`):
+
+| Directory / File | Purpose | How to generate |
+|---|---|---|
+| `node_modules/` | npm dependencies | `npm install` |
+| `dist/` | Compiled JavaScript output | `npm run build` |
+| `package-lock.json` | Dependency lock file | `npm install` (auto-generated) |
+| `www/` | Memory Viewer static site (local preview) | Started automatically by the plugin |
+| `docs/` | Documentation HTML pages | Built from source or viewed at the hosted URL |
+| `ppt/` | Presentation files (internal use) | Not needed for development |
+| `.env` | Local environment variables | Copy from `.env.example` |
+
+### Build
+
+```bash
+npm run build       # Compile TypeScript → dist/
+npm run dev         # Watch mode — auto-recompile on save
+```
+
+The build output goes to `dist/` (CommonJS modules with declarations and source maps).
+
+### Configure for Local Development
+
+1. **Copy the environment template:**
+
+```bash
+cp .env.example .env
+```
+
+2. **Edit `.env`** with your API keys (or leave blank for local-only mode):
+
+```bash
+# Embedding — leave blank to use local offline model
+EMBEDDING_PROVIDER=openai_compatible
+EMBEDDING_API_KEY=your-key
+EMBEDDING_ENDPOINT=https://your-api.com/v1
+EMBEDDING_MODEL=bge-m3
+
+# Summarizer — leave blank for rule-based fallback
+SUMMARIZER_PROVIDER=openai_compatible
+SUMMARIZER_API_KEY=your-key
+SUMMARIZER_ENDPOINT=https://api.openai.com/v1
+SUMMARIZER_MODEL=gpt-4o-mini
+```
+
+3. **Install the plugin locally into OpenClaw:**
+
+```bash
+npm run build
+openclaw plugins install .
+```
+
+4. **Configure OpenClaw** — Add the plugin to `~/.openclaw/openclaw.json` (see [Configure](#2-configure) section above).
+
+5. **Start the gateway:**
+
+```bash
+openclaw gateway stop    # stop existing
+openclaw gateway start   # start with new plugin
+```
+
+### Testing
+
+Run the full test suite:
+
+```bash
+npm test              # Run all tests once
+npm run test:watch    # Watch mode — re-run on file changes
 ```
 
 Test coverage includes:
-- **Policy tests** — Verifies retrieval strategy, search filtering, evidence extraction, instruction stripping
-- **Recall tests** — RRF fusion, recency decay correctness
-- **Capture tests** — Message filtering, evidence block stripping, self-tool exclusion
-- **Storage tests** — SQLite CRUD, FTS5, vector storage, content hash dedup
-- **Task processor tests** — Task boundary detection, skip logic, summary generation
+
+| Test File | Coverage |
+|---|---|
+| `tests/policy.test.ts` | Retrieval strategy, search filtering, evidence extraction, instruction stripping |
+| `tests/recall.test.ts` | RRF fusion, recency decay correctness |
+| `tests/capture.test.ts` | Message filtering, evidence block stripping, self-tool exclusion |
+| `tests/storage.test.ts` | SQLite CRUD, FTS5, vector storage, content hash dedup |
+| `tests/chunker.test.ts` | Semantic chunking for code blocks, paragraphs, function bodies |
+| `tests/task-processor.test.ts` | Task boundary detection, skip logic, summary generation |
+| `tests/multi-agent.test.ts` | Multi-agent memory isolation, owner filtering, public sharing |
+| `tests/integration.test.ts` | End-to-end ingestion and retrieval pipeline |
+
+> Tests use an **in-memory SQLite database** — no external services or API keys required.
+
+### Development Workflow
+
+1. **Make changes** to files in `src/` or `index.ts`
+2. **Run tests** to verify: `npm test`
+3. **Build** to check TypeScript compilation: `npm run build`
+4. **Test with OpenClaw** locally:
+   ```bash
+   openclaw plugins install .   # re-install from local source
+   openclaw gateway stop && openclaw gateway start
+   tail -f ~/.openclaw/logs/gateway.log   # watch logs
+   ```
+5. **Open Memory Viewer** at `http://127.0.0.1:18799` to verify UI changes
+
+### Publishing to npm
+
+```bash
+npm run build                    # Compile TypeScript
+npm publish --access public      # Publish to npm registry
+```
+
+After publishing, users can install with:
+```bash
+openclaw plugins install @memtensor/memos-local-openclaw-plugin
+```
+
+### Utility Scripts
+
+| Script | Command | Purpose |
+|---|---|---|
+| Seed test data | `npx tsx scripts/seed-test-data.ts` | Populate local DB with sample memories, tasks, and skills |
+| Smoke test | `npx tsx scripts/smoke-test.ts` | Quick end-to-end verification of plugin functionality |
+| Start viewer | `npx tsx scripts/start-viewer.ts` | Start Memory Viewer standalone (without gateway) |
+| Refresh skills | `npx tsx scripts/refresh-skill.ts` | Re-evaluate and regenerate skills from existing tasks |
+| Refresh summaries | `npx tsx scripts/refresh-summaries.ts` | Re-generate task summaries for completed tasks |
+| Mock skills | `npx tsx scripts/mock-skills.ts` | Generate mock skill data for testing |
 
 ## License
 
