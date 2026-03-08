@@ -4,10 +4,11 @@ import * as path from "path";
 import type { SqliteStore } from "../storage/sqlite";
 import type { RecallEngine } from "../recall/engine";
 import type { Embedder } from "../embedding";
-import type { Chunk, Task, Skill, PluginContext, SummarizerConfig, SkillGenerateOutput } from "../types";
+import type { Chunk, Task, Skill, PluginContext, SkillGenerateOutput } from "../types";
 import { DEFAULTS } from "../types";
 import type { CreateEvalResult } from "./evaluator";
 import { SkillValidator } from "./validator";
+import { buildSkillConfigChain, callLLMWithFallback } from "../shared/llm-call";
 
 // ─── Step 1: Generate SKILL.md ───
 // Based on Anthropic skill-creator principles:
@@ -138,6 +139,7 @@ Requirements:
 - Mix formal and casual tones, include some with typos or shorthand
 - Each prompt should be complex enough that the agent would need the skill (not simple Q&A)
 - Write expectations that are specific and verifiable
+- LANGUAGE RULE: Write prompts and expectations in the SAME language as the skill content. If the skill is in Chinese, write Chinese test prompts. If English, write English.
 
 Skill:
 {SKILL_CONTENT}
@@ -161,6 +163,7 @@ Rules:
 - Each reference should be a standalone markdown document.
 - Don't duplicate what's already in SKILL.md — references are for deeper detail.
 - If there's nothing worth extracting, return an empty array.
+- LANGUAGE RULE: Write reference content in the SAME language as the SKILL.md and task record. Chinese input → Chinese output.
 
 SKILL.md:
 {SKILL_CONTENT}
@@ -340,8 +343,8 @@ export class SkillGenerator {
   }
 
   private async step1GenerateSkillMd(task: Task, conversationText: string, evalResult: CreateEvalResult): Promise<string> {
-    const cfg = this.getProviderConfig();
-    if (!cfg) throw new Error("No LLM configured for skill generation");
+    const chain = buildSkillConfigChain(this.ctx);
+    if (chain.length === 0) throw new Error("No LLM configured for skill generation");
 
     const lang = this.detectLanguage(conversationText);
     const langInstruction = `\n\n⚠️ LANGUAGE REQUIREMENT: The task record is in ${lang}. You MUST write ALL prose content (description, headings, explanations, pitfalls) in ${lang}. Only the "name" field stays in English kebab-case.\n`;
@@ -353,7 +356,7 @@ export class SkillGenerator {
       .replace("{CONVERSATION}", conversationText.slice(0, 12000))
       + langInstruction;
 
-    const raw = await this.callLLM(cfg, prompt, { maxTokens: 6000, temperature: 0.2 });
+    const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.step1", { maxTokens: 6000, temperature: 0.2, timeoutMs: 120_000 });
 
     const trimmed = raw.trim();
     if (trimmed.startsWith("---")) return trimmed;
@@ -368,15 +371,15 @@ export class SkillGenerator {
     skillContent: string,
     conversationText: string,
   ): Promise<Array<{ filename: string; content: string }>> {
-    const cfg = this.getProviderConfig();
-    if (!cfg) return [];
+    const chain = buildSkillConfigChain(this.ctx);
+    if (chain.length === 0) return [];
 
     const prompt = STEP2_SCRIPTS_PROMPT
       .replace("{SKILL_CONTENT}", skillContent.slice(0, 4000))
       .replace("{CONVERSATION}", conversationText.slice(0, 6000));
 
     try {
-      const raw = await this.callLLM(cfg, prompt, { maxTokens: 3000, temperature: 0.1 });
+      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.scripts", { maxTokens: 3000, temperature: 0.1, timeoutMs: 120_000 });
       return this.parseJSONArray<{ filename: string; content: string }>(raw);
     } catch (err) {
       this.ctx.log.warn(`SkillGenerator: script extraction failed: ${err}`);
@@ -390,15 +393,15 @@ export class SkillGenerator {
     skillContent: string,
     conversationText: string,
   ): Promise<Array<{ filename: string; content: string }>> {
-    const cfg = this.getProviderConfig();
-    if (!cfg) return [];
+    const chain = buildSkillConfigChain(this.ctx);
+    if (chain.length === 0) return [];
 
     const prompt = STEP2B_REFS_PROMPT
       .replace("{SKILL_CONTENT}", skillContent.slice(0, 4000))
       .replace("{CONVERSATION}", conversationText.slice(0, 6000));
 
     try {
-      const raw = await this.callLLM(cfg, prompt, { maxTokens: 3000, temperature: 0.1 });
+      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.refs", { maxTokens: 3000, temperature: 0.1, timeoutMs: 120_000 });
       return this.parseJSONArray<{ filename: string; content: string }>(raw);
     } catch (err) {
       this.ctx.log.warn(`SkillGenerator: reference extraction failed: ${err}`);
@@ -411,8 +414,8 @@ export class SkillGenerator {
   private async step3GenerateEvals(
     skillContent: string,
   ): Promise<Array<{ id: number; prompt: string; expectations: string[]; trigger_confidence?: string }>> {
-    const cfg = this.getProviderConfig();
-    if (!cfg) return [];
+    const chain = buildSkillConfigChain(this.ctx);
+    if (chain.length === 0) return [];
 
     const lang = this.detectLanguage(skillContent);
     const prompt = STEP3_EVALS_PROMPT
@@ -420,7 +423,7 @@ export class SkillGenerator {
       + `\n\n⚠️ LANGUAGE: Write test prompts and expectations in ${lang}, matching the skill's language.\n`;
 
     try {
-      const raw = await this.callLLM(cfg, prompt, { maxTokens: 2000, temperature: 0.3 });
+      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.evals", { maxTokens: 2000, temperature: 0.3, timeoutMs: 120_000 });
       return this.parseJSONArray(raw);
     } catch (err) {
       this.ctx.log.warn(`SkillGenerator: eval generation failed: ${err}`);
@@ -464,42 +467,6 @@ export class SkillGenerator {
     return { hitCount, results };
   }
 
-  // ─── Shared LLM call ───
-
-  private async callLLM(
-    cfg: SummarizerConfig,
-    prompt: string,
-    opts: { maxTokens: number; temperature: number },
-  ): Promise<string> {
-    const endpoint = this.normalizeEndpoint(cfg.endpoint ?? "https://api.openai.com/v1/chat/completions");
-    const model = cfg.model ?? "gpt-4o-mini";
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${cfg.apiKey}`,
-      ...cfg.headers,
-    };
-
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model,
-        temperature: opts.temperature,
-        max_tokens: opts.maxTokens,
-        messages: [{ role: "user", content: prompt }],
-      }),
-      signal: AbortSignal.timeout(cfg.timeoutMs ?? 120_000),
-    });
-
-    if (!resp.ok) {
-      const body = await resp.text();
-      throw new Error(`LLM call failed (${resp.status}): ${body}`);
-    }
-
-    const json = (await resp.json()) as { choices: Array<{ message: { content: string } }> };
-    return json.choices[0]?.message?.content?.trim() ?? "";
-  }
-
   // ─── Helpers ───
 
   private parseJSONArray<T>(raw: string): T[] {
@@ -532,14 +499,4 @@ export class SkillGenerator {
     return "";
   }
 
-  private getProviderConfig(): SummarizerConfig | undefined {
-    return this.ctx.config.summarizer;
-  }
-
-  private normalizeEndpoint(url: string): string {
-    const stripped = url.replace(/\/+$/, "");
-    if (stripped.endsWith("/chat/completions")) return stripped;
-    if (stripped.endsWith("/completions")) return stripped;
-    return `${stripped}/chat/completions`;
-  }
 }

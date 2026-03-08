@@ -1218,6 +1218,11 @@ const memosLocalPlugin = {
           api.logger.info(`╚══════════════════════════════════════════╝`);
           api.logger.info(`memos-local: password reset token: ${viewer.getResetToken()}`);
           api.logger.info(`memos-local: forgot password? Use the reset token on the login page.`);
+          skillEvolver.recoverOrphanedTasks().then((count) => {
+            if (count > 0) api.logger.info(`memos-local: recovered ${count} orphaned skill tasks`);
+          }).catch((err) => {
+            api.logger.warn(`memos-local: skill recovery failed: ${err}`);
+          });
         } catch (err) {
           api.logger.warn(`memos-local: viewer failed to start: ${err}`);
           api.logger.info(`memos-local: started (embedding: ${embedder.provider})`);

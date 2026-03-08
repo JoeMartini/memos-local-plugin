@@ -12,6 +12,7 @@ import { RecallEngine } from "./src/recall/engine";
 import { captureMessages } from "./src/capture";
 import { DEFAULTS } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
+import { SkillEvolver } from "./src/skill/evolver";
 
 function ownerFilterFor(agentId: string | undefined): string[] {
   const resolvedAgentId = agentId && agentId.trim().length > 0 ? agentId : "main";
@@ -524,6 +525,17 @@ const memosLocalPlugin = {
           api.logger.info(`╚══════════════════════════════════════════╝`);
           api.logger.info(`memos-local: password reset token: ${viewer.getResetToken()}`);
           api.logger.info(`memos-local: forgot password? Use the reset token on the login page.`);
+
+          const skillEnabled = ctx.config.skillEvolution?.enabled ?? DEFAULTS.skillEvolutionEnabled;
+          if (skillEnabled) {
+            const recallEngine = new RecallEngine(store, embedder, ctx);
+            const evolver = new SkillEvolver(store, recallEngine, ctx, embedder);
+            evolver.recoverOrphanedTasks().then((count) => {
+              if (count > 0) api.logger.info(`memos-local: recovered ${count} orphaned skill tasks`);
+            }).catch((err) => {
+              api.logger.warn(`memos-local: skill recovery failed: ${err}`);
+            });
+          }
         } catch (err) {
           api.logger.warn(`memos-local: viewer failed to start: ${err}`);
           api.logger.info(`memos-local: started (embedding: ${embedder.provider})`);

@@ -47,6 +47,7 @@
     "@sinclair/typebox": "^0.34.48",
     "better-sqlite3": "^12.6.2",
     "posthog-node": "^5.28.0",
+    "puppeteer": "^24.38.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {

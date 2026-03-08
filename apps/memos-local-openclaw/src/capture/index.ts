@@ -2,6 +2,8 @@ import type { ConversationMessage, Role, Logger } from "../types";
 
 const SKIP_ROLES: Set<Role> = new Set(["system"]);
 
+const SYSTEM_BOILERPLATE_RE = /^A new session was started via \/new or \/reset\b/;
+
 const SELF_TOOLS = new Set([
   "memory_search",
   "memory_timeline",
@@ -56,6 +58,11 @@ export function captureMessages(
 
     if (role === "tool" && msg.toolName && SELF_TOOLS.has(msg.toolName)) {
       log.debug(`Skipping self-tool result: ${msg.toolName}`);
+      continue;
+    }
+
+    if (role === "user" && SYSTEM_BOILERPLATE_RE.test(msg.content.trim())) {
+      log.debug(`Skipping system boilerplate: ${msg.content.slice(0, 60)}...`);
       continue;
     }
 

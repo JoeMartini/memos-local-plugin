@@ -247,6 +247,7 @@ export interface SkillEvolutionConfig {
   minConfidence?: number;
   maxSkillLines?: number;
   autoInstall?: boolean;
+  summarizer?: SummarizerConfig;
 }
 
 export interface TelemetryConfig {
@@ -293,7 +294,7 @@ export const DEFAULTS = {
   mmrLambda: 0.7,
   recencyHalfLifeDays: 14,
   vectorSearchMaxChunks: 0,
-  dedupSimilarityThreshold: 0.93,
+  dedupSimilarityThreshold: 0.60,
   evidenceWrapperTag: "STORED_MEMORY",
   excerptMinChars: 200,
   excerptMaxChars: 500,

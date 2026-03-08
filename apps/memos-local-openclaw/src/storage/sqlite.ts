@@ -306,6 +306,14 @@ export class SqliteStore {
       .run(meta.skillStatus, meta.skillReason, Date.now(), taskId);
   }
 
+  getTasksBySkillStatus(statuses: string[]): Task[] {
+    const placeholders = statuses.map(() => "?").join(",");
+    const rows = this.db.prepare(
+      `SELECT * FROM tasks WHERE skill_status IN (${placeholders}) AND status = 'completed' ORDER BY updated_at ASC`,
+    ).all(...statuses) as TaskRow[];
+    return rows.map(rowToTask);
+  }
+
   private migrateMergeFields(): void {
     const cols = this.db.prepare("PRAGMA table_info(chunks)").all() as Array<{ name: string }>;
     if (!cols.some((c) => c.name === "merge_count")) {
@@ -633,6 +641,10 @@ export class SqliteStore {
     `).run(chunkId, buf, vector.length, Date.now());
   }
 
+  deleteEmbedding(chunkId: string): void {
+    this.db.prepare("DELETE FROM embeddings WHERE chunk_id = ?").run(chunkId);
+  }
+
   // ─── Read ───
 
   getChunk(chunkId: string): Chunk | null {
@@ -875,6 +887,22 @@ export class SqliteStore {
     return remaining === 0 ? 1 : 0;
   }
 
+  deleteTask(taskId: string): boolean {
+    this.db.prepare("DELETE FROM task_skills WHERE task_id = ?").run(taskId);
+    this.db.prepare("UPDATE chunks SET task_id = NULL WHERE task_id = ?").run(taskId);
+    const result = this.db.prepare("DELETE FROM tasks WHERE id = ?").run(taskId);
+    return result.changes > 0;
+  }
+
+  deleteSkill(skillId: string): boolean {
+    this.db.prepare("DELETE FROM task_skills WHERE skill_id = ?").run(skillId);
+    this.db.prepare("DELETE FROM skill_versions WHERE skill_id = ?").run(skillId);
+    this.db.prepare("DELETE FROM skill_embeddings WHERE skill_id = ?").run(skillId);
+    this.db.prepare("UPDATE chunks SET skill_id = NULL WHERE skill_id = ?").run(skillId);
+    const result = this.db.prepare("DELETE FROM skills WHERE id = ?").run(skillId);
+    return result.changes > 0;
+  }
+
   // ─── Task CRUD ───
 
   insertTask(task: Task): void {
@@ -1008,6 +1036,24 @@ export class SqliteStore {
       "SELECT 1 FROM chunks WHERE session_key = ? AND role = ? AND content_hash = ? LIMIT 1",
     ).get(sessionKey, role, hash);
     return !!row;
+  }
+
+  /**
+   * Find an active chunk with the same content_hash within the same owner (agent dimension).
+   * Returns the existing chunk ID if found, null otherwise.
+   */
+  findActiveChunkByHash(content: string, owner?: string): string | null {
+    const hash = contentHash(content);
+    if (owner) {
+      const row = this.db.prepare(
+        "SELECT id FROM chunks WHERE content_hash = ? AND dedup_status = 'active' AND owner = ? LIMIT 1",
+      ).get(hash, owner) as { id: string } | undefined;
+      return row?.id ?? null;
+    }
+    const row = this.db.prepare(
+      "SELECT id FROM chunks WHERE content_hash = ? AND dedup_status = 'active' LIMIT 1",
+    ).get(hash) as { id: string } | undefined;
+    return row?.id ?? null;
   }
 
   // ─── Util ───
@@ -1182,6 +1228,10 @@ export class SqliteStore {
   // ─── Task-Skill Links ───
 
   linkTaskSkill(taskId: string, skillId: string, relation: TaskSkillRelation, versionAt: number): void {
+    const skillExists = this.db.prepare("SELECT 1 FROM skills WHERE id = ?").get(skillId);
+    if (!skillExists) return;
+    const taskExists = this.db.prepare("SELECT 1 FROM tasks WHERE id = ?").get(taskId);
+    if (!taskExists) return;
     this.db.prepare(`
       INSERT OR REPLACE INTO task_skills (task_id, skill_id, relation, version_at, created_at)
       VALUES (?, ?, ?, ?, ?)
@@ -1230,6 +1280,17 @@ export class SqliteStore {
   getDistinctSessionKeys(): string[] {
     return (this.db.prepare("SELECT DISTINCT session_key FROM chunks ORDER BY session_key").all() as Array<{ session_key: string }>)
       .map(r => r.session_key);
+  }
+
+  getSessionOwnerMap(sessionKeys: string[]): Map<string, string> {
+    const result = new Map<string, string>();
+    if (sessionKeys.length === 0) return result;
+    const placeholders = sessionKeys.map(() => "?").join(",");
+    const rows = this.db.prepare(
+      `SELECT session_key, owner FROM chunks WHERE session_key IN (${placeholders}) AND owner IS NOT NULL GROUP BY session_key`,
+    ).all(...sessionKeys) as Array<{ session_key: string; owner: string }>;
+    for (const r of rows) result.set(r.session_key, r.owner);
+    return result;
   }
 
   close(): void {

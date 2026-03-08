@@ -414,7 +414,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 
 /* ─── Analytics / 统计 ─── */
 .nav-tabs{display:flex;align-items:center;gap:2px;background:rgba(255,255,255,.06);border-radius:10px;padding:3px}
-.nav-tabs .tab{padding:6px 20px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text-sec);background:transparent;border:1px solid transparent;cursor:pointer;transition:all .2s;white-space:nowrap}
+.nav-tabs .tab{padding:6px 20px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text-sec);background:transparent;border:1px solid rgba(0,0,0,0);cursor:pointer;transition:color .2s,background .2s,box-shadow .2s;white-space:nowrap}
 .nav-tabs .tab:hover{color:var(--text)}
 .nav-tabs .tab.active{color:var(--text);background:rgba(255,255,255,.1);border-color:var(--border);box-shadow:0 1px 4px rgba(0,0,0,.15)}
 [data-theme="light"] .nav-tabs{background:rgba(0,0,0,.05)}
@@ -816,6 +816,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
           <div class="task-detail-summary" id="taskDetailSummary"></div>
           <div class="task-detail-chunks-title" data-i18n="tasks.chunks">Related Memories</div>
           <div class="task-detail-chunks" id="taskDetailChunks"></div>
+          <div id="taskDetailActions" style="display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)"></div>
         </div>
       </div>
     </div>
@@ -864,6 +865,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <div class="task-detail-chunks" id="skillVersionsList" style="gap:10px"></div>
         <div class="task-detail-chunks-title" style="margin-top:16px" data-i18n="skills.related">Related Tasks</div>
         <div class="task-detail-chunks" id="skillRelatedTasks" style="gap:8px"></div>
+        <div id="skillDetailActions" style="display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)"></div>
       </div>
     </div>
     <div class="analytics-view" id="analyticsView">
@@ -1119,7 +1121,19 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <div id="migrateActions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-ghost" onclick="migrateScan()" id="migrateScanBtn" data-i18n="migrate.scan">Scan Data Sources</button>
           <button class="btn btn-primary" onclick="migrateStart()" id="migrateStartBtn" style="display:none" data-i18n="migrate.start">Start Import</button>
+          <span id="migrateConcurrencyRow" style="display:none;align-items:center;gap:6px">
+            <span style="font-size:11px;color:var(--text-muted)" data-i18n="migrate.concurrency.label">Concurrent agents</span>
+            <select id="migrateConcurrency" class="filter-select" style="min-width:auto;padding:3px 10px;font-size:11px">
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+              <option value="4">4</option>
+              <option value="8">8</option>
+            </select>
+          </span>
           <span id="migrateStatus" style="font-size:11px;color:var(--text-muted)"></span>
+        </div>
+        <div id="migrateConcurrencyWarn" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:11px;color:#f59e0b;line-height:1.5">
+          <span data-i18n="migrate.concurrency.warn">\u26A0 Increasing concurrency raises LLM API call frequency, which may trigger rate limits and cause failures.</span>
         </div>
 
         <!-- Post-process section: shown after import completes -->
@@ -1143,10 +1157,22 @@ input,textarea,select{font-family:inherit;font-size:inherit}
                 </div>
               </label>
             </div>
-            <div style="display:flex;gap:10px;align-items:center">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <button class="btn btn-primary" id="ppStartBtn" onclick="ppStart()" data-i18n="pp.start">Start Processing</button>
               <button class="btn btn-sm" id="ppStopBtn" onclick="ppStop()" style="display:none;background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3);font-size:12px;padding:5px 16px;font-weight:600" data-i18n="migrate.stop">\u25A0 Stop</button>
+              <span style="display:inline-flex;align-items:center;gap:6px">
+                <span style="font-size:11px;color:var(--text-muted)" data-i18n="pp.concurrency.label">Concurrent agents</span>
+                <select id="ppConcurrency" class="filter-select" style="min-width:auto;padding:3px 10px;font-size:11px">
+                  <option value="1" selected>1</option>
+                  <option value="2">2</option>
+                  <option value="4">4</option>
+                  <option value="8">8</option>
+                </select>
+              </span>
               <span id="ppStatus" style="font-size:11px;color:var(--text-muted)"></span>
+            </div>
+            <div id="ppConcurrencyWarn" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:11px;color:#f59e0b;line-height:1.5">
+              <span data-i18n="pp.concurrency.warn">\u26A0 Increasing concurrency raises LLM API call frequency, which may trigger rate limits and cause failures.</span>
             </div>
             <div id="ppProgress" style="display:none;margin-top:12px">
               <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -1452,6 +1478,8 @@ const I18N={
     'migrate.config.warn.desc':'Please configure both Embedding Model and Summarizer Model above before importing. These are required for processing memories.',
     'migrate.sqlite.label':'Memory Index (SQLite)',
     'migrate.sessions.label':'Conversation History',
+    'migrate.concurrency.label':'Concurrent agents',
+    'migrate.concurrency.warn':'\u26A0 Increasing concurrency raises LLM API call frequency, which may trigger rate limits and cause failures.',
     'migrate.scan':'Scan Data Sources',
     'migrate.start':'Start Import',
     'migrate.scanning':'Scanning...',
@@ -1475,6 +1503,8 @@ const I18N={
     'pp.tasks.hint':'Group imported messages into tasks and generate a structured summary (title, goal, steps, result) for each one. Makes it easier to search and recall past work.',
     'pp.skills.label':'Trigger skill evolution',
     'pp.skills.hint':'Analyze completed tasks and automatically create or upgrade reusable skills (SKILL.md). Requires task summaries to be enabled. May take longer due to LLM evaluation.',
+    'pp.concurrency.label':'Concurrent agents',
+    'pp.concurrency.warn':'\u26A0 Increasing concurrency raises LLM API call frequency, which may trigger rate limits and cause failures.',
     'pp.start':'Start Processing',
     'pp.resume':'Resume Processing',
     'pp.running':'Processing',
@@ -1523,7 +1553,25 @@ const I18N={
     'tasks.role.assistant':'Assistant',
     'tasks.error':'Error',
     'tasks.error.detail':'Failed to load task details',
-    'tasks.untitled.related':'Untitled'
+    'tasks.untitled.related':'Untitled',
+    'task.edit':'Edit',
+    'task.delete':'Delete',
+    'task.save':'Save',
+    'task.cancel':'Cancel',
+    'task.delete.confirm':'Are you sure you want to delete this task? This cannot be undone.',
+    'task.delete.error':'Failed to delete task: ',
+    'task.save.error':'Failed to save task: ',
+    'task.retrySkill':'Retry Skill Generation',
+    'task.retrySkill.short':'Retry Skill',
+    'task.retrySkill.confirm':'Re-trigger skill generation for this task?',
+    'task.retrySkill.error':'Failed to retry skill generation: ',
+    'skill.edit':'Edit',
+    'skill.delete':'Delete',
+    'skill.save':'Save',
+    'skill.cancel':'Cancel',
+    'skill.delete.confirm':'Are you sure you want to delete this skill? This will also remove all associated files and cannot be undone.',
+    'skill.delete.error':'Failed to delete skill: ',
+    'skill.save.error':'Failed to save skill: '
   },
   zh:{
     'title':'OpenClaw 记忆',
@@ -1723,6 +1771,8 @@ const I18N={
     'migrate.config.warn.desc':'请先在上方配置好 Embedding 模型和 Summarizer 模型，这两项是处理记忆所必需的。',
     'migrate.sqlite.label':'记忆索引 (SQLite)',
     'migrate.sessions.label':'对话历史',
+    'migrate.concurrency.label':'并行 Agent 数',
+    'migrate.concurrency.warn':'\u26A0 提高并行数会增加 LLM API 调用频率，可能触发限流而导致失败。',
     'migrate.scan':'扫描数据源',
     'migrate.start':'开始导入',
     'migrate.scanning':'扫描中...',
@@ -1746,6 +1796,8 @@ const I18N={
     'pp.tasks.hint':'将导入的消息按任务分组，为每个任务生成结构化摘要（标题、目标、步骤、结果），方便日后搜索和回忆。',
     'pp.skills.label':'触发技能进化',
     'pp.skills.hint':'分析已完成的任务，自动创建或升级可复用的技能（SKILL.md）。需要先启用任务摘要。由于需要 LLM 评估，耗时较长。',
+    'pp.concurrency.label':'并行 Agent 数',
+    'pp.concurrency.warn':'\u26A0 提高并行数会增加 LLM API 调用频率，可能触发限流而导致失败。',
     'pp.start':'开始处理',
     'pp.resume':'继续处理',
     'pp.running':'正在处理',
@@ -1794,7 +1846,25 @@ const I18N={
     'tasks.role.assistant':'助手',
     'tasks.error':'出错了',
     'tasks.error.detail':'加载任务详情失败',
-    'tasks.untitled.related':'未命名'
+    'tasks.untitled.related':'未命名',
+    'task.edit':'编辑',
+    'task.delete':'删除',
+    'task.save':'保存',
+    'task.cancel':'取消',
+    'task.delete.confirm':'确定要删除此任务吗？此操作不可撤销。',
+    'task.delete.error':'删除任务失败：',
+    'task.save.error':'保存任务失败：',
+    'task.retrySkill':'重新生成技能',
+    'task.retrySkill.short':'重试技能',
+    'task.retrySkill.confirm':'确定要为此任务重新触发技能生成吗？',
+    'task.retrySkill.error':'重新生成技能失败：',
+    'skill.edit':'编辑',
+    'skill.delete':'删除',
+    'skill.save':'保存',
+    'skill.cancel':'取消',
+    'skill.delete.confirm':'确定要删除此技能吗？关联的文件也会被删除，此操作不可撤销。',
+    'skill.delete.error':'删除技能失败：',
+    'skill.save.error':'保存技能失败：'
   }
 };
 const LANG_KEY='memos-viewer-lang';
@@ -2213,6 +2283,12 @@ async function loadTasks(){
           '<span class="tag"><span class="icon">\\u{1F4DD}</span> '+task.chunkCount+' '+t('tasks.chunks.label')+'</span>'+
           '<span class="tag"><span class="icon">\\u{1F4C2}</span> '+(task.sessionKey||'').slice(0,12)+'</span>'+
         '</div>'+
+        '<div class="card-actions" onclick="event.stopPropagation()">'+
+          '<button class="btn btn-sm btn-ghost" onclick="openTaskDetail(\\''+task.id+'\\')">'+t('card.expand')+'</button>'+
+          '<button class="btn btn-sm btn-ghost" onclick="editTaskInline(\\''+task.id+'\\')">'+t('card.edit')+'</button>'+
+          (task.status==='completed'&&(!task.skillStatus||task.skillStatus==='not_generated'||task.skillStatus==='skipped')?'<button class="btn btn-sm btn-ghost" onclick="retrySkillGen(\\''+task.id+'\\')">'+t('task.retrySkill.short')+'</button>':'')+
+          '<button class="btn btn-sm btn-ghost" style="color:var(--accent)" onclick="deleteTask(\\''+task.id+'\\')">'+t('task.delete')+'</button>'+
+        '</div>'+
       '</div>';
     }).join('');
 
@@ -2237,7 +2313,10 @@ function renderTasksPagination(total){
   el.innerHTML=html;
 }
 
+var _currentTaskId=null;
+var _currentTaskData=null;
 async function openTaskDetail(taskId){
+  _currentTaskId=taskId;
   const overlay=document.getElementById('taskDetailOverlay');
   overlay.classList.add('show');
   document.getElementById('taskDetailTitle').textContent=t('tasks.loading');
@@ -2246,6 +2325,7 @@ async function openTaskDetail(taskId){
   document.getElementById('taskSkillSection').className='task-skill-section';
   document.getElementById('taskDetailSummary').textContent='';
   document.getElementById('taskDetailChunks').innerHTML='<div class="spinner"></div>';
+  document.getElementById('taskDetailActions').innerHTML='';
 
   try{
     const r=await fetch('/api/task/'+taskId);
@@ -2263,8 +2343,12 @@ async function openTaskDetail(taskId){
     meta.push('<div style="width:100%;margin-top:4px"><span class="meta-item" style="width:100%">'+t('tasks.taskid')+'<span class="task-id-full">'+esc(task.id)+'</span></span></div>');
     document.getElementById('taskDetailMeta').innerHTML=meta.join('');
 
+    _currentTaskData=task;
+
     // ── Skill status section ──
     renderTaskSkillSection(task);
+
+    document.getElementById('taskDetailActions').innerHTML='';
 
     var summaryEl=document.getElementById('taskDetailSummary');
     if(task.status==='skipped'){
@@ -2319,25 +2403,86 @@ function renderTaskSkillSection(task){
   }else if(ss==='not_generated'){
     section.className='task-skill-section status-not_generated';
     section.innerHTML='<div class="skill-status-header">\\u274C \u672A\u751F\u6210\u6280\u80FD</div>'+
-      '<div class="skill-status-reason">\u539F\u56E0\uFF1A'+esc(task.skillReason||'\u7ECF LLM \u8BC4\u4F30\uFF0C\u8BE5\u4EFB\u52A1\u4E0D\u9002\u5408\u63D0\u70BC\u4E3A\u53EF\u590D\u7528\u6280\u80FD\u3002')+'</div>';
+      '<div class="skill-status-reason">\u539F\u56E0\uFF1A'+esc(task.skillReason||'\u7ECF LLM \u8BC4\u4F30\uFF0C\u8BE5\u4EFB\u52A1\u4E0D\u9002\u5408\u63D0\u70BC\u4E3A\u53EF\u590D\u7528\u6280\u80FD\u3002')+'</div>'+
+      (task.status==='completed'?'<button class="btn btn-primary" onclick="retrySkillGen(\\''+esc(task.id)+'\\')" style="margin-top:8px;font-size:12px">'+t('task.retrySkill')+'</button>':'');
   }else if(ss==='skipped'){
     section.className='task-skill-section status-skipped';
     section.innerHTML='<div class="skill-status-header">\\u23ED \u8DF3\u8FC7\u6280\u80FD\u8BC4\u4F30</div>'+
-      '<div class="skill-status-reason">\u539F\u56E0\uFF1A'+esc(task.skillReason||'')+'</div>';
+      '<div class="skill-status-reason">\u539F\u56E0\uFF1A'+esc(task.skillReason||'')+'</div>'+
+      (task.status==='completed'?'<button class="btn btn-primary" onclick="retrySkillGen(\\''+esc(task.id)+'\\')" style="margin-top:8px;font-size:12px">'+t('task.retrySkill')+'</button>':'');
+  }else if(ss==='queued'){
+    section.className='task-skill-section status-generating';
+    section.innerHTML='<div class="skill-status-header">\\u{1F4CB} \u6392\u961F\u4E2D</div>'+
+      '<div class="skill-status-reason">'+esc(task.skillReason||'\u7B49\u5F85\u6280\u80FD\u8BC4\u4F30\uFF0C\u524D\u65B9\u4EFB\u52A1\u5904\u7406\u5B8C\u6210\u540E\u81EA\u52A8\u5F00\u59CB\u3002')+'</div>';
   }else if(task.status==='active'){
     section.className='task-skill-section status-skipped';
     section.innerHTML='<div class="skill-status-header">\\u23F8 \u4EFB\u52A1\u8FDB\u884C\u4E2D</div>'+
       '<div class="skill-status-reason">\u6280\u80FD\u8BC4\u4F30\u5728\u4EFB\u52A1\u5B8C\u6210\u540E\u81EA\u52A8\u8FD0\u884C\u3002</div>';
+  }else if(task.status==='completed'){
+    section.className='task-skill-section status-generating';
+    section.innerHTML='<div class="skill-status-header">\\u23F3 \u7B49\u5F85\u8BC4\u4F30</div>'+
+      '<div class="skill-status-reason">\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6280\u80FD\u8BC4\u4F30\u5373\u5C06\u5F00\u59CB\u3002</div>'+
+      '<button class="btn btn-primary" onclick="retrySkillGen(\\''+esc(task.id)+'\\')" style="margin-top:8px;font-size:12px">'+t('task.retrySkill')+'</button>';
   }else{
     section.className='task-skill-section status-skipped';
     section.innerHTML='<div class="skill-status-header">\\u2014 \u65E0\u6280\u80FD\u4FE1\u606F</div>'+
-      '<div class="skill-status-reason">\u8BE5\u4EFB\u52A1\u5728\u6280\u80FD\u8FDB\u5316\u7CFB\u7EDF\u542F\u7528\u4E4B\u524D\u5B8C\u6210\uFF0C\u65E0\u6280\u80FD\u8BC4\u4F30\u8BB0\u5F55\u3002</div>';
+      '<div class="skill-status-reason">\u8BE5\u4EFB\u52A1\u672A\u8FDB\u884C\u6280\u80FD\u8BC4\u4F30\u3002</div>'+
+      (task.status==='completed'?'<button class="btn btn-primary" onclick="retrySkillGen(\\''+esc(task.id)+'\\')" style="margin-top:8px;font-size:12px">'+t('task.retrySkill')+'</button>':'');
   }
 }
 
 function closeTaskDetail(event){
   if(event && event.target!==document.getElementById('taskDetailOverlay')) return;
   document.getElementById('taskDetailOverlay').classList.remove('show');
+}
+
+async function retrySkillGen(taskId){
+  if(!confirm(t('task.retrySkill.confirm'))) return;
+  try{
+    const r=await fetch('/api/task/'+taskId+'/retry-skill',{method:'POST'});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'unknown');
+    openTaskDetail(taskId);
+  }catch(e){ alert(t('task.retrySkill.error')+e.message); }
+}
+
+async function deleteTask(taskId){
+  if(!confirm(t('task.delete.confirm'))) return;
+  try{
+    const r=await fetch('/api/task/'+taskId,{method:'DELETE'});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'unknown');
+    closeTaskDetail();
+    document.getElementById('taskDetailOverlay').classList.remove('show');
+    loadTasks();
+  }catch(e){ alert(t('task.delete.error')+e.message); }
+}
+
+async function editTaskInline(){
+  if(!_currentTaskData) return;
+  var task=_currentTaskData;
+  var titleEl=document.getElementById('taskDetailTitle');
+  var summaryEl=document.getElementById('taskDetailSummary');
+  var actionsEl=document.getElementById('taskDetailActions');
+
+  titleEl.innerHTML='<input id="editTaskTitle" class="filter-input" style="width:100%;font-size:16px;font-weight:600" value="'+esc(task.title||'')+'"/>';
+  summaryEl.innerHTML='<textarea id="editTaskSummary" class="filter-input" style="width:100%;min-height:80px;font-size:13px;resize:vertical">'+esc(task.summary||'')+'</textarea>';
+  actionsEl.innerHTML=
+    '<button class="btn btn-primary" onclick="saveTaskEdit()" style="font-size:12px">'+t('task.save')+'</button>'+
+    '<button class="btn btn-ghost" onclick="openTaskDetail(\\''+esc(task.id)+'\\')" style="font-size:12px">'+t('task.cancel')+'</button>';
+}
+
+async function saveTaskEdit(){
+  if(!_currentTaskId) return;
+  var title=document.getElementById('editTaskTitle').value.trim();
+  var summary=document.getElementById('editTaskSummary').value.trim();
+  try{
+    const r=await fetch('/api/task/'+_currentTaskId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:title,summary:summary})});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'unknown');
+    openTaskDetail(_currentTaskId);
+    loadTasks();
+  }catch(e){ alert(t('task.save.error')+e.message); }
 }
 
 /* ─── Skills View Logic ─── */
@@ -2397,6 +2542,12 @@ async function loadSkills(){
           '<span class="tag"><span class="icon">\\u{1F4E6}</span> '+skill.sourceType+'</span>'+
           (tags.length>0?'<div class="skill-card-tags">'+tags.map(t=>'<span class="skill-tag">'+esc(t)+'</span>').join('')+'</div>':'')+
         '</div>'+
+        '<div class="card-actions" onclick="event.stopPropagation()">'+
+          '<button class="btn btn-sm btn-ghost" onclick="openSkillDetail(\\''+skill.id+'\\')">'+t('card.expand')+'</button>'+
+          '<button class="btn btn-sm btn-ghost" onclick="editSkillInline(\\''+skill.id+'\\')">'+t('card.edit')+'</button>'+
+          (skill.visibility==='public'?'<button class="btn btn-sm btn-ghost" onclick="toggleSkillPublic(\\''+skill.id+'\\',false)">\\u{1F512} '+t('skills.setPrivate')+'</button>':'<button class="btn btn-sm btn-ghost" onclick="toggleSkillPublic(\\''+skill.id+'\\',true)">\\u{1F310} '+t('skills.setPublic')+'</button>')+
+          '<button class="btn btn-sm btn-ghost" style="color:var(--accent)" onclick="deleteSkill(\\''+skill.id+'\\')">'+t('skill.delete')+'</button>'+
+        '</div>'+
       '</div>';
     }).join('');
   }catch(e){
@@ -2421,6 +2572,7 @@ async function openSkillDetail(skillId){
   document.getElementById('skillDetailContent').innerHTML='<div class="spinner"></div>';
   document.getElementById('skillVersionsList').innerHTML='<div class="spinner"></div>';
   document.getElementById('skillRelatedTasks').innerHTML='';
+  document.getElementById('skillDetailActions').innerHTML='';
 
   try{
     const r=await fetch('/api/skill/'+skillId);
@@ -2516,6 +2668,9 @@ async function openSkillDetail(skillId){
       ).join('');
     }
 
+    window._currentSkillData=skill;
+    document.getElementById('skillDetailActions').innerHTML='';
+
   }catch(e){
     document.getElementById('skillDetailTitle').textContent=t('skills.error');
     document.getElementById('skillDetailContent').innerHTML='<div style="color:var(--rose);padding:16px">'+t('skills.error.detail')+esc(String(e))+'</div>';
@@ -2541,6 +2696,18 @@ async function toggleSkillVisibility(){
     loadSkills();
   }catch(e){
     alert('Error: '+e.message);
+  }
+}
+
+async function toggleSkillPublic(id,setPublic){
+  const newVis=setPublic?'public':'private';
+  try{
+    const r=await fetch('/api/skill/'+id+'/visibility',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:newVis})});
+    if(!r.ok) throw new Error('Failed: '+r.status);
+    toast(setPublic?t('toast.setPublic'):t('toast.setPrivate'),'success');
+    loadSkills();
+  }catch(e){
+    toast('Error: '+e.message,'error');
   }
 }
 
@@ -2663,6 +2830,41 @@ function renderSkillMarkdown(md){
 function closeSkillDetail(event){
   if(event && event.target!==document.getElementById('skillDetailOverlay')) return;
   document.getElementById('skillDetailOverlay').classList.remove('show');
+}
+
+async function deleteSkill(skillId){
+  if(!confirm(t('skill.delete.confirm'))) return;
+  try{
+    const r=await fetch('/api/skill/'+skillId,{method:'DELETE'});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'unknown');
+    closeSkillDetail();
+    document.getElementById('skillDetailOverlay').classList.remove('show');
+    loadSkills();
+  }catch(e){ alert(t('skill.delete.error')+e.message); }
+}
+
+function editSkillInline(){
+  var skill=window._currentSkillData;
+  if(!skill) return;
+  var descEl=document.getElementById('skillDetailDesc');
+  var actionsEl=document.getElementById('skillDetailActions');
+  descEl.innerHTML='<textarea id="editSkillDesc" class="filter-input" style="width:100%;min-height:60px;font-size:13px;resize:vertical">'+esc(skill.description||'')+'</textarea>';
+  actionsEl.innerHTML=
+    '<button class="btn btn-primary" onclick="saveSkillEdit()" style="font-size:12px">'+t('skill.save')+'</button>'+
+    '<button class="btn btn-ghost" onclick="openSkillDetail(\\''+esc(skill.id)+'\\')" style="font-size:12px">'+t('skill.cancel')+'</button>';
+}
+
+async function saveSkillEdit(){
+  if(!currentSkillId) return;
+  var desc=document.getElementById('editSkillDesc').value.trim();
+  try{
+    const r=await fetch('/api/skill/'+currentSkillId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({description:desc})});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'unknown');
+    openSkillDetail(currentSkillId);
+    loadSkills();
+  }catch(e){ alert(t('skill.save.error')+e.message); }
 }
 
 function formatDuration(ms){
@@ -3368,6 +3570,19 @@ async function clearAll(){
 let migrateScanData=null;
 let migrateStats={stored:0,skipped:0,merged:0,errors:0};
 
+(function(){
+  const sel=document.getElementById('migrateConcurrency');
+  if(sel) sel.addEventListener('change',function(){
+    const w=document.getElementById('migrateConcurrencyWarn');
+    if(w) w.style.display=parseInt(this.value,10)>1?'block':'none';
+  });
+  const ppSel=document.getElementById('ppConcurrency');
+  if(ppSel) ppSel.addEventListener('change',function(){
+    const w=document.getElementById('ppConcurrencyWarn');
+    if(w) w.style.display=parseInt(this.value,10)>1?'block':'none';
+  });
+})();
+
 async function migrateScan(){
   const btn=document.getElementById('migrateScanBtn');
   btn.disabled=true;
@@ -3403,6 +3618,7 @@ async function migrateScan(){
 
     if(d.totalItems>0 && d.configReady){
       document.getElementById('migrateStartBtn').style.display='inline-flex';
+      document.getElementById('migrateConcurrencyRow').style.display='inline-flex';
     }
 
     if(d.totalItems===0){
@@ -3424,10 +3640,15 @@ function migrateStart(){
   if(!migrateScanData||!migrateScanData.configReady)return;
   if(!confirm(t('migrate.start')+'?'))return;
 
+  const concSel=document.getElementById('migrateConcurrency');
+  const concurrency=concSel?parseInt(concSel.value,10)||1:1;
+
   window._migrateRunning=true;
   _migrateStatusChecked=false;
   document.getElementById('migrateStartBtn').style.display='none';
   document.getElementById('migrateScanBtn').disabled=true;
+  document.getElementById('migrateConcurrencyRow').style.display='none';
+  document.getElementById('migrateConcurrencyWarn').style.display='none';
   document.getElementById('migrateProgress').style.display='block';
   document.getElementById('migrateLiveLog').innerHTML='';
   migrateStats={stored:0,skipped:0,merged:0,errors:0};
@@ -3437,7 +3658,7 @@ function migrateStart(){
   document.getElementById('migrateBar').style.width='0%';
   document.getElementById('migrateBar').style.background='linear-gradient(90deg,#6366f1,#8b5cf6)';
   document.getElementById('migrateCounter').textContent='';
-  const body=JSON.stringify({sources:['sqlite','sessions']});
+  const body=JSON.stringify({sources:['sqlite','sessions'],concurrency});
   connectMigrateSSE('/api/migrate/start','POST',body);
 }
 
@@ -3642,6 +3863,9 @@ function ppStart(){
   var enableSkills=document.getElementById('ppEnableSkills').checked;
   if(!enableTasks&&!enableSkills){toast(t('pp.select.warn'),'error');return;}
 
+  var ppConcSel=document.getElementById('ppConcurrency');
+  var ppConcurrency=ppConcSel?parseInt(ppConcSel.value,10)||1:1;
+
   window._ppRunning=true;
   _ppSSEConnected=false;
   ppStats={tasks:0,skills:0,errors:0,skipped:0};
@@ -3658,7 +3882,7 @@ function ppStart(){
   document.getElementById('ppLiveLog').innerHTML='';
   updatePPStats();
 
-  var body=JSON.stringify({enableTasks:enableTasks,enableSkills:enableSkills});
+  var body=JSON.stringify({enableTasks:enableTasks,enableSkills:enableSkills,concurrency:ppConcurrency});
   fetch('/api/migrate/postprocess',{method:'POST',headers:{'Content-Type':'application/json'},body:body})
     .then(function(r){
       if(!r.ok){

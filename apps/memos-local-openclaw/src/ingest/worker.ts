@@ -19,7 +19,8 @@ export class IngestWorker {
     private embedder: Embedder,
     private ctx: PluginContext,
   ) {
-    this.summarizer = new Summarizer(ctx.config.summarizer, ctx.log);
+    const strongCfg = ctx.config.skillEvolution?.summarizer;
+    this.summarizer = new Summarizer(ctx.config.summarizer, ctx.log, strongCfg);
     this.taskProcessor = new TaskProcessor(store, ctx);
   }
 
@@ -139,7 +140,7 @@ export class IngestWorker {
     seq: number,
   ): Promise<{ action: "stored" | "duplicate" | "merged"; chunkId?: string; summary?: string; targetChunkId?: string; reason?: string }> {
     const chunkId = uuid();
-    const summary = await this.summarizer.summarize(content);
+    let summary = await this.summarizer.summarize(content);
 
     let embedding: number[] | null = null;
     try {
@@ -151,11 +152,23 @@ export class IngestWorker {
     let dedupStatus: "active" | "duplicate" | "merged" = "active";
     let dedupTarget: string | null = null;
     let dedupReason: string | null = null;
+    let mergedFromOld: string | null = null;
+
+    // Fast path: exact content_hash match within same owner (agent dimension)
+    const chunkOwner = msg.owner ?? "agent:main";
+    const existingByHash = this.store.findActiveChunkByHash(content, chunkOwner);
+    if (existingByHash) {
+      this.ctx.log.debug(`Exact-dup (owner=${chunkOwner}): hash match → existing=${existingByHash}`);
+      this.store.recordMergeHit(existingByHash, "DUPLICATE", "exact content hash match");
+      dedupStatus = "duplicate";
+      dedupTarget = existingByHash;
+      dedupReason = "exact content hash match";
+    }
 
     // Smart dedup: find Top-5 similar chunks, then ask LLM to judge
-    if (embedding) {
-      const similarThreshold = this.ctx.config.dedup?.similarityThreshold ?? 0.75;
-      const dedupOwnerFilter = msg.owner ? [msg.owner, "public"] : undefined;
+    if (dedupStatus === "active" && embedding) {
+      const similarThreshold = this.ctx.config.dedup?.similarityThreshold ?? 0.60;
+      const dedupOwnerFilter = msg.owner ? [msg.owner] : undefined;
       const topSimilar = findTopSimilar(this.store, embedding, similarThreshold, 5, this.ctx.log, dedupOwnerFilter);
 
       if (topSimilar.length > 0) {
@@ -188,19 +201,21 @@ export class IngestWorker {
               const oldChunk = this.store.getChunk(targetChunkId);
               const oldSummary = oldChunk?.summary ?? "";
               this.store.recordMergeHit(targetChunkId, "UPDATE", dedupResult.reason, oldSummary, dedupResult.mergedSummary);
-              this.store.updateChunkSummaryAndContent(targetChunkId, dedupResult.mergedSummary, content);
 
+              summary = dedupResult.mergedSummary;
               try {
-                const [newEmb] = await this.embedder.embed([dedupResult.mergedSummary]);
-                if (newEmb) this.store.upsertEmbedding(targetChunkId, newEmb);
+                const [newEmb] = await this.embedder.embed([summary]);
+                if (newEmb) embedding = newEmb;
               } catch (err) {
-                this.ctx.log.warn(`Re-embed after UPDATE failed: ${err}`);
+                this.ctx.log.warn(`Re-embed after merge failed: ${err}`);
               }
 
-              dedupStatus = "merged";
-              dedupTarget = targetChunkId;
+              this.store.markDedupStatus(targetChunkId, "merged", chunkId, dedupResult.reason);
+              this.store.deleteEmbedding(targetChunkId);
+
+              mergedFromOld = targetChunkId;
               dedupReason = dedupResult.reason;
-              this.ctx.log.debug(`Smart dedup: UPDATE → merged into chunk=${targetChunkId}, storing with status=merged, reason: ${dedupResult.reason}`);
+              this.ctx.log.debug(`Smart dedup: UPDATE → old chunk=${targetChunkId} retired, new chunk=${chunkId} gets merged summary, reason: ${dedupResult.reason}`);
             }
           }
 
@@ -243,8 +258,8 @@ export class IngestWorker {
     if (dedupStatus === "duplicate") {
       return { action: "duplicate", summary, targetChunkId: dedupTarget ?? undefined, reason: dedupReason ?? undefined };
     }
-    if (dedupStatus === "merged") {
-      return { action: "merged", summary, targetChunkId: dedupTarget ?? undefined, reason: dedupReason ?? undefined };
+    if (mergedFromOld) {
+      return { action: "merged", chunkId, summary, targetChunkId: mergedFromOld, reason: dedupReason ?? undefined };
     }
     return { action: "stored", chunkId, summary };
   }
