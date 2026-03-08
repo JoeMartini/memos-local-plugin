@@ -1,28 +1,28 @@
 ---
 name: memos-memory-guide
-description: Use the MemOS Local memory system to search and use the user's past conversations. Use this skill whenever the user refers to past chats, their own preferences or history, or when you need to answer from prior context. When auto-recall returns nothing (long or unclear user query), generate your own short search query and call memory_search. Use task_summary when you need full task context, skill_get for experience guides, skill_search to discover public skills, memory_write_public for shared knowledge, and memory_timeline to expand around a memory hit.
+description: Use the MemOS memory system to search and use the user's past conversations, including local memory and v4 Hub-shared memory/skills. Use this skill whenever the user refers to past chats, preferences, prior tasks, or shared team knowledge. When auto-recall returns nothing, generate a short search query and call memory_search. Use task_summary for full task context, network_memory_detail for Hub hits, skill_get for local experience guides, skill_search for local/Hub skill discovery, network_skill_pull for Hub skills, memory_write_public for local shared knowledge, and memory_timeline to expand around a local memory hit.
 ---
 
 # MemOS Local Memory — Agent Guide
 
-This skill describes how to use the MemOS memory tools so you can reliably search and use the user's long-term conversation history, share knowledge across agents, and discover public skills.
+This skill describes how to use the MemOS memory tools so you can reliably search and use the user's long-term conversation history, query Hub-shared team data, share tasks, and discover or pull reusable skills.
 
 ## How memory is provided each turn
 
 - **Automatic recall (hook):** At the start of each turn, the system runs a memory search using the user's current message and injects relevant past memories into your context. You do not need to call any tool for that.
 - **When that is not enough:** If the user's message is very long, vague, or the automatic search returns **no memories**, you should **generate your own short, focused query** and call `memory_search` yourself.
-- **Memory isolation:** Each agent can only see its own memories and memories marked as `public`. Other agents' private memories are invisible to you.
+- **Memory isolation:** Each agent can only see its own local private memories and local `public` memories. Hub-shared data only appears when you search with `scope="group"` or `scope="all"`.
 
 ## Tools — what they do and when to call
 
 ### memory_search
 
-- **What it does:** Searches the user's stored conversation memory by a natural-language query. Returns a list of relevant excerpts with `chunkId` and optionally `task_id`. Only returns memories belonging to the current agent or marked as public.
+- **What it does:** Searches stored conversation memory by natural-language query. In v4 it supports `scope="local" | "group" | "all"`. Local hits are returned as normal local memory hits; Hub hits are returned in a separate section.
 - **When to call:**
   - The automatic recall did not run or returned nothing.
   - The user's query is long or unclear — **generate a short query yourself** and call `memory_search(query="...")`.
-  - You need to search with a different angle (e.g. filter by `role='user'`).
-- **Parameters:** `query` (required), optional `minScore`, `role`.
+  - You need to search team-shared memory instead of only local memory.
+- **Parameters:** `query` (required), optional `scope`, `minScore`, `role`.
 
 ### memory_write_public
 
@@ -44,9 +44,9 @@ This skill describes how to use the MemOS memory tools so you can reliably searc
 
 ### skill_search
 
-- **What it does:** Searches available **skills** (capabilities/guides) by natural language. Can search your own skills, other agents' public skills, or both — controlled by the `scope` parameter.
-- **When to call:** The current task requires a capability or guide you don't have. Use `skill_search` to find one first; after finding it, use `skill_get` to read it, then `skill_install` to load it for future turns. Set `scope` to `public` to only see others' public skills, `self` for only your own, or leave as default `mix` for both.
-- **Parameters:** `query` (required, natural language description of the need), `scope` (optional, default `mix`: self + public; `self`: own only; `public`: public only).
+- **What it does:** Searches available **skills** by natural language across local skills and, in v4, Hub-shared skills.
+- **When to call:** The current task requires a capability or guide you do not already have. Use `skill_search` first; after finding a local skill, use `skill_get` or `skill_install`. For Hub skills, use `network_skill_pull` if you want a local copy.
+- **Parameters:** `query` (required), `scope` (optional: `local`, `group`, or `all`).
 
 ### skill_install
 
@@ -56,15 +56,39 @@ This skill describes how to use the MemOS memory tools so you can reliably searc
 
 ### skill_publish
 
-- **What it does:** Makes a skill **public** so other agents can discover and install it via `skill_search`.
-- **When to call:** You have a useful skill that other agents could benefit from, and you want to share it.
-- **Parameters:** `skillId`.
+- **What it does:** Publishes a skill for sharing. In v4 this may publish to Hub-visible sharing scopes depending on the provided `scope`.
+- **When to call:** You have a useful skill that teammates could benefit from.
+- **Parameters:** `skillId`, optional `scope`.
 
 ### skill_unpublish
 
 - **What it does:** Makes a skill **private** again. Other agents will no longer discover it.
 - **When to call:** You want to stop sharing a previously published skill.
 - **Parameters:** `skillId`.
+
+### network_memory_detail
+
+- **What it does:** Fetches the full content behind a Hub search hit.
+- **When to call:** A `memory_search` result came from the Hub and you need the full shared memory content.
+- **Parameters:** `remoteHitId`.
+
+### task_share / task_unshare
+
+- **What they do:** Share a local task to the Hub, or remove it later.
+- **When to call:** A task is valuable to your group or to the whole team and should be discoverable via shared search.
+- **Parameters:** `taskId`, plus sharing visibility/scope when required.
+
+### network_skill_pull
+
+- **What it does:** Pulls a Hub-shared skill bundle down into local storage.
+- **When to call:** `skill_search` found a useful Hub skill and you want to use it locally or offline.
+- **Parameters:** `skillId`.
+
+### network_team_info
+
+- **What it does:** Returns current Hub connection information, user, role, and groups.
+- **When to call:** You need to confirm whether team sharing is configured or which groups the current client belongs to.
+- **Parameters:** none.
 
 ### memory_timeline
 
@@ -92,16 +116,25 @@ This skill describes how to use the MemOS memory tools so you can reliably searc
 4. **You need the exact surrounding conversation of a hit**
    → Call `memory_timeline(chunkId=...)`.
 
-5. **You need a capability/guide that you don't have**
-   → Call `skill_search(query="...", scope="mix")` to discover available skills.
+5. **You need team-shared memory detail from a Hub hit**
+   → Call `network_memory_detail(remoteHitId=...)`.
 
-6. **You have shared knowledge useful to all agents**
-   → Call `memory_write_public(content="...")` to persist it in public memory.
+6. **You need a capability/guide that you do not have**
+   → Call `skill_search(query="...", scope="group")` or `scope="all"` to discover available skills.
 
-7. **You want to share a useful skill with other agents**
-   → Call `skill_publish(skillId=...)`.
+7. **You found a useful Hub skill and want to use it locally**
+   → Call `network_skill_pull(skillId=...)`.
 
-8. **User asks where to see or manage their memories**
+8. **You have a task that should be searchable by teammates**
+   → Call `task_share(taskId=...)` and later `task_unshare(taskId=...)` if needed.
+
+9. **You have shared knowledge useful to all local agents**
+   → Call `memory_write_public(content="...")` to persist it in local public memory.
+
+10. **You want to share a useful skill with other agents or teammates**
+   → Call `skill_publish(skillId=..., scope=...)`.
+
+11. **User asks where to see or manage their memories**
    → Call `memory_viewer()` and share the URL.
 
 ## Writing good search queries

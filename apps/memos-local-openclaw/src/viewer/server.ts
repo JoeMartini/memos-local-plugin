@@ -967,21 +967,25 @@ export class ViewerServer {
   private handleSharingMemorySearch(req: http.IncomingMessage, res: http.ServerResponse): void {
     this.readBody(req, async (body) => {
       if (!this.ctx) return this.jsonResponse(res, { local: { hits: [], meta: {} }, hub: { hits: [], meta: { totalCandidates: 0, searchedGroups: [], includedPublic: false } }, error: "sharing_unavailable" });
+      const emptyHub = { hits: [], meta: { totalCandidates: 0, searchedGroups: [], includedPublic: false } };
       try {
         const parsed = JSON.parse(body || "{}");
         const query = String(parsed.query || "");
         const role = typeof parsed.role === "string" ? parsed.role : undefined;
-        const minScore = typeof parsed.minScore === "number" ? parsed.minScore : undefined;
         const maxResults = typeof parsed.maxResults === "number" ? parsed.maxResults : 10;
         const scope = parsed.scope === "group" || parsed.scope === "all" ? parsed.scope : "local";
         const local = this.searchLocalViewerMemories(query, { role, maxResults });
-        const localHits = local.hits;
-        const hub = scope === "local"
-          ? { hits: [], meta: { totalCandidates: 0, searchedGroups: [], includedPublic: false } }
-          : await hubSearchMemories(this.store, this.ctx, { query, maxResults, scope });
-        this.jsonResponse(res, { local: { hits: localHits, meta: local.meta }, hub });
+        if (scope === "local") {
+          return this.jsonResponse(res, { local: { hits: local.hits, meta: local.meta }, hub: emptyHub });
+        }
+        try {
+          const hub = await hubSearchMemories(this.store, this.ctx, { query, maxResults, scope });
+          this.jsonResponse(res, { local: { hits: local.hits, meta: local.meta }, hub });
+        } catch (err) {
+          this.jsonResponse(res, { local: { hits: local.hits, meta: local.meta }, hub: emptyHub, error: String(err) });
+        }
       } catch (err) {
-        this.jsonResponse(res, { local: { hits: [], meta: {} }, hub: { hits: [], meta: { totalCandidates: 0, searchedGroups: [], includedPublic: false } }, error: String(err) });
+        this.jsonResponse(res, { local: { hits: [], meta: {} }, hub: emptyHub, error: String(err) });
       }
     });
   }
@@ -1005,9 +1009,16 @@ export class ViewerServer {
       const query = String(url.searchParams.get("query") || "");
       const scope = url.searchParams.get("scope") === "group" || url.searchParams.get("scope") === "all" ? url.searchParams.get("scope")! : "local";
       const recall = new RecallEngine(this.store, this.embedder, this.ctx);
-      const localHits = scope === "local" ? await recall.searchSkills(query, "mix" as any, "agent:main") : await recall.searchSkills(query, "mix" as any, "agent:main");
-      const hub = scope === "local" ? { hits: [] } : await hubSearchSkills(this.store, this.ctx, { query, maxResults: Number(url.searchParams.get("maxResults") || 20) });
-      this.jsonResponse(res, { local: { hits: localHits }, hub });
+      const localHits = await recall.searchSkills(query, "mix" as any, "agent:main");
+      if (scope === "local") {
+        return this.jsonResponse(res, { local: { hits: localHits }, hub: { hits: [] } });
+      }
+      try {
+        const hub = await hubSearchSkills(this.store, this.ctx, { query, maxResults: Number(url.searchParams.get("maxResults") || 20) });
+        this.jsonResponse(res, { local: { hits: localHits }, hub });
+      } catch (err) {
+        this.jsonResponse(res, { local: { hits: localHits }, hub: { hits: [] }, error: String(err) });
+      }
     } catch (err) {
       this.jsonResponse(res, { local: { hits: [] }, hub: { hits: [] }, error: String(err) });
     }

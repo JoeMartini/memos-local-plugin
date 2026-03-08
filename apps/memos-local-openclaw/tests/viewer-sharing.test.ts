@@ -170,6 +170,15 @@ describe("viewer sharing endpoints", () => {
     expect(memJson.local.hits.length).toBeGreaterThan(0);
     expect(memJson.hub.hits.length).toBeGreaterThan(0);
 
+    const detailRes = await fetch(`${viewerUrl}/api/sharing/memory-detail`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ remoteHitId: memJson.hub.hits[0].remoteHitId }),
+    });
+    const detailJson = await detailRes.json();
+    expect(detailJson.summary).toContain("Hub rollout checklist");
+    expect(detailJson.content).toContain("nginx canary");
+
     const skillRes = await fetch(`${viewerUrl}/api/sharing/search/skills?query=rollout&scope=all`, { headers: { cookie } });
     const skillJson = await skillRes.json();
     expect(skillJson.local.hits.length).toBeGreaterThan(0);
@@ -208,4 +217,60 @@ describe("viewer sharing endpoints", () => {
     expect(hubStore.getHubTaskBySource(adminUserId, "local-task-1")).toBeNull();
     expect(viewerStore.getHubTaskBySource(adminUserId, "local-task-1")).toBeNull();
   });
+
+
+  it("degrades to local-only results when hub is unreachable", async () => {
+    const viewerDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-viewer-offline-"));
+    tmpDirs.push(viewerDir);
+
+    const viewerStore = new SqliteStore(path.join(viewerDir, "viewer.db"), noopLog);
+    stores.push(viewerStore);
+
+    viewerStore.insertTask({ id: "offline-task-1", sessionKey: "offline-session", title: "Offline task", summary: "Offline task", status: "completed", owner: "agent:main", startedAt: 1, endedAt: 2, updatedAt: 2 });
+    viewerStore.insertChunk({ id: "offline-chunk-1", sessionKey: "offline-session", turnId: "turn-1", seq: 0, role: "assistant", content: "Offline local nginx checklist remains searchable.", kind: "paragraph", summary: "Offline nginx checklist", embedding: null, taskId: "offline-task-1", skillId: null, owner: "agent:main", dedupStatus: "active", dedupTarget: null, dedupReason: null, mergeCount: 0, lastHitAt: null, mergeHistory: "[]", createdAt: 3, updatedAt: 3 });
+    viewerStore.insertSkill({ id: "offline-skill-1", name: "offline-rollout", description: "Offline local rollout helper", version: 1, status: "active", tags: "[]", sourceType: "manual", dirPath: viewerDir, installed: 0, owner: "agent:main", visibility: "private", qualityScore: 0.8, createdAt: 1, updatedAt: 1 });
+
+    viewer = new ViewerServer({
+      store: viewerStore,
+      embedder: { provider: "local", embedQuery: async () => { throw new Error("skip vec"); } } as any,
+      port: 19835,
+      log: noopLog,
+      dataDir: viewerDir,
+      ctx: {
+        stateDir: viewerDir,
+        workspaceDir: viewerDir,
+        config: {
+          sharing: { enabled: true, role: "client", client: { hubAddress: "127.0.0.1:19999", userToken: "bad-token" } },
+        } as any,
+        log: noopLog,
+      },
+    });
+    const viewerUrl = await viewer.start();
+    const cookie = await viewerAuthCookie(viewerUrl);
+
+    const statusRes = await fetch(`${viewerUrl}/api/sharing/status`, { headers: { cookie } });
+    const statusJson = await statusRes.json();
+    expect(statusJson.connection.connected).toBe(false);
+
+    const pendingRes = await fetch(`${viewerUrl}/api/sharing/pending-users`, { headers: { cookie } });
+    const pendingJson = await pendingRes.json();
+    expect(pendingJson.error).toBeTruthy();
+
+    const memRes = await fetch(`${viewerUrl}/api/sharing/search/memories`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ query: "nginx checklist", scope: "all", maxResults: 5 }),
+    });
+    const memJson = await memRes.json();
+    expect(memJson.local.hits.length).toBeGreaterThan(0);
+    expect(memJson.hub.hits.length).toBe(0);
+    expect(memJson.error).toBeTruthy();
+
+    const skillRes = await fetch(`${viewerUrl}/api/sharing/search/skills?query=rollout&scope=all`, { headers: { cookie } });
+    const skillJson = await skillRes.json();
+    expect(skillJson.local.hits.length).toBeGreaterThan(0);
+    expect(skillJson.hub.hits.length).toBe(0);
+    expect(skillJson.error).toBeTruthy();
+  });
+
 });
