@@ -1769,6 +1769,50 @@ export class SqliteStore {
     this.db.prepare('DELETE FROM hub_skills WHERE source_user_id = ? AND source_skill_id = ?').run(sourceUserId, sourceSkillId);
   }
 
+  listAllHubTasks(): Array<{ id: string; sourceTaskId: string; sourceUserId: string; title: string; summary: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; chunkCount: number; createdAt: number; updatedAt: number }> {
+    const rows = this.db.prepare(`
+      SELECT t.*, u.username AS owner_name, g.name AS group_name,
+        (SELECT COUNT(*) FROM hub_chunks c WHERE c.hub_task_id = t.id) AS chunk_count
+      FROM hub_tasks t
+      LEFT JOIN hub_users u ON u.id = t.source_user_id
+      LEFT JOIN hub_groups g ON g.id = t.group_id
+      ORDER BY t.updated_at DESC
+    `).all() as any[];
+    return rows.map(r => ({
+      id: r.id, sourceTaskId: r.source_task_id, sourceUserId: r.source_user_id,
+      title: r.title, summary: r.summary, groupId: r.group_id, groupName: r.group_name ?? null,
+      visibility: r.visibility, ownerName: r.owner_name ?? "unknown", chunkCount: r.chunk_count ?? 0,
+      createdAt: r.created_at, updatedAt: r.updated_at,
+    }));
+  }
+
+  deleteHubTaskById(taskId: string): boolean {
+    const info = this.db.prepare('DELETE FROM hub_tasks WHERE id = ?').run(taskId);
+    return info.changes > 0;
+  }
+
+  listAllHubSkills(): Array<{ id: string; sourceSkillId: string; sourceUserId: string; name: string; description: string; version: number; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; qualityScore: number | null; createdAt: number; updatedAt: number }> {
+    const rows = this.db.prepare(`
+      SELECT s.*, u.username AS owner_name, g.name AS group_name
+      FROM hub_skills s
+      LEFT JOIN hub_users u ON u.id = s.source_user_id
+      LEFT JOIN hub_groups g ON g.id = s.group_id
+      ORDER BY s.updated_at DESC
+    `).all() as any[];
+    return rows.map(r => ({
+      id: r.id, sourceSkillId: r.source_skill_id, sourceUserId: r.source_user_id,
+      name: r.name, description: r.description, version: r.version,
+      groupId: r.group_id, groupName: r.group_name ?? null, visibility: r.visibility,
+      ownerName: r.owner_name ?? "unknown", qualityScore: r.quality_score,
+      createdAt: r.created_at, updatedAt: r.updated_at,
+    }));
+  }
+
+  deleteHubSkillById(skillId: string): boolean {
+    const info = this.db.prepare('DELETE FROM hub_skills WHERE id = ?').run(skillId);
+    return info.changes > 0;
+  }
+
   private resolveCanonicalHubTaskId(taskId: string, sourceUserId: string, sourceTaskId?: string): string {
     if (sourceTaskId) {
       const bySource = this.db.prepare('SELECT id FROM hub_tasks WHERE source_user_id = ? AND source_task_id = ?').get(sourceUserId, sourceTaskId) as { id: string } | undefined;

@@ -230,6 +230,10 @@ export class ViewerServer {
       else if (p.match(/^\/api\/sharing\/groups\/[^/]+\/members$/) && req.method === "POST") this.handleSharingGroupAddMember(req, res, p);
       else if (p.match(/^\/api\/sharing\/groups\/[^/]+\/members$/) && req.method === "DELETE") this.handleSharingGroupRemoveMember(req, res, p);
       else if (p === "/api/sharing/users" && req.method === "GET") this.serveSharingUsers(res);
+      else if (p === "/api/admin/shared-tasks" && req.method === "GET") this.serveAdminSharedTasks(res);
+      else if (p.match(/^\/api\/admin\/shared-tasks\/[^/]+$/) && req.method === "DELETE") this.handleAdminDeleteTask(res, p);
+      else if (p === "/api/admin/shared-skills" && req.method === "GET") this.serveAdminSharedSkills(res);
+      else if (p.match(/^\/api\/admin\/shared-skills\/[^/]+$/) && req.method === "DELETE") this.handleAdminDeleteSkill(res, p);
       else if (p === "/api/config" && req.method === "GET") this.serveConfig(res);
       else if (p === "/api/config" && req.method === "PUT") this.handleSaveConfig(req, res);
       else if (p === "/api/auth/logout" && req.method === "POST") this.handleLogout(req, res);
@@ -1302,6 +1306,54 @@ export class ViewerServer {
       this.jsonResponse(res, { users: Array.isArray(data?.users) ? data.users : [] });
     } catch (err) {
       this.jsonResponse(res, { users: [], error: String(err) });
+    }
+  }
+
+  // ─── Admin management endpoints (Hub-side data) ───
+
+  private async serveAdminSharedTasks(res: http.ServerResponse): Promise<void> {
+    const hub = this.resolveHubConnection();
+    if (!hub) return this.jsonResponse(res, { tasks: [], error: "not_configured" });
+    try {
+      const data = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/admin/shared-tasks", { method: "GET" }) as any;
+      this.jsonResponse(res, { tasks: Array.isArray(data?.tasks) ? data.tasks : [] });
+    } catch (err) {
+      this.jsonResponse(res, { tasks: [], error: String(err) });
+    }
+  }
+
+  private async handleAdminDeleteTask(res: http.ServerResponse, p: string): Promise<void> {
+    const hub = this.resolveHubConnection();
+    if (!hub) return this.jsonResponse(res, { ok: false, error: "not_configured" });
+    const taskId = decodeURIComponent(p.replace("/api/admin/shared-tasks/", ""));
+    try {
+      await hubRequestJson(hub.hubUrl, hub.userToken, `/api/v1/hub/admin/shared-tasks/${encodeURIComponent(taskId)}`, { method: "DELETE" });
+      this.jsonResponse(res, { ok: true });
+    } catch (err) {
+      this.jsonResponse(res, { ok: false, error: String(err) });
+    }
+  }
+
+  private async serveAdminSharedSkills(res: http.ServerResponse): Promise<void> {
+    const hub = this.resolveHubConnection();
+    if (!hub) return this.jsonResponse(res, { skills: [], error: "not_configured" });
+    try {
+      const data = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/admin/shared-skills", { method: "GET" }) as any;
+      this.jsonResponse(res, { skills: Array.isArray(data?.skills) ? data.skills : [] });
+    } catch (err) {
+      this.jsonResponse(res, { skills: [], error: String(err) });
+    }
+  }
+
+  private async handleAdminDeleteSkill(res: http.ServerResponse, p: string): Promise<void> {
+    const hub = this.resolveHubConnection();
+    if (!hub) return this.jsonResponse(res, { ok: false, error: "not_configured" });
+    const skillId = decodeURIComponent(p.replace("/api/admin/shared-skills/", ""));
+    try {
+      await hubRequestJson(hub.hubUrl, hub.userToken, `/api/v1/hub/admin/shared-skills/${encodeURIComponent(skillId)}`, { method: "DELETE" });
+      this.jsonResponse(res, { ok: true });
+    } catch (err) {
+      this.jsonResponse(res, { ok: false, error: String(err) });
     }
   }
 

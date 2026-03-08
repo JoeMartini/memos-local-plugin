@@ -456,8 +456,35 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .nav-tabs .tab.active{color:var(--text);background:rgba(255,255,255,.1);border-color:var(--border);box-shadow:0 1px 4px rgba(0,0,0,.15)}
 [data-theme="light"] .nav-tabs{background:rgba(0,0,0,.05)}
 [data-theme="light"] .nav-tabs .tab.active{background:#fff;border-color:rgba(0,0,0,.1);box-shadow:0 1px 3px rgba(0,0,0,.08);color:var(--text)}
-.analytics-view,.settings-view,.logs-view,.migrate-view{display:none;flex:1;min-width:0;flex-direction:column;gap:20px}
-.analytics-view.show,.settings-view.show,.logs-view.show,.migrate-view.show{display:flex}
+.analytics-view,.settings-view,.logs-view,.migrate-view,.admin-view{display:none;flex:1;min-width:0;flex-direction:column;gap:20px}
+.analytics-view.show,.settings-view.show,.logs-view.show,.migrate-view.show,.admin-view.show{display:flex}
+.admin-view{padding:0 4px}
+.admin-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:16px;flex-wrap:wrap}
+.admin-tabs .admin-tab{padding:6px 14px;border-radius:8px;border:1px solid transparent;background:none;color:var(--text-sec);cursor:pointer;font-size:13px;font-family:inherit;transition:all .15s}
+.admin-tabs .admin-tab:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.admin-tabs .admin-tab.active{color:var(--text);background:var(--pri-glow);border-color:var(--pri);font-weight:600}
+.admin-panel{display:none}.admin-panel.active{display:block}
+.admin-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:12px;transition:border-color .15s}
+.admin-card:hover{border-color:var(--border-glow)}
+.admin-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.admin-card-title{font-size:14px;font-weight:600;color:var(--text)}
+.admin-card-meta{font-size:12px;color:var(--text-sec);line-height:1.5}
+.admin-card-actions{display:flex;gap:6px;margin-top:10px}
+.admin-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.admin-badge.public{background:var(--green-bg);color:var(--green)}
+.admin-badge.group{background:var(--pri-glow);color:var(--pri)}
+.admin-badge.admin{background:var(--amber-bg);color:var(--amber)}
+.admin-badge.member{background:rgba(255,255,255,.06);color:var(--text-sec)}
+.admin-badge.active{background:var(--green-bg);color:var(--green)}
+.admin-badge.pending{background:var(--amber-bg);color:var(--amber)}
+.admin-badge.blocked{background:var(--rose-bg);color:var(--rose)}
+.admin-empty{text-align:center;padding:32px;color:var(--text-muted);font-size:13px}
+.admin-stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+.admin-stat-box{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;text-align:center}
+.admin-stat-box .val{font-size:24px;font-weight:700;color:var(--text)}
+.admin-stat-box .lbl{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+[data-theme="light"] .admin-tabs .admin-tab.active{background:rgba(79,70,229,.06)}
+[data-theme="light"] .admin-tabs .admin-tab:hover{background:rgba(0,0,0,.04)}
 
 /* ─── Logs ─── */
 .logs-toolbar{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
@@ -758,6 +785,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <button class="tab" data-view="analytics" onclick="switchView('analytics')" data-i18n="tab.analytics">\u{1F4CA} Analytics</button>
         <button class="tab" data-view="logs" onclick="switchView('logs')" data-i18n="tab.logs">\u{1F4DD} Logs</button>
         <button class="tab" data-view="import" onclick="switchView('import')" data-i18n="tab.import">\u{1F4E5} Import</button>
+        <button class="tab" data-view="admin" onclick="switchView('admin')" style="display:none" data-i18n="tab.admin">\u{1F6E1} Admin</button>
         <button class="tab" data-view="settings" onclick="switchView('settings')" data-i18n="tab.settings">\u2699 Settings</button>
       </nav>
     </div>
@@ -1171,6 +1199,25 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <button class="btn btn-primary" onclick="saveConfig()" data-i18n="settings.save">Save Settings</button>
       </div>
       <div style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:4px" data-i18n="settings.restart.hint">Some changes require restarting the OpenClaw gateway to take effect.</div>
+    </div>
+
+    <!-- ─── Admin Page ─── -->
+    <div class="admin-view" id="adminView">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 style="font-size:18px;font-weight:700;color:var(--text)"><span class="icon">\u{1F6E1}</span> Hub Admin Panel</h2>
+        <button class="btn btn-sm btn-ghost" onclick="loadAdminData()">\u21BB Refresh</button>
+      </div>
+      <div class="admin-stat-row" id="adminStats"></div>
+      <div class="admin-tabs">
+        <button class="admin-tab active" onclick="switchAdminTab('users',this)">Users</button>
+        <button class="admin-tab" onclick="switchAdminTab('groups',this)">Groups</button>
+        <button class="admin-tab" onclick="switchAdminTab('memories',this)">Shared Memories</button>
+        <button class="admin-tab" onclick="switchAdminTab('skills',this)">Shared Skills</button>
+      </div>
+      <div class="admin-panel active" id="adminUsersPanel"></div>
+      <div class="admin-panel" id="adminGroupsPanel"></div>
+      <div class="admin-panel" id="adminMemoriesPanel"></div>
+      <div class="admin-panel" id="adminSkillsPanel"></div>
     </div>
 
     <!-- ─── Import Page ─── -->
@@ -2002,6 +2049,7 @@ function switchView(view){
   const logsView=document.getElementById('logsView');
   const settingsView=document.getElementById('settingsView');
   const migrateView=document.getElementById('migrateView');
+  const adminView=document.getElementById('adminView');
   feedWrap.classList.add('hide');
   analyticsView.classList.remove('show');
   tasksView.classList.remove('show');
@@ -2009,6 +2057,7 @@ function switchView(view){
   logsView.classList.remove('show');
   settingsView.classList.remove('show');
   migrateView.classList.remove('show');
+  if(adminView) adminView.classList.remove('show');
   if(view==='analytics'){
     analyticsView.classList.add('show');
     loadMetrics();
@@ -2030,6 +2079,8 @@ function switchView(view){
   } else if(view==='import'){
     migrateView.classList.add('show');
     if(!window._migrateRunning) migrateScan();
+  } else if(view==='admin'){
+    if(adminView){adminView.classList.add('show');loadAdminData();}
   } else {
     feedWrap.classList.remove('hide');
   }
@@ -2069,16 +2120,17 @@ function renderSharingSidebar(data){
     hintEl.textContent='Enable sharing in plugin config to connect a Hub.';
     return;
   }
-  if(data.role!=='client'){
-    statusEl.innerHTML='<strong>Hub mode</strong>';
-    hintEl.textContent='This node is currently running as the Hub server.';
-    return;
-  }
   var conn=data.connection||{};
   if(conn.connected&&conn.user){
     var groups=(conn.user.groups||[]).map(function(g){return g.name;}).join(', ')||'(none)';
-    statusEl.innerHTML='<strong>'+esc(conn.user.username)+'</strong> · '+esc(conn.user.role)+'<br>Team: '+esc(conn.teamName||'Unknown')+'<br>Hub: '+esc(conn.hubUrl||data.hubUrl||'')+'<br>Groups: '+esc(groups);
+    var roleLabel=data.role==='hub'?'Hub Admin':'Client';
+    statusEl.innerHTML='<strong>'+esc(conn.user.username)+'</strong> · '+esc(conn.user.role)+' ('+roleLabel+')<br>Team: '+esc(conn.teamName||'Unknown')+'<br>Hub: '+esc(conn.hubUrl||data.hubUrl||'')+'<br>Groups: '+esc(groups);
     hintEl.textContent=conn.apiVersion?'API '+conn.apiVersion:'';
+    var adminTab=document.querySelector('.tab[data-view="admin"]');
+    if(adminTab) adminTab.style.display=(conn.user.role==='admin')?'':'none';
+  }else if(data.role==='hub'){
+    statusEl.innerHTML='<strong>Hub mode</strong><br>Status: not connected to self';
+    hintEl.textContent='Configure sharing.client with hubAddress and userToken pointing to this Hub to enable admin UI.';
   }else if(data.clientConfigured){
     statusEl.innerHTML='<strong>Client configured</strong><br>Hub: '+esc(data.hubUrl||'')+'<br>Status: disconnected';
     hintEl.textContent='Viewer will keep showing local data; Hub actions may fail until the connection is restored.';
@@ -2116,9 +2168,15 @@ function renderSharingSettings(data){
     teamLines.push('<div class="line"><strong>Team:</strong> '+esc(conn.teamName||'Unknown')+'</div>');
     teamLines.push('<div class="line"><strong>Groups:</strong> '+esc(groups)+'</div>');
     if(user.role==='admin'){
-      teamLines.push('<div style="margin-top:12px"><button class="btn btn-sm" onclick="loadGroupManager()">Manage Groups</button></div>');
+      teamLines.push('<div style="margin-top:12px;display:flex;gap:8px">');
+      teamLines.push('<button class="btn btn-sm" onclick="loadGroupManager()">Manage Groups</button>');
+      teamLines.push('<button class="btn btn-sm btn-primary" onclick="switchView(\'admin\')">Open Admin Panel</button>');
+      teamLines.push('</div>');
     }
     teamLines.push('<div id="groupManagerPanel" style="margin-top:12px;display:none"></div>');
+  }else if(data.role==='hub'&&!data.clientConfigured){
+    teamLines.push('<div class="line">Hub is running but client connection is not configured.</div>');
+    teamLines.push('<div class="line" style="color:var(--amber)">Add <code>sharing.client.hubAddress</code> and <code>sharing.client.userToken</code> pointing to this Hub to enable the admin interface.</div>');
   }else{
     teamLines.push('<div class="line">Not connected to Hub.</div>');
   }
@@ -2310,6 +2368,272 @@ async function removeGroupMember(groupId,userId){
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
     var d=await r.json();
     if(d.ok){toast('Member removed','success');toggleGroupMembers(groupId);toggleGroupMembers(groupId);}else{toast(d.error||'Remove failed','error');}
+  }catch(e){toast('Remove failed: '+e.message,'error');}
+}
+
+/* ─── Hub Admin Panel ─── */
+var adminDataCache={users:[],groups:[],tasks:[],skills:[]};
+
+function switchAdminTab(tab,btn){
+  document.querySelectorAll('.admin-tabs .admin-tab').forEach(function(t){t.classList.remove('active');});
+  btn.classList.add('active');
+  document.querySelectorAll('.admin-panel').forEach(function(p){p.classList.remove('active');});
+  var panel=document.getElementById('admin'+tab.charAt(0).toUpperCase()+tab.slice(1)+'Panel');
+  if(panel) panel.classList.add('active');
+}
+
+async function loadAdminData(){
+  try{
+    var [usersR,groupsR,tasksR,skillsR,pendingR]=await Promise.all([
+      fetch('/api/sharing/users').then(function(r){return r.json();}),
+      fetch('/api/sharing/groups').then(function(r){return r.json();}),
+      fetch('/api/admin/shared-tasks').then(function(r){return r.json();}),
+      fetch('/api/admin/shared-skills').then(function(r){return r.json();}),
+      fetch('/api/sharing/pending-users').then(function(r){return r.json();})
+    ]);
+    adminDataCache.users=Array.isArray(usersR.users)?usersR.users:[];
+    adminDataCache.groups=Array.isArray(groupsR.groups)?groupsR.groups:[];
+    adminDataCache.tasks=Array.isArray(tasksR.tasks)?tasksR.tasks:[];
+    adminDataCache.skills=Array.isArray(skillsR.skills)?skillsR.skills:[];
+    var pending=Array.isArray(pendingR.users)?pendingR.users:[];
+    renderAdminStats(pending.length);
+    renderAdminUsers(adminDataCache.users, pending);
+    renderAdminGroups(adminDataCache.groups);
+    renderAdminMemories(adminDataCache.tasks);
+    renderAdminSkills(adminDataCache.skills);
+  }catch(e){
+    var statsEl=document.getElementById('adminStats');
+    if(statsEl) statsEl.innerHTML='<div class="admin-empty">Failed to load admin data: '+esc(String(e))+'</div>';
+  }
+}
+
+function renderAdminStats(pendingCount){
+  var el=document.getElementById('adminStats');
+  if(!el) return;
+  el.innerHTML=
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.users.length+'</div><div class="lbl">Active Users</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+pendingCount+'</div><div class="lbl">Pending</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.groups.length+'</div><div class="lbl">Groups</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.tasks.length+'</div><div class="lbl">Shared Tasks</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.skills.length+'</div><div class="lbl">Shared Skills</div></div>';
+}
+
+function renderAdminUsers(users,pending){
+  var el=document.getElementById('adminUsersPanel');
+  if(!el) return;
+  var html='';
+  if(pending&&pending.length>0){
+    html+='<div style="margin-bottom:16px"><h3 style="font-size:14px;font-weight:600;color:var(--amber);margin-bottom:10px">Pending Approval ('+pending.length+')</h3>';
+    for(var p=0;p<pending.length;p++){
+      var pu=pending[p];
+      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(pu.username||pu.id||'Unknown')+'</div><span class="admin-badge pending">pending</span></div>'+
+        '<div class="admin-card-meta">Device: '+esc(pu.deviceName||'unknown')+'</div>'+
+        '<div class="admin-card-actions">'+
+          '<button class="btn btn-sm btn-primary" onclick="adminApproveUser(&quot;'+escAttr(pu.id)+'&quot;,&quot;'+escAttr(pu.username||'')+'&quot;)">Approve</button>'+
+          '<button class="btn btn-sm btn-ghost" onclick="adminRejectUser(&quot;'+escAttr(pu.id)+'&quot;)" style="color:var(--rose)">Reject</button>'+
+        '</div></div>';
+    }
+    html+='</div>';
+  }
+  html+='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Active Users ('+users.length+')</h3>';
+  if(users.length===0){
+    html+='<div class="admin-empty">No active users.</div>';
+  }else{
+    for(var i=0;i<users.length;i++){
+      var u=users[i];
+      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(u.username||u.id)+'</div>'+
+        '<span class="admin-badge '+(u.role==='admin'?'admin':'member')+'">'+esc(u.role||'member')+'</span></div>'+
+        '<div class="admin-card-meta">ID: '+esc(u.id)+(u.status?' \u00B7 Status: '+esc(u.status):'')+'</div></div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+async function adminApproveUser(userId,username){
+  try{
+    var r=await fetch('/api/sharing/approve-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
+    var d=await r.json();
+    if(d.ok){toast('User approved','success');loadAdminData();}else{toast(d.error||'Approve failed','error');}
+  }catch(e){toast('Approve failed: '+e.message,'error');}
+}
+async function adminRejectUser(userId){
+  if(!confirm('Reject this user?')) return;
+  try{
+    var r=await fetch('/api/sharing/reject-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
+    var d=await r.json();
+    if(d.ok){toast('User rejected','success');loadAdminData();}else{toast(d.error||'Reject failed','error');}
+  }catch(e){toast('Reject failed: '+e.message,'error');}
+}
+
+function renderAdminGroups(groups){
+  var el=document.getElementById('adminGroupsPanel');
+  if(!el) return;
+  var html='<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'+
+    '<h3 style="font-size:14px;font-weight:600;color:var(--text)">Groups ('+groups.length+')</h3>'+
+    '<button class="btn btn-sm btn-primary" onclick="showAdminCreateGroup()">+ New Group</button></div>';
+  html+='<div id="adminCreateGroupForm" style="display:none;margin-bottom:14px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px">'+
+    '<div style="display:flex;flex-direction:column;gap:8px">'+
+    '<input id="adminNewGroupName" type="text" placeholder="Group name" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text)">'+
+    '<input id="adminNewGroupDesc" type="text" placeholder="Description (optional)" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text)">'+
+    '<div style="display:flex;gap:8px"><button class="btn btn-sm btn-primary" onclick="adminCreateGroup()">Create</button>'+
+    '<button class="btn btn-sm btn-ghost" onclick="hideAdminCreateGroup()">Cancel</button></div></div></div>';
+  if(groups.length===0){
+    html+='<div class="admin-empty">No groups created yet.</div>';
+  }else{
+    for(var i=0;i<groups.length;i++){
+      var g=groups[i];
+      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(g.name)+'</div>'+
+        '<button class="btn btn-sm btn-ghost" onclick="adminDeleteGroup(&quot;'+escAttr(g.id)+'&quot;,&quot;'+escAttr(g.name)+'&quot;)" style="color:var(--rose);font-size:11px">Delete</button></div>'+
+        (g.description?'<div class="admin-card-meta">'+esc(g.description)+'</div>':'')+
+        '<div class="admin-card-actions">'+
+          '<button class="btn btn-sm" onclick="adminToggleGroupMembers(&quot;'+escAttr(g.id)+'&quot;)">Members</button>'+
+        '</div>'+
+        '<div id="adminGroupMembers_'+escAttr(g.id)+'" style="display:none;margin-top:10px"></div>'+
+      '</div>';
+    }
+  }
+  el.innerHTML=html;
+}
+function showAdminCreateGroup(){var f=document.getElementById('adminCreateGroupForm');if(f)f.style.display='block';}
+function hideAdminCreateGroup(){var f=document.getElementById('adminCreateGroupForm');if(f)f.style.display='none';}
+async function adminCreateGroup(){
+  var name=(document.getElementById('adminNewGroupName')).value.trim();
+  var desc=(document.getElementById('adminNewGroupDesc')).value.trim();
+  if(!name){toast('Group name is required','error');return;}
+  try{
+    var r=await fetch('/api/sharing/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:desc})});
+    var d=await r.json();
+    if(d.ok||d.id){toast('Group created','success');hideAdminCreateGroup();loadAdminData();}else{toast(d.error||'Create failed','error');}
+  }catch(e){toast('Create failed: '+e.message,'error');}
+}
+async function adminDeleteGroup(groupId,groupName){
+  if(!confirm('Delete group "'+groupName+'"?')) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId),{method:'DELETE'});
+    var d=await r.json();
+    if(d.ok){toast('Group deleted','success');loadAdminData();}else{toast(d.error||'Delete failed','error');}
+  }catch(e){toast('Delete failed: '+e.message,'error');}
+}
+async function adminToggleGroupMembers(groupId){
+  var el=document.getElementById('adminGroupMembers_'+groupId);
+  if(!el) return;
+  if(el.style.display!=='none'){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML='Loading...';
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members');
+    var d=await r.json();
+    var members=Array.isArray(d.members)?d.members:[];
+    var html='<div style="font-size:12px;margin-bottom:6px;color:var(--text-sec)">Members ('+members.length+'):</div>';
+    if(members.length>0){
+      html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
+      for(var i=0;i<members.length;i++){
+        var m=members[i];
+        html+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;font-size:12px">'+
+          esc(m.username||m.userId)+
+          ' <button style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:11px;padding:0 2px" onclick="adminRemoveGroupMember(&quot;'+escAttr(groupId)+'&quot;,&quot;'+escAttr(m.userId)+'&quot;)">&times;</button></span>';
+      }
+      html+='</div>';
+    }else{
+      html+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">No members.</div>';
+    }
+    var memberIds=new Set(members.map(function(m){return m.userId;}));
+    var available=adminDataCache.users.filter(function(u){return !memberIds.has(u.id);});
+    if(available.length>0){
+      html+='<div style="display:flex;gap:6px;align-items:center">'+
+        '<select id="adminAddMember_'+escAttr(groupId)+'" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg-card);color:var(--text)">';
+      for(var j=0;j<available.length;j++){
+        html+='<option value="'+escAttr(available[j].id)+'">'+esc(available[j].username)+'</option>';
+      }
+      html+='</select><button class="btn btn-sm" onclick="adminAddGroupMember(&quot;'+escAttr(groupId)+'&quot;)">Add</button></div>';
+    }
+    el.innerHTML=html;
+  }catch(e){el.innerHTML='Failed: '+esc(String(e));}
+}
+async function adminAddGroupMember(groupId){
+  var sel=document.getElementById('adminAddMember_'+groupId);
+  if(!sel) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:sel.value})});
+    var d=await r.json();
+    if(d.ok){toast('Member added','success');adminToggleGroupMembers(groupId);adminToggleGroupMembers(groupId);}else{toast(d.error||'Add failed','error');}
+  }catch(e){toast('Add failed: '+e.message,'error');}
+}
+async function adminRemoveGroupMember(groupId,userId){
+  if(!confirm('Remove this member?')) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
+    var d=await r.json();
+    if(d.ok){toast('Member removed','success');adminToggleGroupMembers(groupId);adminToggleGroupMembers(groupId);}else{toast(d.error||'Remove failed','error');}
+  }catch(e){toast('Remove failed: '+e.message,'error');}
+}
+
+function renderAdminMemories(tasks){
+  var el=document.getElementById('adminMemoriesPanel');
+  if(!el) return;
+  var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Shared Tasks ('+tasks.length+')</h3>';
+  if(tasks.length===0){
+    html+='<div class="admin-empty">No shared tasks on Hub.</div>';
+  }else{
+    for(var i=0;i<tasks.length;i++){
+      var t=tasks[i];
+      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(t.title||t.id)+'</div>'+
+        '<span class="admin-badge '+(t.visibility==='public'?'public':'group')+'">'+esc(t.visibility||'public')+'</span></div>'+
+        '<div class="admin-card-meta">'+
+          'Owner: '+esc(t.ownerName||t.sourceUserId||'unknown')+
+          (t.groupName?' \u00B7 Group: '+esc(t.groupName):'')+
+          (t.chunkCount!=null?' \u00B7 Chunks: '+t.chunkCount:'')+
+          ' \u00B7 Updated: '+new Date(t.updatedAt||t.createdAt).toLocaleDateString()+
+        '</div>'+
+        '<div class="admin-card-actions">'+
+          '<button class="btn btn-sm btn-ghost" onclick="adminDeleteTask(&quot;'+escAttr(t.id)+'&quot;,&quot;'+escAttr(t.title||t.id)+'&quot;)" style="color:var(--rose)">Remove</button>'+
+        '</div></div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+async function adminDeleteTask(taskId,taskTitle){
+  if(!confirm('Remove shared task "'+taskTitle+'" from Hub? This cannot be undone.')) return;
+  try{
+    var r=await fetch('/api/admin/shared-tasks/'+encodeURIComponent(taskId),{method:'DELETE'});
+    var d=await r.json();
+    if(d.ok){toast('Task removed','success');loadAdminData();}else{toast(d.error||'Remove failed','error');}
+  }catch(e){toast('Remove failed: '+e.message,'error');}
+}
+
+function renderAdminSkills(skills){
+  var el=document.getElementById('adminSkillsPanel');
+  if(!el) return;
+  var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Shared Skills ('+skills.length+')</h3>';
+  if(skills.length===0){
+    html+='<div class="admin-empty">No shared skills on Hub.</div>';
+  }else{
+    for(var i=0;i<skills.length;i++){
+      var s=skills[i];
+      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(s.name||s.id)+'</div>'+
+        '<span class="admin-badge '+(s.visibility==='public'?'public':'group')+'">'+esc(s.visibility||'public')+'</span></div>'+
+        '<div class="admin-card-meta">'+
+          (s.description?esc(s.description)+'<br>':'')+
+          'Owner: '+esc(s.ownerName||s.sourceUserId||'unknown')+
+          (s.groupName?' \u00B7 Group: '+esc(s.groupName):'')+
+          (s.version!=null?' \u00B7 v'+s.version:'')+
+          (s.qualityScore!=null?' \u00B7 Quality: '+s.qualityScore:'')+
+        '</div>'+
+        '<div class="admin-card-actions">'+
+          '<button class="btn btn-sm btn-ghost" onclick="adminDeleteSkill(&quot;'+escAttr(s.id)+'&quot;,&quot;'+escAttr(s.name||s.id)+'&quot;)" style="color:var(--rose)">Remove</button>'+
+        '</div></div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+async function adminDeleteSkill(skillId,skillName){
+  if(!confirm('Remove shared skill "'+skillName+'" from Hub? This cannot be undone.')) return;
+  try{
+    var r=await fetch('/api/admin/shared-skills/'+encodeURIComponent(skillId),{method:'DELETE'});
+    var d=await r.json();
+    if(d.ok){toast('Skill removed','success');loadAdminData();}else{toast(d.error||'Remove failed','error');}
   }catch(e){toast('Remove failed: '+e.message,'error');}
 }
 

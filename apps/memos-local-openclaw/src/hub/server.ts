@@ -502,6 +502,38 @@ export class HubServer {
       return this.json(res, 200, { ok: true });
     }
 
+    // ── Admin: shared tasks & skills management ──
+
+    if (req.method === "GET" && routePath === "/api/v1/hub/admin/shared-tasks") {
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const tasks = this.opts.store.listAllHubTasks();
+      return this.json(res, 200, { tasks });
+    }
+
+    const adminTaskDeleteMatch = req.method === "DELETE" ? routePath.match(/^\/api\/v1\/hub\/admin\/shared-tasks\/([^/]+)$/) : null;
+    if (adminTaskDeleteMatch) {
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const taskId = decodeURIComponent(adminTaskDeleteMatch[1]);
+      const deleted = this.opts.store.deleteHubTaskById(taskId);
+      if (!deleted) return this.json(res, 404, { error: "not_found" });
+      return this.json(res, 200, { ok: true });
+    }
+
+    if (req.method === "GET" && routePath === "/api/v1/hub/admin/shared-skills") {
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const skills = this.opts.store.listAllHubSkills();
+      return this.json(res, 200, { skills });
+    }
+
+    const adminSkillDeleteMatch = req.method === "DELETE" ? routePath.match(/^\/api\/v1\/hub\/admin\/shared-skills\/([^/]+)$/) : null;
+    if (adminSkillDeleteMatch) {
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const skillId = decodeURIComponent(adminSkillDeleteMatch[1]);
+      const deleted = this.opts.store.deleteHubSkillById(skillId);
+      if (!deleted) return this.json(res, 404, { error: "not_found" });
+      return this.json(res, 200, { ok: true });
+    }
+
     if (req.method === "POST" && routePath === "/api/v1/hub/memory-detail") {
       const body = await this.readJson(req);
       const hit = this.remoteHitMap.get(String(body.remoteHitId));
