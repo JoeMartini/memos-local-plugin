@@ -1447,9 +1447,9 @@ export class SqliteStore {
     return { taskId: row.task_id, hubTaskId: row.hub_task_id, visibility: row.visibility, groupId: row.group_id, syncedChunks: row.synced_chunks, sharedAt: row.shared_at };
   }
 
-  listLocalSharedTasks(): Array<{ taskId: string; hubTaskId: string; syncedChunks: number }> {
-    const rows = this.db.prepare('SELECT task_id, hub_task_id, synced_chunks FROM local_shared_tasks').all() as any[];
-    return rows.map(r => ({ taskId: r.task_id, hubTaskId: r.hub_task_id, syncedChunks: r.synced_chunks }));
+  listLocalSharedTasks(): Array<{ taskId: string; hubTaskId: string; visibility: string; groupId: string | null; syncedChunks: number }> {
+    const rows = this.db.prepare('SELECT task_id, hub_task_id, visibility, group_id, synced_chunks FROM local_shared_tasks').all() as any[];
+    return rows.map(r => ({ taskId: r.task_id, hubTaskId: r.hub_task_id, visibility: r.visibility, groupId: r.group_id, syncedChunks: r.synced_chunks }));
   }
 
   // ─── Hub Users / Groups ───
@@ -1678,12 +1678,43 @@ export class SqliteStore {
     return new Float32Array(row.vector.buffer, row.vector.byteOffset, row.dimensions);
   }
 
-  getAllHubEmbeddings(): Array<{ chunkId: string; vector: Float32Array }> {
-    const rows = this.db.prepare('SELECT chunk_id, vector, dimensions FROM hub_embeddings').all() as Array<{ chunk_id: string; vector: Buffer; dimensions: number }>;
+  getVisibleHubEmbeddings(userId: string): Array<{ chunkId: string; vector: Float32Array }> {
+    const rows = this.db.prepare(`
+      SELECT he.chunk_id, he.vector, he.dimensions
+      FROM hub_embeddings he
+      JOIN hub_chunks hc ON hc.id = he.chunk_id
+      JOIN hub_tasks ht ON ht.id = hc.hub_task_id
+      WHERE ht.visibility = 'public'
+         OR EXISTS (
+           SELECT 1 FROM hub_group_members gm
+           WHERE gm.group_id = ht.group_id AND gm.user_id = ?
+         )
+    `).all(userId) as Array<{ chunk_id: string; vector: Buffer; dimensions: number }>;
     return rows.map(r => ({
       chunkId: r.chunk_id,
       vector: new Float32Array(r.vector.buffer, r.vector.byteOffset, r.dimensions),
     }));
+  }
+
+  getVisibleHubSearchHitByChunkId(chunkId: string, userId: string): HubSearchRow | null {
+    const row = this.db.prepare(`
+      SELECT hc.id, hc.content, hc.summary, hc.role, hc.created_at, ht.title as task_title, ht.visibility, hg.name as group_name, hu.username as owner_name,
+             0 as rank
+      FROM hub_chunks hc
+      JOIN hub_tasks ht ON ht.id = hc.hub_task_id
+      LEFT JOIN hub_groups hg ON hg.id = ht.group_id
+      LEFT JOIN hub_users hu ON hu.id = ht.source_user_id
+      WHERE hc.id = ?
+        AND (
+          ht.visibility = 'public'
+          OR EXISTS (
+            SELECT 1 FROM hub_group_members gm
+            WHERE gm.group_id = ht.group_id AND gm.user_id = ?
+          )
+        )
+      LIMIT 1
+    `).get(chunkId, userId) as HubSearchRow | undefined;
+    return row ?? null;
   }
 
   getHubChunkById(chunkId: string): HubChunkRecord | null {

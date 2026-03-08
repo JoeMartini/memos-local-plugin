@@ -1512,6 +1512,8 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
       const { v4: uuidv4 } = require("uuid");
 
       for (const entry of shared) {
+        const task = store.getTask(entry.taskId);
+        if (!task) continue;
         const chunks = store.getChunksByTask(entry.taskId);
         if (chunks.length <= entry.syncedChunks) continue;
 
@@ -1526,6 +1528,12 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
                 id: entry.hubTaskId,
                 sourceTaskId: entry.taskId,
                 sourceUserId: hubClient.userId,
+                title: task.title,
+                summary: task.summary,
+                groupId: entry.visibility === "group" ? entry.groupId ?? null : null,
+                visibility: entry.visibility,
+                createdAt: task.startedAt ?? task.updatedAt ?? Date.now(),
+                updatedAt: task.updatedAt ?? Date.now(),
               },
               chunks: newChunks.map((chunk) => ({
                 id: uuidv4(),
@@ -1541,7 +1549,7 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
               })),
             }),
           });
-          store.markTaskShared(entry.taskId, entry.hubTaskId, chunks.length, "public");
+          store.markTaskShared(entry.taskId, entry.hubTaskId, chunks.length, entry.visibility, entry.groupId);
         } catch (err) {
           ctx.log.warn(`incremental sync failed for task=${entry.taskId}: ${err}`);
         }

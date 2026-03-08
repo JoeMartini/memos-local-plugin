@@ -214,6 +214,55 @@ describe("hub search pipeline", () => {
     expect([403, 404]).toContain(detailB.status);
   });
 
+  it("should not return vector-only hits for unauthorized group chunks", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-hub-vector-scope-"));
+    dirs.push(dir);
+    const store = new SqliteStore(path.join(dir, "test.db"), noopLog);
+    stores.push(store);
+
+    const embedder = {
+      embed: async (_texts: string[]) => [new Float32Array([1, 0])],
+    } as any;
+
+    const server = new HubServer({
+      store,
+      log: noopLog,
+      config: { sharing: { enabled: true, role: "hub", hub: { port: 18919, teamName: "VectorScope", teamToken: "vector-secret" } } },
+      dataDir: dir,
+      embedder,
+    } as any);
+    servers.push(server);
+    await server.start();
+
+    const authPath = path.join(dir, "hub-auth.json");
+    const adminState = JSON.parse(fs.readFileSync(authPath, "utf8"));
+    const adminToken = adminState.bootstrapAdminToken;
+
+    const joinA = await fetch("http://127.0.0.1:18919/api/v1/hub/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "alice", deviceName: "A", teamToken: "vector-secret" }) });
+    const joinB = await fetch("http://127.0.0.1:18919/api/v1/hub/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "bob", deviceName: "B", teamToken: "vector-secret" }) });
+    const userA = await joinA.json();
+    const userB = await joinB.json();
+
+    const approveA = await fetch("http://127.0.0.1:18919/api/v1/hub/admin/approve-user", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ userId: userA.userId, username: "alice" }) });
+    const approveB = await fetch("http://127.0.0.1:18919/api/v1/hub/admin/approve-user", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ userId: userB.userId, username: "bob" }) });
+    const tokenA = (await approveA.json()).token;
+    const tokenB = (await approveB.json()).token;
+
+    store.upsertHubGroup({ id: "group-secret", name: "Secret", description: "secret", createdAt: 1 });
+    store.addHubGroupMember("group-secret", userA.userId, 1);
+    store.upsertHubTask({ id: "hub-task-secret", sourceTaskId: "task-secret", sourceUserId: userA.userId, title: "Secret Task", summary: "vector-only secret", groupId: "group-secret", visibility: "group", createdAt: 1, updatedAt: 1 });
+    store.upsertHubChunk({ id: "hub-chunk-secret", hubTaskId: "hub-task-secret", sourceTaskId: "task-secret", sourceChunkId: "chunk-secret", sourceUserId: userA.userId, role: "assistant", content: "forbidden rollout payload", summary: "forbidden rollout payload", kind: "paragraph", createdAt: 2 });
+    store.upsertHubEmbedding("hub-chunk-secret", new Float32Array([1, 0]));
+
+    const searchA = await fetch("http://127.0.0.1:18919/api/v1/hub/search", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${tokenA}` }, body: JSON.stringify({ query: "nonsensequery", maxResults: 5 }) });
+    const searchB = await fetch("http://127.0.0.1:18919/api/v1/hub/search", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${tokenB}` }, body: JSON.stringify({ query: "nonsensequery", maxResults: 5 }) });
+    const jsonA = await searchA.json();
+    const jsonB = await searchB.json();
+
+    expect(jsonA.hits.length).toBeGreaterThan(0);
+    expect(jsonB.hits).toEqual([]);
+  });
+
   it("should accept shared task content and return searchable hits with details", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-hub-search-"));
     dirs.push(dir);

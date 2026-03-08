@@ -151,7 +151,7 @@ export class HubServer {
     embedder.embed(texts).then((vectors) => {
       for (let i = 0; i < vectors.length; i++) {
         if (vectors[i]) {
-          this.opts.store.upsertHubEmbedding(chunkIds[i], vectors[i]);
+          this.opts.store.upsertHubEmbedding(chunkIds[i], new Float32Array(vectors[i]));
         }
       }
       this.opts.log.info(`hub: embedded ${vectors.filter(Boolean).length}/${chunkIds.length} shared chunks`);
@@ -345,7 +345,7 @@ export class HubServer {
         try {
           const [queryVec] = await this.opts.embedder.embed([query]);
           if (queryVec) {
-            const allEmb = this.opts.store.getAllHubEmbeddings();
+            const allEmb = this.opts.store.getVisibleHubEmbeddings(auth.userId);
             const scored = allEmb.map(e => {
               let dot = 0, nA = 0, nB = 0;
               for (let i = 0; i < queryVec.length && i < e.vector.length; i++) {
@@ -380,9 +380,9 @@ export class HubServer {
       const hits = mergedIds.map((id, rank) => {
         let hit = ftsMap.get(id);
         if (!hit) {
-          const chunk = this.opts.store.getHubChunkById(id);
-          if (!chunk) return null;
-          hit = { id: chunk.id, content: chunk.content, summary: chunk.summary, role: chunk.role, created_at: chunk.createdAt, task_title: "", visibility: "public", group_name: null, owner_name: null, rank: 0 } as any;
+          const visibleHit = this.opts.store.getVisibleHubSearchHitByChunkId(id, auth.userId);
+          if (!visibleHit) return null;
+          hit = visibleHit as any;
         }
         const remoteHitId = randomUUID();
         this.remoteHitMap.set(remoteHitId, { chunkId: id, expiresAt: Date.now() + 10 * 60 * 1000, requesterUserId: auth.userId });
