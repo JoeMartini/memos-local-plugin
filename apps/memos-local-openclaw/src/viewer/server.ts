@@ -222,6 +222,14 @@ export class ViewerServer {
       else if (p === "/api/sharing/tasks/share" && req.method === "POST") this.handleSharingTaskShare(req, res);
       else if (p === "/api/sharing/tasks/unshare" && req.method === "POST") this.handleSharingTaskUnshare(req, res);
       else if (p === "/api/sharing/skills/pull" && req.method === "POST") this.handleSharingSkillPull(req, res);
+      else if (p === "/api/sharing/groups" && req.method === "GET") this.serveSharingGroups(res);
+      else if (p === "/api/sharing/groups" && req.method === "POST") this.handleSharingGroupCreate(req, res);
+      else if (p.match(/^\/api\/sharing\/groups\/[^/]+$/) && req.method === "PUT") this.handleSharingGroupUpdate(req, res, p);
+      else if (p.match(/^\/api\/sharing\/groups\/[^/]+$/) && req.method === "DELETE") this.handleSharingGroupDelete(res, p);
+      else if (p.match(/^\/api\/sharing\/groups\/[^/]+\/members$/) && req.method === "GET") this.serveSharingGroupMembers(res, p);
+      else if (p.match(/^\/api\/sharing\/groups\/[^/]+\/members$/) && req.method === "POST") this.handleSharingGroupAddMember(req, res, p);
+      else if (p.match(/^\/api\/sharing\/groups\/[^/]+\/members$/) && req.method === "DELETE") this.handleSharingGroupRemoveMember(req, res, p);
+      else if (p === "/api/sharing/users" && req.method === "GET") this.serveSharingUsers(res);
       else if (p === "/api/config" && req.method === "GET") this.serveConfig(res);
       else if (p === "/api/config" && req.method === "PUT") this.handleSaveConfig(req, res);
       else if (p === "/api/auth/logout" && req.method === "POST") this.handleLogout(req, res);
@@ -1159,6 +1167,137 @@ export class ViewerServer {
         this.jsonResponse(res, { ok: false, error: String(err) });
       }
     });
+  }
+
+  private resolveHubConnection(): { hubUrl: string; userToken: string } | null {
+    if (!this.ctx) return null;
+    const conn = this.store.getClientHubConnection();
+    const hubUrl = conn?.hubUrl || this.ctx.config.sharing?.client?.hubAddress || "";
+    const userToken = conn?.userToken || this.ctx.config.sharing?.client?.userToken || "";
+    if (!hubUrl || !userToken) return null;
+    return { hubUrl: normalizeHubUrl(hubUrl), userToken };
+  }
+
+  private extractGroupId(path: string): string {
+    const m = path.match(/\/api\/sharing\/groups\/([^/]+)/);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  private async serveSharingGroups(res: http.ServerResponse): Promise<void> {
+    const hub = this.resolveHubConnection();
+    if (!hub) return this.jsonResponse(res, { groups: [], error: "not_configured" });
+    try {
+      const data = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/groups", { method: "GET" }) as any;
+      this.jsonResponse(res, { groups: Array.isArray(data?.groups) ? data.groups : [] });
+    } catch (err) {
+      this.jsonResponse(res, { groups: [], error: String(err) });
+    }
+  }
+
+  private handleSharingGroupCreate(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      const hub = this.resolveHubConnection();
+      if (!hub) return this.jsonResponse(res, { ok: false, error: "not_configured" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const data = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/groups", {
+          method: "POST",
+          body: JSON.stringify({ name: parsed.name, description: parsed.description }),
+        }) as any;
+        this.jsonResponse(res, { ok: true, ...data });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private handleSharingGroupUpdate(req: http.IncomingMessage, res: http.ServerResponse, p: string): void {
+    this.readBody(req, async (body) => {
+      const hub = this.resolveHubConnection();
+      if (!hub) return this.jsonResponse(res, { ok: false, error: "not_configured" });
+      const groupId = this.extractGroupId(p);
+      try {
+        const parsed = JSON.parse(body || "{}");
+        await hubRequestJson(hub.hubUrl, hub.userToken, `/api/v1/hub/groups/${encodeURIComponent(groupId)}`, {
+          method: "PUT",
+          body: JSON.stringify({ name: parsed.name, description: parsed.description }),
+        });
+        this.jsonResponse(res, { ok: true });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private async handleSharingGroupDelete(res: http.ServerResponse, p: string): Promise<void> {
+    const hub = this.resolveHubConnection();
+    if (!hub) return this.jsonResponse(res, { ok: false, error: "not_configured" });
+    const groupId = this.extractGroupId(p);
+    try {
+      await hubRequestJson(hub.hubUrl, hub.userToken, `/api/v1/hub/groups/${encodeURIComponent(groupId)}`, { method: "DELETE" });
+      this.jsonResponse(res, { ok: true });
+    } catch (err) {
+      this.jsonResponse(res, { ok: false, error: String(err) });
+    }
+  }
+
+  private async serveSharingGroupMembers(res: http.ServerResponse, p: string): Promise<void> {
+    const hub = this.resolveHubConnection();
+    if (!hub) return this.jsonResponse(res, { members: [], error: "not_configured" });
+    const groupId = this.extractGroupId(p);
+    try {
+      const data = await hubRequestJson(hub.hubUrl, hub.userToken, `/api/v1/hub/groups/${encodeURIComponent(groupId)}`, { method: "GET" }) as any;
+      this.jsonResponse(res, { members: Array.isArray(data?.members) ? data.members : [] });
+    } catch (err) {
+      this.jsonResponse(res, { members: [], error: String(err) });
+    }
+  }
+
+  private handleSharingGroupAddMember(req: http.IncomingMessage, res: http.ServerResponse, p: string): void {
+    this.readBody(req, async (body) => {
+      const hub = this.resolveHubConnection();
+      if (!hub) return this.jsonResponse(res, { ok: false, error: "not_configured" });
+      const groupId = this.extractGroupId(p);
+      try {
+        const parsed = JSON.parse(body || "{}");
+        await hubRequestJson(hub.hubUrl, hub.userToken, `/api/v1/hub/groups/${encodeURIComponent(groupId)}/members`, {
+          method: "POST",
+          body: JSON.stringify({ userId: parsed.userId }),
+        });
+        this.jsonResponse(res, { ok: true });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private handleSharingGroupRemoveMember(req: http.IncomingMessage, res: http.ServerResponse, p: string): void {
+    this.readBody(req, async (body) => {
+      const hub = this.resolveHubConnection();
+      if (!hub) return this.jsonResponse(res, { ok: false, error: "not_configured" });
+      const groupId = this.extractGroupId(p);
+      try {
+        const parsed = JSON.parse(body || "{}");
+        await hubRequestJson(hub.hubUrl, hub.userToken, `/api/v1/hub/groups/${encodeURIComponent(groupId)}/members`, {
+          method: "DELETE",
+          body: JSON.stringify({ userId: parsed.userId }),
+        });
+        this.jsonResponse(res, { ok: true });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private async serveSharingUsers(res: http.ServerResponse): Promise<void> {
+    const hub = this.resolveHubConnection();
+    if (!hub) return this.jsonResponse(res, { users: [], error: "not_configured" });
+    try {
+      const data = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/admin/users", { method: "GET" }) as any;
+      this.jsonResponse(res, { users: Array.isArray(data?.users) ? data.users : [] });
+    } catch (err) {
+      this.jsonResponse(res, { users: [], error: String(err) });
+    }
   }
 
   private serveConfig(res: http.ServerResponse): void {

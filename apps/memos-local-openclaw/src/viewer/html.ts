@@ -2115,6 +2115,10 @@ function renderSharingSettings(data){
     teamLines.push('<div class="line"><strong>User:</strong> '+esc(user.username)+' ('+esc(user.role)+')</div>');
     teamLines.push('<div class="line"><strong>Team:</strong> '+esc(conn.teamName||'Unknown')+'</div>');
     teamLines.push('<div class="line"><strong>Groups:</strong> '+esc(groups)+'</div>');
+    if(user.role==='admin'){
+      teamLines.push('<div style="margin-top:12px"><button class="btn btn-sm" onclick="loadGroupManager()">Manage Groups</button></div>');
+    }
+    teamLines.push('<div id="groupManagerPanel" style="margin-top:12px;display:none"></div>');
   }else{
     teamLines.push('<div class="line">Not connected to Hub.</div>');
   }
@@ -2155,8 +2159,8 @@ function renderSharingPendingUsers(users, error, rejectSupported){
       '<div class="pending-user-name">'+esc(user.username||user.id||'Pending User')+'</div>'+
       '<div class="pending-user-meta">Device: '+esc(user.deviceName||'unknown')+'</div>'+
       '<div class="pending-user-actions">'+
-        '<button class="btn btn-sm" onclick="approveSharingUser(\''+escAttr(user.id)+'\',\''+escAttr(user.username||'')+'\')">Approve</button>'+
-        (rejectSupported?'<button class="btn btn-sm btn-ghost" onclick="rejectSharingUser(\''+escAttr(user.id)+'\',\''+escAttr(user.username||'')+'\')">Reject</button>':'')+
+        '<button class="btn btn-sm" onclick="approveSharingUser(&quot;'+escAttr(user.id)+'&quot;,&quot;'+escAttr(user.username||'')+'&quot;)">Approve</button>'+
+        (rejectSupported?'<button class="btn btn-sm btn-ghost" onclick="rejectSharingUser(&quot;'+escAttr(user.id)+'&quot;,&quot;'+escAttr(user.username||'')+'&quot;)">Reject</button>':'')+
       '</div>'+
     '</div>';
   }).join('')+'</div>';
@@ -2176,6 +2180,137 @@ async function rejectSharingUser(userId,username){
     const d=await r.json();
     if(d.ok){toast('User rejected','success');loadSharingPendingUsers();} else {toast(d.error||'Reject failed','error');}
   }catch(e){toast('Reject failed: '+e.message,'error');}
+}
+
+/* ─── Group Manager ─── */
+var groupManagerUsers=[];
+async function loadGroupManager(){
+  var panel=document.getElementById('groupManagerPanel');
+  if(!panel) return;
+  panel.style.display='block';
+  panel.innerHTML='Loading groups...';
+  try{
+    var [gr,ur]=await Promise.all([
+      fetch('/api/sharing/groups').then(function(r){return r.json();}),
+      fetch('/api/sharing/users').then(function(r){return r.json();})
+    ]);
+    var groups=Array.isArray(gr.groups)?gr.groups:[];
+    groupManagerUsers=Array.isArray(ur.users)?ur.users:[];
+    renderGroupManager(panel,groups);
+  }catch(e){panel.innerHTML='Failed to load groups: '+esc(String(e));}
+}
+function renderGroupManager(panel,groups){
+  var html='<div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">'+
+    '<strong>Groups ('+groups.length+')</strong>'+
+    '<button class="btn btn-sm" onclick="showCreateGroupForm()">+ New Group</button>'+
+  '</div>';
+  html+='<div id="createGroupForm" style="display:none;margin-bottom:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px">'+
+    '<input id="newGroupName" type="text" placeholder="Group name" style="width:60%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-right:6px">'+
+    '<input id="newGroupDesc" type="text" placeholder="Description (optional)" style="width:60%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-right:6px;margin-top:6px">'+
+    '<div style="margin-top:8px"><button class="btn btn-sm btn-primary" onclick="createGroup()">Create</button> '+
+    '<button class="btn btn-sm btn-ghost" onclick="hideCreateGroupForm()">Cancel</button></div>'+
+  '</div>';
+  if(groups.length===0){
+    html+='<div class="line">No groups yet.</div>';
+  }else{
+    html+='<div style="display:flex;flex-direction:column;gap:8px">';
+    for(var i=0;i<groups.length;i++){
+      var g=groups[i];
+      html+='<div style="padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center">'+
+          '<div><strong>'+esc(g.name)+'</strong>'+(g.description?' — <span style="color:var(--text-sec)">'+esc(g.description)+'</span>':'')+'</div>'+
+          '<div style="display:flex;gap:6px">'+
+            '<button class="btn btn-sm" onclick="toggleGroupMembers(&quot;'+escAttr(g.id)+'&quot;)">Members</button>'+
+            '<button class="btn btn-sm btn-ghost" onclick="deleteGroup(&quot;'+escAttr(g.id)+'&quot;,&quot;'+escAttr(g.name)+'&quot;)" style="color:#ef4444">Delete</button>'+
+          '</div>'+
+        '</div>'+
+        '<div id="groupMembers_'+escAttr(g.id)+'" style="display:none;margin-top:8px"></div>'+
+      '</div>';
+    }
+    html+='</div>';
+  }
+  panel.innerHTML=html;
+}
+function showCreateGroupForm(){var f=document.getElementById('createGroupForm');if(f)f.style.display='block';}
+function hideCreateGroupForm(){var f=document.getElementById('createGroupForm');if(f)f.style.display='none';}
+async function createGroup(){
+  var name=(document.getElementById('newGroupName')).value.trim();
+  var desc=(document.getElementById('newGroupDesc')).value.trim();
+  if(!name){toast('Group name is required','error');return;}
+  try{
+    var r=await fetch('/api/sharing/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:desc})});
+    var d=await r.json();
+    if(d.ok){toast('Group created','success');hideCreateGroupForm();loadGroupManager();}else{toast(d.error||'Create failed','error');}
+  }catch(e){toast('Create failed: '+e.message,'error');}
+}
+async function deleteGroup(groupId,groupName){
+  if(!confirm('Delete group "'+groupName+'"? Members will be removed.')) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId),{method:'DELETE'});
+    var d=await r.json();
+    if(d.ok){toast('Group deleted','success');loadGroupManager();}else{toast(d.error||'Delete failed','error');}
+  }catch(e){toast('Delete failed: '+e.message,'error');}
+}
+async function toggleGroupMembers(groupId){
+  var el=document.getElementById('groupMembers_'+groupId);
+  if(!el) return;
+  if(el.style.display!=='none'){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML='Loading...';
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members');
+    var d=await r.json();
+    var members=Array.isArray(d.members)?d.members:[];
+    renderGroupMembers(el,groupId,members);
+  }catch(e){el.innerHTML='Failed: '+esc(String(e));}
+}
+function renderGroupMembers(el,groupId,members){
+  var html='<div style="font-size:12px;margin-bottom:6px;color:var(--text-sec)">Members ('+members.length+'):</div>';
+  if(members.length>0){
+    html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
+    for(var i=0;i<members.length;i++){
+      var m=members[i];
+      html+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;font-size:12px">'+
+        esc(m.username||m.userId)+
+        ' <button style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:11px;padding:0 2px" onclick="removeGroupMember(&quot;'+escAttr(groupId)+'&quot;,&quot;'+escAttr(m.userId)+'&quot;)">&times;</button>'+
+      '</span>';
+    }
+    html+='</div>';
+  }else{
+    html+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">No members yet.</div>';
+  }
+  var memberIds=new Set(members.map(function(m){return m.userId;}));
+  var available=groupManagerUsers.filter(function(u){return !memberIds.has(u.id);});
+  if(available.length>0){
+    html+='<div style="display:flex;gap:6px;align-items:center">'+
+      '<select id="addMemberSelect_'+escAttr(groupId)+'" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">';
+    for(var j=0;j<available.length;j++){
+      html+='<option value="'+escAttr(available[j].id)+'">'+esc(available[j].username)+'</option>';
+    }
+    html+='</select>'+
+      '<button class="btn btn-sm" onclick="addGroupMember(&quot;'+escAttr(groupId)+'&quot;)">Add</button>'+
+    '</div>';
+  }
+  el.innerHTML=html;
+}
+async function addGroupMember(groupId){
+  var sel=document.getElementById('addMemberSelect_'+groupId);
+  if(!sel) return;
+  var userId=sel.value;
+  if(!userId) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
+    var d=await r.json();
+    if(d.ok){toast('Member added','success');toggleGroupMembers(groupId);toggleGroupMembers(groupId);}else{toast(d.error||'Add failed','error');}
+  }catch(e){toast('Add failed: '+e.message,'error');}
+}
+async function removeGroupMember(groupId,userId){
+  if(!confirm('Remove this member from the group?')) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
+    var d=await r.json();
+    if(d.ok){toast('Member removed','success');toggleGroupMembers(groupId);toggleGroupMembers(groupId);}else{toast(d.error||'Remove failed','error');}
+  }catch(e){toast('Remove failed: '+e.message,'error');}
 }
 
 function renderSharingMemorySearchResults(data,query){
@@ -2212,7 +2347,7 @@ function renderSharingMemorySearchResults(data,query){
             '<span class="meta-chip">visibility: '+esc(hit.visibility||'hub')+'</span>'+
           '</div>'+
           '<div class="hub-hit-actions">'+
-            '<button class="btn btn-sm" onclick="openSharedMemoryDetail(\''+escAttr(hit.remoteHitId)+'\',\''+escAttr(hit.summary||'Shared Memory')+'\',\''+escAttr(hit.ownerName||'')+'\',\''+escAttr(hit.groupName||'')+'\')">View Detail</button>'+
+            '<button class="btn btn-sm" onclick="openSharedMemoryDetail(&quot;'+escAttr(hit.remoteHitId)+'&quot;,&quot;'+escAttr(hit.summary||'Shared Memory')+'&quot;,&quot;'+escAttr(hit.ownerName||'')+'&quot;,&quot;'+escAttr(hit.groupName||'')+'&quot;)">View Detail</button>'+
           '</div>'+
         '</div>';
       }).join(''):'<div class="hub-hit-card"><div class="excerpt">No Hub results.</div></div>')+'</div>'+
@@ -2749,7 +2884,7 @@ async function loadSkills(){
         const qs=skill.qualityScore;
         const qsBadge=qs!==null&&qs!==undefined?'<span class="skill-badge quality '+(qs>=7?'high':qs>=5?'mid':'low')+'">★ '+qs.toFixed(1)+'</span>':'';
         const visBadge=skill.visibility==='public'?'<span class="skill-badge visibility-public">🌐 '+t('skills.visibility.public')+'</span>':'';
-        return '<div class="skill-card '+installedClass+' '+statusClass+'" onclick="openSkillDetail(''+skill.id+'')">'+
+        return '<div class="skill-card '+installedClass+' '+statusClass+'" onclick="openSkillDetail(&quot;'+escAttr(skill.id)+'&quot;)">'+
           '<div class="skill-card-top">'+
             '<div class="skill-card-name">🧠 '+esc(skill.name)+'</div>'+
             '<div class="skill-card-badges">'+
@@ -2808,7 +2943,7 @@ async function loadSkills(){
     const hubHits=(data.hub&&Array.isArray(data.hub.hits))?data.hub.hits:[];
 
     list.innerHTML=localHits.length?localHits.map(function(skill){
-      return '<div class="hub-skill-card" onclick="openSkillDetail(''+skill.skillId+'')">'+
+      return '<div class="hub-skill-card" onclick="openSkillDetail(&quot;'+escAttr(skill.skillId)+'&quot;)">'+
         '<div class="summary">'+esc(skill.name)+'</div>'+
         '<div class="excerpt">'+esc(skill.description||'')+'</div>'+
         '<div class="hub-skill-meta"><span class="meta-chip">visibility: '+esc(skill.visibility||'private')+'</span><span class="meta-chip">owner: '+esc(skill.owner||'agent:main')+'</span></div>'+
@@ -2826,7 +2961,7 @@ async function loadSkills(){
             '<span class="meta-chip">visibility: '+esc(skill.visibility||'hub')+'</span>'+
             (skill.version!=null?'<span class="meta-chip">v'+skill.version+'</span>':'')+
           '</div>'+
-          '<div class="hub-skill-actions"><button class="btn btn-sm" onclick="event.stopPropagation();pullHubSkill(''+escAttr(skill.skillId)+'')">Pull to Local</button></div>'+
+          '<div class="hub-skill-actions"><button class="btn btn-sm" onclick="event.stopPropagation();pullHubSkill(&quot;'+escAttr(skill.skillId)+'&quot;)">Pull to Local</button></div>'+
         '</div>';
       }).join(''):'<div class="hub-skill-card"><div class="excerpt">No Hub skill results.</div></div>';
     }

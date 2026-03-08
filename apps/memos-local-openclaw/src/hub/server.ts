@@ -203,6 +203,94 @@ export class HubServer {
       return this.json(res, 200, { status: "rejected" });
     }
 
+    if (req.method === "GET" && routePath === "/api/v1/hub/admin/users") {
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const users = this.opts.store.listHubUsers().filter(u => u.status === "active");
+      return this.json(res, 200, { users: users.map(u => ({ id: u.id, username: u.username, role: u.role, status: u.status })) });
+    }
+
+    // ── Group management ──
+
+    if (req.method === "GET" && routePath === "/api/v1/hub/groups") {
+      const groups = this.opts.store.listHubGroups();
+      return this.json(res, 200, { groups });
+    }
+
+    if (req.method === "POST" && routePath === "/api/v1/hub/groups") {
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const body = await this.readJson(req);
+      const name = String(body.name || "").trim();
+      if (!name) return this.json(res, 400, { error: "name_required" });
+      const groupId = randomUUID();
+      this.opts.store.upsertHubGroup({
+        id: groupId,
+        name,
+        description: String(body.description || ""),
+        createdAt: Date.now(),
+      });
+      return this.json(res, 201, { id: groupId, name });
+    }
+
+    const groupDetailMatch = routePath.match(/^\/api\/v1\/hub\/groups\/([^/]+)$/);
+    if (groupDetailMatch) {
+      const groupId = decodeURIComponent(groupDetailMatch[1]);
+
+      if (req.method === "GET") {
+        const group = this.opts.store.getHubGroupById(groupId);
+        if (!group) return this.json(res, 404, { error: "not_found" });
+        const members = this.opts.store.listHubGroupMembers(groupId);
+        return this.json(res, 200, { ...group, members });
+      }
+
+      if (req.method === "PUT") {
+        if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+        const existing = this.opts.store.getHubGroupById(groupId);
+        if (!existing) return this.json(res, 404, { error: "not_found" });
+        const body = await this.readJson(req);
+        this.opts.store.upsertHubGroup({
+          id: groupId,
+          name: String(body.name || existing.name).trim(),
+          description: String(body.description ?? existing.description),
+          createdAt: existing.createdAt,
+        });
+        return this.json(res, 200, { ok: true });
+      }
+
+      if (req.method === "DELETE") {
+        if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+        const deleted = this.opts.store.deleteHubGroup(groupId);
+        if (!deleted) return this.json(res, 404, { error: "not_found" });
+        return this.json(res, 200, { ok: true });
+      }
+    }
+
+    const groupMembersMatch = routePath.match(/^\/api\/v1\/hub\/groups\/([^/]+)\/members$/);
+    if (groupMembersMatch) {
+      const groupId = decodeURIComponent(groupMembersMatch[1]);
+
+      if (req.method === "POST") {
+        if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+        const group = this.opts.store.getHubGroupById(groupId);
+        if (!group) return this.json(res, 404, { error: "group_not_found" });
+        const body = await this.readJson(req);
+        const userId = String(body.userId || "");
+        if (!userId) return this.json(res, 400, { error: "userId_required" });
+        const user = this.opts.store.getHubUser(userId);
+        if (!user) return this.json(res, 404, { error: "user_not_found" });
+        this.opts.store.addHubGroupMember(groupId, userId);
+        return this.json(res, 200, { ok: true });
+      }
+
+      if (req.method === "DELETE") {
+        if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+        const body = await this.readJson(req);
+        const userId = String(body.userId || "");
+        if (!userId) return this.json(res, 400, { error: "userId_required" });
+        this.opts.store.removeHubGroupMember(groupId, userId);
+        return this.json(res, 200, { ok: true });
+      }
+    }
+
     if (req.method === "POST" && routePath === "/api/v1/hub/tasks/share") {
       const body = await this.readJson(req);
       if (!body?.task) return this.json(res, 400, { error: "invalid_payload" });
