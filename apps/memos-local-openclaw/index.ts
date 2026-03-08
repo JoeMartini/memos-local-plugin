@@ -261,8 +261,9 @@ const memosLocalPlugin = {
 
           const agentId = (params as any).agentId ?? "main";
           const ownerFilter = [`agent:${agentId}`, "public"];
-          ctx.log.debug(`memory_search query="${query}" maxResults=${maxResults ?? 20} minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId}`);
-          const result = await engine.search({ query, maxResults, minScore, role, ownerFilter });
+          const effectiveMaxResults = maxResults ?? 20;
+          ctx.log.debug(`memory_search query="${query}" maxResults=${effectiveMaxResults} minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId}`);
+          const result = await engine.search({ query, maxResults: effectiveMaxResults, minScore, role, ownerFilter });
           ctx.log.debug(`memory_search raw candidates: ${result.hits.length}`);
 
           if (result.hits.length === 0) {
