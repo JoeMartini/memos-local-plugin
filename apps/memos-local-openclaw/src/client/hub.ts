@@ -1,6 +1,6 @@
 import type { PluginContext } from "../types";
 import type { SqliteStore } from "../storage/sqlite";
-import type { HubMemoryDetail, HubScope, HubSearchResult } from "../sharing/types";
+import type { HubMemoryDetail, HubScope, HubSearchResult, HubSkillSearchResult } from "../sharing/types";
 
 export interface ResolvedHubClient {
   hubUrl: string;
@@ -54,6 +54,21 @@ export async function hubSearchMemories(
       scope: input.scope,
     }),
   }) as Promise<HubSearchResult>;
+}
+
+
+export async function hubSearchSkills(
+  store: SqliteStore,
+  ctx: PluginContext,
+  input: { query: string; maxResults?: number; hubAddress?: string; userToken?: string },
+): Promise<HubSkillSearchResult> {
+  const client = await resolveHubClient(store, ctx, { hubAddress: input.hubAddress, userToken: input.userToken });
+  const url = new URL(`${client.hubUrl}/api/v1/hub/skills`);
+  url.searchParams.set("query", input.query);
+  if (input.maxResults != null) url.searchParams.set("maxResults", String(input.maxResults));
+  return hubRequestJson(url.origin, client.userToken, `${url.pathname}${url.search}`, {
+    method: "GET",
+  }) as Promise<HubSkillSearchResult>;
 }
 
 export async function hubGetMemoryDetail(

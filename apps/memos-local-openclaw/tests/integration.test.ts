@@ -1052,6 +1052,161 @@ describe("Integration: network team info tool", () => {
   });
 });
 
+describe("Integration: hub skill sync", () => {
+  async function setupSkillSyncHarness() {
+    const publisherDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-skill-publisher-"));
+    const pullerDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-skill-puller-"));
+    const hubDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-skill-hub-"));
+    const port = 19500 + Math.floor(Math.random() * 1000);
+    const hubStore = new SqliteStore(path.join(hubDir, "hub.db"), noopLog as any);
+    const hubServer = new HubServer({
+      store: hubStore,
+      log: noopLog as any,
+      config: {
+        sharing: {
+          enabled: true,
+          role: "hub",
+          hub: {
+            port,
+            teamName: "Skill Sync Test",
+            teamToken: "skill-sync-secret",
+          },
+        },
+      } as any,
+      dataDir: hubDir,
+    } as any);
+
+    await hubServer.start();
+    const authState = JSON.parse(fs.readFileSync(path.join(hubDir, "hub-auth.json"), "utf8"));
+    const userToken = authState.bootstrapAdminToken as string;
+
+    const skillDir = path.join(publisherDir, "skills-store", "docker-compose-deploy");
+    fs.mkdirSync(path.join(skillDir, "scripts"), { recursive: true });
+    fs.mkdirSync(path.join(skillDir, "references"), { recursive: true });
+    fs.mkdirSync(path.join(skillDir, "evals"), { recursive: true });
+    fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# Docker Compose Deploy\nUse scripts/deploy.sh", "utf8");
+    fs.writeFileSync(path.join(skillDir, "scripts", "deploy.sh"), "#!/bin/bash\ndocker compose up -d\n", "utf8");
+    fs.writeFileSync(path.join(skillDir, "references", "docker-compose.yml"), "services:\n  app: {}\n", "utf8");
+    fs.writeFileSync(path.join(skillDir, "evals", "evals.json"), JSON.stringify({
+      skill_name: "docker-compose-deploy",
+      evals: [{ id: 1, prompt: "deploy app", expectations: ["compose", "up -d"] }],
+    }), "utf8");
+
+    const publisherStore = new SqliteStore(path.join(publisherDir, "memos-local", "memos.db"), noopLog as any);
+    publisherStore.insertSkill({
+      id: "skill-local-1",
+      name: "docker-compose-deploy",
+      description: "Deploy with docker compose",
+      version: 2,
+      status: "active",
+      tags: JSON.stringify(["docker", "deploy"]),
+      sourceType: "manual",
+      dirPath: skillDir,
+      installed: 0,
+      owner: "agent:main",
+      visibility: "private",
+      qualityScore: 0.88,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    publisherStore.insertSkillVersion({
+      id: "skill-version-local-1",
+      skillId: "skill-local-1",
+      version: 2,
+      content: "# Docker Compose Deploy\nUse scripts/deploy.sh",
+      changelog: "initial",
+      changeSummary: "initial",
+      upgradeType: "create",
+      sourceTaskId: null,
+      metrics: "{}",
+      qualityScore: 0.88,
+      createdAt: 1,
+    });
+    publisherStore.close();
+
+    const publisher = makePluginApi(publisherDir, {
+      sharing: {
+        enabled: true,
+        role: "client",
+        client: {
+          hubAddress: `127.0.0.1:${port}`,
+          userToken,
+        },
+      },
+      telemetry: { enabled: false },
+    });
+
+    const puller = makePluginApi(pullerDir, {
+      sharing: {
+        enabled: true,
+        role: "client",
+        client: {
+          hubAddress: `127.0.0.1:${port}`,
+          userToken,
+        },
+      },
+      telemetry: { enabled: false },
+    });
+
+    const pullerStore = new SqliteStore(path.join(pullerDir, "memos-local", "memos.db"), noopLog as any);
+
+    return {
+      publisherDir,
+      pullerDir,
+      hubDir,
+      publisher,
+      puller,
+      pullerStore,
+      hubStore,
+      hubServer,
+    };
+  }
+
+  async function teardownSkillSyncHarness(harness: Awaited<ReturnType<typeof setupSkillSyncHarness>>) {
+    await harness.publisher.service?.stop?.();
+    await harness.puller.service?.stop?.();
+    harness.pullerStore.close();
+    await harness.hubServer.stop();
+    harness.hubStore.close();
+    fs.rmSync(harness.publisherDir, { recursive: true, force: true });
+    fs.rmSync(harness.pullerDir, { recursive: true, force: true });
+    fs.rmSync(harness.hubDir, { recursive: true, force: true });
+  }
+
+  it("skill_publish and network_skill_pull should round-trip a bundle through the hub", async () => {
+    const harness = await setupSkillSyncHarness();
+
+    try {
+      const publishTool = harness.publisher.tools.get("skill_publish");
+      const pullTool = harness.puller.tools.get("network_skill_pull");
+      expect(publishTool).toBeDefined();
+      expect(pullTool).toBeDefined();
+
+      const publishResult = await publishTool.execute("call-skill-publish", { skillId: "skill-local-1", scope: "public" }, { agentId: "main" });
+      expect(publishResult.details.publishedToHub).toBe(true);
+      expect(publishResult.details.hubSkillId).toBeTruthy();
+
+      const searchTool = harness.puller.tools.get("skill_search");
+      const searchResult = await searchTool.execute("call-skill-search", { query: "docker compose deploy", scope: "all" }, { agentId: "main" });
+      expect(searchResult.details.hub.hits.length).toBeGreaterThan(0);
+      expect(searchResult.details.hub.hits[0].name).toContain("docker-compose-deploy");
+
+      const pulled = await pullTool.execute("call-skill-pull", { skillId: searchResult.details.hub.hits[0].skillId }, { agentId: "main" });
+      expect(pulled.details.pulled).toBe(true);
+      expect(pulled.details.localSkillId).toBeTruthy();
+
+      const localSkill = harness.pullerStore.getSkill(pulled.details.localSkillId);
+      expect(localSkill).not.toBeNull();
+      expect(localSkill!.name).toContain("docker-compose-deploy");
+      expect(fs.existsSync(path.join(localSkill!.dirPath, "SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(localSkill!.dirPath, "scripts", "deploy.sh"))).toBe(true);
+      expect(fs.existsSync(path.join(localSkill!.dirPath, "references", "docker-compose.yml"))).toBe(true);
+    } finally {
+      await teardownSkillSyncHarness(harness);
+    }
+  });
+});
+
 describe("Integration: evidence anti-writeback", () => {
   it("should not store evidence wrapper blocks in memory", async () => {
     plugin.onConversationTurn([

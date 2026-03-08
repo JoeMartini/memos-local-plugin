@@ -67,6 +67,21 @@ export interface HubMemoryDetail {
   };
 }
 
+export interface HubSkillHit {
+  skillId: string;
+  name: string;
+  description: string;
+  version: number;
+  visibility: SharedVisibility;
+  groupName: string | null;
+  ownerName: string;
+  qualityScore: number | null;
+}
+
+export interface HubSkillSearchResult {
+  hits: HubSkillHit[];
+}
+
 export interface NetworkSearchResult {
   local: SearchResult;
   hub: HubSearchResult;

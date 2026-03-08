@@ -296,3 +296,77 @@ describe("hub search pipeline", () => {
     expect(detailJson.content).toContain("proxy_pass");
   });
 });
+
+
+describe("hub skill pipeline", () => {
+  it("should publish, fetch, and unpublish skill bundles", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-hub-skills-"));
+    dirs.push(dir);
+    const store = new SqliteStore(path.join(dir, "test.db"), noopLog);
+    stores.push(store);
+
+    const server = new HubServer({
+      store,
+      log: noopLog,
+      config: { sharing: { enabled: true, role: "hub", hub: { port: 18918, teamName: "Skills", teamToken: "skills-secret" } } },
+      dataDir: dir,
+    } as any);
+    servers.push(server);
+    await server.start();
+
+    const authPath = path.join(dir, "hub-auth.json");
+    const state = JSON.parse(fs.readFileSync(authPath, "utf8"));
+    const token = state.bootstrapAdminToken;
+    const userId = state.bootstrapAdminUserId;
+
+    const publishRes = await fetch("http://127.0.0.1:18918/api/v1/hub/skills/publish", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        visibility: "public",
+        metadata: {
+          id: "skill-source-1",
+          name: "docker-compose-deploy",
+          description: "Deploy with docker compose",
+          version: 2,
+          qualityScore: 0.88,
+        },
+        bundle: {
+          skill_md: "# Docker Compose Deploy\nUse scripts/deploy.sh",
+          scripts: [{ filename: "deploy.sh", content: "#!/bin/bash\ndocker compose up -d\n" }],
+          references: [{ filename: "docker-compose.yml", content: "services:\n  app: {}\n" }],
+          evals: [{ id: 1, prompt: "deploy app", expectations: ["compose", "up -d"] }],
+        },
+      }),
+    });
+    expect(publishRes.status).toBe(200);
+    const publishJson = await publishRes.json();
+    expect(publishJson.skillId).toBeTruthy();
+
+    const stored = store.getHubSkillBySource(userId, "skill-source-1");
+    expect(stored).not.toBeNull();
+    expect(stored!.name).toBe("docker-compose-deploy");
+
+    const bundleRes = await fetch(`http://127.0.0.1:18918/api/v1/hub/skills/${publishJson.skillId}/bundle`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(bundleRes.status).toBe(200);
+    const bundleJson = await bundleRes.json();
+    expect(bundleJson.metadata.name).toBe("docker-compose-deploy");
+    expect(bundleJson.bundle.skill_md).toContain("Docker Compose Deploy");
+
+    const unpublishRes = await fetch("http://127.0.0.1:18918/api/v1/hub/skills/unpublish", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ sourceSkillId: "skill-source-1" }),
+    });
+    expect(unpublishRes.status).toBe(200);
+    expect(store.getHubSkillBySource(userId, "skill-source-1")).toBeNull();
+  });
+});

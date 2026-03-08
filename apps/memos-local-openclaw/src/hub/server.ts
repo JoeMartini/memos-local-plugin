@@ -216,6 +216,83 @@ export class HubServer {
       return this.json(res, 200, { hits, meta: { totalCandidates: hits.length, searchedGroups: [], includedPublic: true } });
     }
 
+    if (req.method === "GET" && path === "/api/v1/hub/skills") {
+      const auth = this.authenticate(req);
+      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+      const hits = this.opts.store.searchHubSkills(String(url.searchParams.get("query") || ""), {
+        userId: auth.userId,
+        maxResults: Number(url.searchParams.get("maxResults") || 10),
+      }).map(({ hit }) => ({
+        skillId: hit.id,
+        name: hit.name,
+        description: hit.description,
+        version: hit.version,
+        visibility: hit.visibility,
+        groupName: hit.group_name,
+        ownerName: hit.owner_name || "unknown",
+        qualityScore: hit.quality_score,
+      }));
+      return this.json(res, 200, { hits });
+    }
+
+    if (req.method === "POST" && path === "/api/v1/hub/skills/publish") {
+      const auth = this.authenticate(req);
+      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+      const body = await this.readJson(req);
+      const metadata = body?.metadata ?? {};
+      const sourceSkillId = String(metadata.id || "");
+      if (!sourceSkillId) return this.json(res, 400, { error: "missing_skill_id" });
+      const existing = this.opts.store.getHubSkillBySource(auth.userId, sourceSkillId);
+      const skillId = existing?.id ?? randomUUID();
+      const visibility = body?.visibility === "group" ? "group" : "public";
+      this.opts.store.upsertHubSkill({
+        id: skillId,
+        sourceSkillId,
+        sourceUserId: auth.userId,
+        name: String(metadata.name || sourceSkillId),
+        description: String(metadata.description || ""),
+        version: Number(metadata.version || 1),
+        groupId: visibility === "group" ? String(body?.groupId || "") || null : null,
+        visibility,
+        bundle: JSON.stringify(body?.bundle ?? {}),
+        qualityScore: metadata.qualityScore == null ? null : Number(metadata.qualityScore),
+        createdAt: existing?.createdAt ?? Date.now(),
+        updatedAt: Date.now(),
+      });
+      return this.json(res, 200, { ok: true, skillId, visibility });
+    }
+
+    const skillBundleMatch = req.method === "GET" ? path.match(/^\/api\/v1\/hub\/skills\/([^/]+)\/bundle$/) : null;
+    if (skillBundleMatch) {
+      const auth = this.authenticate(req);
+      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+      const skill = this.opts.store.getHubSkillById(decodeURIComponent(skillBundleMatch[1]));
+      if (!skill) return this.json(res, 404, { error: "not_found" });
+      const user = this.opts.store.getHubUser(auth.userId);
+      const groups = new Set((user?.groups ?? []).map((group) => group.id));
+      const allowed = skill.visibility === "public" || (skill.groupId != null && groups.has(skill.groupId));
+      if (!allowed) return this.json(res, 403, { error: "forbidden" });
+      return this.json(res, 200, {
+        skillId: skill.id,
+        metadata: {
+          id: skill.sourceSkillId,
+          name: skill.name,
+          description: skill.description,
+          version: skill.version,
+          qualityScore: skill.qualityScore,
+        },
+        bundle: JSON.parse(skill.bundle),
+      });
+    }
+
+    if (req.method === "POST" && path === "/api/v1/hub/skills/unpublish") {
+      const auth = this.authenticate(req);
+      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+      const body = await this.readJson(req);
+      this.opts.store.deleteHubSkillBySource(auth.userId, String(body?.sourceSkillId || ""));
+      return this.json(res, 200, { ok: true });
+    }
+
     if (req.method === "POST" && path === "/api/v1/hub/memory-detail") {
       const auth = this.authenticate(req);
       if (!auth) return this.json(res, 401, { error: "unauthorized" });

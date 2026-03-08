@@ -1550,6 +1550,11 @@ export class SqliteStore {
     return row ? rowToHubSkill(row) : null;
   }
 
+  getHubSkillById(skillId: string): HubSkillRecord | null {
+    const row = this.db.prepare('SELECT * FROM hub_skills WHERE id = ?').get(skillId) as HubSkillRow | undefined;
+    return row ? rowToHubSkill(row) : null;
+  }
+
   upsertHubSkillEmbedding(skillId: string, vector: number[], sourceUserId: string, sourceSkillId: string): void {
     if (!sourceUserId || !sourceSkillId) throw new Error("sourceUserId and sourceSkillId are required for hub skill embedding upserts");
     const canonicalSkillId = this.resolveCanonicalHubSkillId(skillId, sourceUserId, sourceSkillId);
@@ -1601,6 +1606,49 @@ export class SqliteStore {
   getHubChunkById(chunkId: string): HubChunkRecord | null {
     const row = this.db.prepare('SELECT * FROM hub_chunks WHERE id = ?').get(chunkId) as HubChunkRow | undefined;
     return row ? rowToHubChunk(row) : null;
+  }
+
+  searchHubSkills(query: string, options?: { userId?: string; maxResults?: number }): Array<{ hit: HubSkillSearchRow; rank: number }> {
+    const limit = options?.maxResults ?? 10;
+    const userId = options?.userId ?? "";
+    const sanitized = sanitizeFtsQuery(query);
+    let rows: HubSkillSearchRow[];
+    if (sanitized) {
+      rows = this.db.prepare(`
+        SELECT hs.id, hs.name, hs.description, hs.version, hs.visibility, hg.name AS group_name, hu.username AS owner_name, hs.quality_score,
+               bm25(hub_skills_fts) as rank
+        FROM hub_skills_fts f
+        JOIN hub_skills hs ON hs.rowid = f.rowid
+        LEFT JOIN hub_groups hg ON hg.id = hs.group_id
+        LEFT JOIN hub_users hu ON hu.id = hs.source_user_id
+        WHERE hub_skills_fts MATCH ?
+          AND (
+            hs.visibility = 'public'
+            OR EXISTS (
+              SELECT 1 FROM hub_group_members gm
+              WHERE gm.group_id = hs.group_id AND gm.user_id = ?
+            )
+          )
+        ORDER BY rank
+        LIMIT ?
+      `).all(sanitized, userId, limit) as HubSkillSearchRow[];
+    } else {
+      rows = this.db.prepare(`
+        SELECT hs.id, hs.name, hs.description, hs.version, hs.visibility, hg.name AS group_name, hu.username AS owner_name, hs.quality_score,
+               0 as rank
+        FROM hub_skills hs
+        LEFT JOIN hub_groups hg ON hg.id = hs.group_id
+        LEFT JOIN hub_users hu ON hu.id = hs.source_user_id
+        WHERE hs.visibility = 'public'
+           OR EXISTS (
+             SELECT 1 FROM hub_group_members gm
+             WHERE gm.group_id = hs.group_id AND gm.user_id = ?
+           )
+        ORDER BY hs.updated_at DESC
+        LIMIT ?
+      `).all(userId, limit) as HubSkillSearchRow[];
+    }
+    return rows.map((row, idx) => ({ hit: row, rank: idx + 1 }));
   }
 
   deleteHubSkillBySource(sourceUserId: string, sourceSkillId: string): void {
@@ -2020,6 +2068,17 @@ function rowToHubSkill(row: HubSkillRow): HubSkillRecord {
   };
 }
 
+
+interface HubSkillSearchRow {
+  id: string;
+  name: string;
+  description: string;
+  version: number;
+  visibility: string;
+  group_name: string | null;
+  owner_name: string | null;
+  quality_score: number | null;
+}
 
 interface HubSearchRow {
   id: string;

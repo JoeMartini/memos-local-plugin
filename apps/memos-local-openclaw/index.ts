@@ -18,8 +18,9 @@ import { captureMessages, stripInboundMetadata } from "./src/capture";
 import { DEFAULTS } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
 import { HubServer } from "./src/hub/server";
-import { hubGetMemoryDetail, hubRequestJson, resolveHubClient } from "./src/client/hub";
+import { hubGetMemoryDetail, hubRequestJson, hubSearchSkills, resolveHubClient } from "./src/client/hub";
 import { getHubStatus } from "./src/client/connector";
+import { fetchHubSkillBundle, publishSkillBundleToHub, restoreSkillBundleFromHub } from "./src/client/skill-sync";
 import { SkillEvolver } from "./src/skill/evolver";
 import { SkillInstaller } from "./src/skill/installer";
 import { Summarizer } from "./src/ingest/providers";
@@ -966,18 +967,44 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
         name: "skill_search",
         label: "Skill Search",
         description:
-          "Search available skills by natural language. Searches your own skills, public skills, or both. " +
+          "Search available skills by natural language. Searches local skills by default, or local + Hub skills when scope=group/all. " +
           "Use when you need a capability or guide and don't have a matching skill at hand.",
         parameters: Type.Object({
           query: Type.String({ description: "Natural language description of the needed skill" }),
-          scope: Type.Optional(Type.String({ description: "Search scope: 'mix' (default, self + public), 'self' (own only), 'public' (public only)" })),
+          scope: Type.Optional(Type.String({ description: "Search scope: 'mix'/'self'/'public' for local search, or 'group'/'all' for local + Hub search" })),
         }),
         execute: trackTool("skill_search", async (_toolCallId: any, params: any) => {
           const { query: skillQuery, scope: rawScope } = params as { query: string; scope?: string };
-          const scope = (rawScope === "self" || rawScope === "public") ? rawScope : "mix";
           const skillAgentId = (params as any).agentId ?? "main";
           const currentOwner = `agent:${skillAgentId}`;
 
+          if (rawScope === "group" || rawScope === "all") {
+            const [localHits, hub] = await Promise.all([
+              engine.searchSkills(skillQuery, "mix" as any, currentOwner),
+              hubSearchSkills(store, ctx, { query: skillQuery, maxResults: 10 }).catch(() => ({ hits: [] })),
+            ]);
+
+            if (localHits.length === 0 && hub.hits.length === 0) {
+              return {
+                content: [{ type: "text", text: `No relevant skills found for: "${skillQuery}" (scope: ${rawScope})` }],
+                details: { query: skillQuery, scope: rawScope, local: { hits: [] }, hub },
+              };
+            }
+
+            const localText = localHits.length > 0
+              ? localHits.map((h, i) => `${i + 1}. [${h.name}] ${h.description.slice(0, 150)}${h.visibility === "public" ? " (public)" : ""}`).join("\n")
+              : "(none)";
+            const hubText = hub.hits.length > 0
+              ? hub.hits.map((h, i) => `${i + 1}. [${h.name}] ${h.description.slice(0, 150)} (${h.visibility}${h.groupName ? `:${h.groupName}` : ""}, owner=${h.ownerName})`).join("\n")
+              : "(none)";
+
+            return {
+              content: [{ type: "text", text: `Local skills:\n${localText}\n\nHub skills:\n${hubText}` }],
+              details: { query: skillQuery, scope: rawScope, local: { hits: localHits }, hub },
+            };
+          }
+
+          const scope = (rawScope === "self" || rawScope === "public") ? rawScope : "mix";
           const hits = await engine.searchSkills(skillQuery, scope as any, currentOwner);
 
           if (hits.length === 0) {
@@ -1009,17 +1036,28 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
         description: "Make a skill public so other agents can discover and install it via skill_search.",
         parameters: Type.Object({
           skillId: Type.String({ description: "The skill ID to publish" }),
+          scope: Type.Optional(Type.String({ description: "Publish scope: omit for local public, or use 'public' / 'group' to publish to Hub" })),
+          groupId: Type.Optional(Type.String({ description: "Optional group ID when scope='group'" })),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for tests or manual routing" })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for tests" })),
         }),
         execute: trackTool("skill_publish", async (_toolCallId: any, params: any) => {
-          const { skillId: pubSkillId } = params as { skillId: string };
+          const { skillId: pubSkillId, scope, groupId, hubAddress, userToken } = params as { skillId: string; scope?: string; groupId?: string; hubAddress?: string; userToken?: string };
           const skill = store.getSkill(pubSkillId);
           if (!skill) {
             return { content: [{ type: "text", text: `Skill not found: ${pubSkillId}` }] };
           }
+          if (scope === "public" || scope === "group") {
+            const published = await publishSkillBundleToHub(store, ctx, { skillId: pubSkillId, visibility: scope, groupId, hubAddress, userToken });
+            return {
+              content: [{ type: "text", text: `Skill "${skill.name}" published to hub (${published.visibility}).` }],
+              details: { skillId: pubSkillId, name: skill.name, publishedToHub: true, hubSkillId: published.skillId, visibility: published.visibility },
+            };
+          }
           store.setSkillVisibility(pubSkillId, "public");
           return {
             content: [{ type: "text", text: `Skill "${skill.name}" is now public.` }],
-            details: { skillId: pubSkillId, name: skill.name, visibility: "public" },
+            details: { skillId: pubSkillId, name: skill.name, visibility: "public", publishedToHub: false },
           };
         }),
       },
@@ -1050,6 +1088,29 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
         }),
       },
       { name: "skill_unpublish" },
+    );
+
+    api.registerTool(
+      {
+        name: "network_skill_pull",
+        label: "Network Skill Pull",
+        description: "Download a published Hub skill bundle and restore it into local managed skills.",
+        parameters: Type.Object({
+          skillId: Type.String({ description: "The Hub skill ID to pull" }),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for tests or manual routing" })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for tests" })),
+        }),
+        execute: trackTool("network_skill_pull", async (_toolCallId: any, params: any) => {
+          const { skillId, hubAddress, userToken } = params as { skillId: string; hubAddress?: string; userToken?: string };
+          const payload = await fetchHubSkillBundle(store, ctx, { skillId, hubAddress, userToken });
+          const restored = restoreSkillBundleFromHub(store, ctx, payload);
+          return {
+            content: [{ type: "text", text: `Pulled Hub skill "${restored.localName}" into local storage.` }],
+            details: { pulled: true, hubSkillId: skillId, localSkillId: restored.localSkillId, localName: restored.localName, dirPath: restored.dirPath },
+          };
+        }),
+      },
+      { name: "network_skill_pull" },
     );
 
     // ─── Auto-recall: inject relevant memories before agent starts ───
