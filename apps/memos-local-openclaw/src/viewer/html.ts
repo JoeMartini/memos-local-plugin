@@ -2170,7 +2170,7 @@ function renderSharingSettings(data){
     if(user.role==='admin'){
       teamLines.push('<div style="margin-top:12px;display:flex;gap:8px">');
       teamLines.push('<button class="btn btn-sm" onclick="loadGroupManager()">Manage Groups</button>');
-      teamLines.push('<button class="btn btn-sm btn-primary" onclick="switchView(\'admin\')">Open Admin Panel</button>');
+      teamLines.push('<button class="btn btn-sm btn-primary" onclick="switchView(\\'admin\\')">Open Admin Panel</button>');
       teamLines.push('</div>');
     }
     teamLines.push('<div id="groupManagerPanel" style="margin-top:12px;display:none"></div>');

@@ -160,8 +160,21 @@ const memosLocalPlugin = {
       }
     }
 
-    const pluginCfg = (api.pluginConfig ?? {}) as Record<string, unknown>;
+    let pluginCfg = (api.pluginConfig ?? {}) as Record<string, unknown>;
     const stateDir = api.resolvePath("~/.openclaw");
+
+    // Fallback: read config from file if not provided by OpenClaw
+    const configPath = path.join(stateDir, "state", "memos-local", "config.json");
+    if (Object.keys(pluginCfg).length === 0 && fs.existsSync(configPath)) {
+      try {
+        const fileConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+        pluginCfg = fileConfig;
+        api.logger.info(`memos-local: loaded config from ${configPath}`);
+      } catch (e) {
+        api.logger.warn(`memos-local: failed to load config from ${configPath}: ${e}`);
+      }
+    }
+
     const ctx = buildContext(stateDir, process.cwd(), pluginCfg as any, {
       debug: (msg: string) => api.logger.info(`[debug] ${msg}`),
       info: (msg: string) => api.logger.info(msg),

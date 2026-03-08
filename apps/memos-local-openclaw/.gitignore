@@ -3,6 +3,12 @@ dist/
 *.tsbuildinfo
 .env
 
+# Compiled output (root level only)
+/*.js
+/*.js.map
+/*.d.ts
+/*.d.ts.map
+
 # OS files
 .DS_Store
 Thumbs.db
