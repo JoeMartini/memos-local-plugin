@@ -172,6 +172,16 @@ export class HubServer {
       return this.json(res, 200, { status: "active", token });
     }
 
+    if (req.method === "POST" && path === "/api/v1/hub/admin/reject-user") {
+      const auth = this.authenticate(req);
+      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const body = await this.readJson(req);
+      const rejected = this.userManager.rejectUser(String(body.userId));
+      if (!rejected) return this.json(res, 404, { error: "not_found" });
+      return this.json(res, 200, { status: "rejected" });
+    }
+
     if (req.method === "POST" && path === "/api/v1/hub/tasks/share") {
       const auth = this.authenticate(req);
       if (!auth) return this.json(res, 401, { error: "unauthorized" });

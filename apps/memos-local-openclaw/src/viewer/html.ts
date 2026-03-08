@@ -145,6 +145,42 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .search-bar input:focus{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-glow)}
 .search-bar .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px;pointer-events:none}
 .search-meta{font-size:12px;color:var(--text-sec);margin-bottom:14px;padding:0 2px}
+.scope-select{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);color:var(--text);font-size:13px;min-width:110px;outline:none}
+.sharing-inline-meta{font-size:12px;color:var(--text-muted);margin:-8px 0 14px 2px}
+.sharing-sidebar-card{margin:14px 0 18px;border:1px solid var(--border);background:var(--bg-card);border-radius:12px;padding:12px;box-shadow:var(--shadow-sm)}
+.sharing-sidebar-card .title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em}
+.sharing-sidebar-card .status{font-size:13px;color:var(--text-sec);line-height:1.5}
+.sharing-sidebar-card .status strong{color:var(--text)}
+.sharing-sidebar-card .hint{margin-top:8px;font-size:11px;color:var(--text-muted)}
+.result-section{margin-bottom:18px;border:1px solid var(--border);border-radius:14px;background:var(--bg-card);overflow:hidden}
+.result-section-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)}
+.result-section-title{font-size:14px;font-weight:700;color:var(--text)}
+.result-section-sub{font-size:12px;color:var(--text-muted)}
+.search-hit-list{padding:12px;display:flex;flex-direction:column;gap:10px}
+.search-hit-card,.hub-hit-card,.hub-skill-card{border:1px solid var(--border);border-radius:12px;background:var(--bg);padding:12px;box-shadow:var(--shadow-sm)}
+.search-hit-card .summary,.hub-hit-card .summary,.hub-skill-card .summary{font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px}
+.search-hit-card .excerpt,.hub-hit-card .excerpt,.hub-skill-card .excerpt{font-size:12px;color:var(--text-sec);line-height:1.55;white-space:pre-wrap}
+.search-hit-meta,.hub-hit-meta,.hub-skill-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;font-size:11px;color:var(--text-muted)}
+.meta-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border:1px solid var(--border);border-radius:999px;background:var(--bg-card)}
+.hub-hit-actions,.hub-skill-actions,.task-share-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.sharing-settings-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+.sharing-panel{border:1px solid var(--border);border-radius:14px;background:var(--bg-card);padding:14px;box-shadow:var(--shadow-sm)}
+.sharing-panel h4{font-size:14px;font-weight:700;color:var(--text);margin:0 0 10px 0}
+.sharing-panel .line{font-size:13px;color:var(--text-sec);margin-bottom:8px;line-height:1.55}
+.sharing-panel .line strong{color:var(--text)}
+.pending-user-list{display:flex;flex-direction:column;gap:10px}
+.pending-user-card{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--bg)}
+.pending-user-name{font-size:14px;font-weight:700;color:var(--text)}
+.pending-user-meta{font-size:12px;color:var(--text-sec);margin-top:4px}
+.pending-user-actions{display:flex;gap:8px;margin-top:10px}
+.task-detail-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.shared-memory-overlay,.shared-memory-overlay.show{display:none}
+.shared-memory-overlay.show{display:flex;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:1200;padding:24px}
+.shared-memory-panel{width:min(860px,95vw);max-height:85vh;overflow:auto;border:1px solid var(--border);border-radius:18px;background:var(--bg-card);box-shadow:var(--shadow-lg);padding:20px}
+.shared-memory-panel h3{font-size:18px;color:var(--text);margin-bottom:10px}
+.shared-memory-panel .content{font-size:13px;color:var(--text-sec);line-height:1.7;white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:12px}
+.hub-source-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:rgba(34,197,94,.12);color:var(--green);font-size:11px;font-weight:700;border:1px solid rgba(34,197,94,.22)}
+@media (max-width: 960px){.sharing-settings-grid{grid-template-columns:1fr}.search-bar{flex-wrap:wrap}.scope-select{width:100%}.task-detail-actions{width:100%;justify-content:flex-start}}
 
 .filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
 .filter-chip{padding:5px 14px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-sec);font-size:12px;font-weight:500;transition:all .15s}
@@ -239,6 +275,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-glow)}
 .form-group textarea{min-height:100px;resize:vertical}
 .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:28px}
+
 
 /* ─── Toast ─── */
 .toast-container{position:fixed;top:80px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:8px}
@@ -741,6 +778,11 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <div class="stat-card rose"><div class="stat-value" id="statTimeSpan">-</div><div class="stat-label" data-i18n="stat.days">Days</div></div>
       </div>
       <div id="embeddingStatus"></div>
+      <div class="sharing-sidebar-card" id="sharingSidebarCard">
+        <div class="title">Hub / Team</div>
+        <div class="status" id="sharingSidebarStatus">Loading connection status...</div>
+        <div class="hint" id="sharingSidebarHint"></div>
+      </div>
       <div class="section-title" data-i18n="sidebar.sessions">Sessions</div>
       <div class="session-list" id="sessionList"></div>
       <button class="btn btn-sm btn-ghost" style="width:100%;margin-top:20px;justify-content:center;color:var(--text-muted);font-size:11px" onclick="clearAll()" data-i18n="sidebar.clear">\u{1F5D1} Clear All Data</button>
@@ -751,8 +793,14 @@ input,textarea,select{font-family:inherit;font-size:inherit}
       <div class="search-bar">
         <span class="search-icon">\u{1F50D}</span>
         <input type="text" id="searchInput" data-i18n-ph="search.placeholder" placeholder="Search memories (supports semantic search)..." oninput="debounceSearch()">
+        <select id="memorySearchScope" class="filter-select" onchange="onMemoryScopeChange()">
+          <option value="local">Local</option>
+          <option value="group">Group</option>
+          <option value="all">All</option>
+        </select>
       </div>
       <div class="search-meta" id="searchMeta"></div>
+      <div class="search-meta" id="sharingSearchMeta"></div>
       <div class="filter-bar" id="filterBar">
         <button class="filter-chip active" data-role="" onclick="setRoleFilter(this,'')" data-i18n="filter.all">All</button>
         <button class="filter-chip" data-role="user" onclick="setRoleFilter(this,'user')">User</button>
@@ -809,7 +857,10 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <div class="task-detail-panel" onclick="event.stopPropagation()">
           <div class="task-detail-header">
             <h2 id="taskDetailTitle"></h2>
-            <button class="btn btn-icon" onclick="closeTaskDetail()" title="Close">\u2715</button>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div id="taskShareActions" style="display:flex;gap:8px;align-items:center"></div>
+              <button class="btn btn-icon" onclick="closeTaskDetail()" title="Close">\u2715</button>
+            </div>
           </div>
           <div class="task-detail-meta" id="taskDetailMeta"></div>
           <div class="task-skill-section" id="taskSkillSection"></div>
@@ -819,7 +870,28 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         </div>
       </div>
     </div>
+    <div class="shared-memory-overlay" id="sharedMemoryOverlay" onclick="closeSharedMemoryDetail(event)">
+      <div class="shared-memory-panel" onclick="event.stopPropagation()">
+        <div class="task-detail-header">
+          <h3 id="sharedMemoryTitle">Shared Memory</h3>
+          <button class="btn btn-icon" onclick="closeSharedMemoryDetail()" title="Close">✕</button>
+        </div>
+        <div class="task-detail-meta" id="sharedMemoryMeta"></div>
+        <div class="task-detail-summary" id="sharedMemorySummary"></div>
+        <div class="content" id="sharedMemoryContent"></div>
+      </div>
+    </div>
     <div class="skills-view" id="skillsView">
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="skillSearchInput" placeholder="Search skills locally or from Hub..." oninput="debounceSkillSearch()">
+        <select id="skillSearchScope" class="scope-select" onchange="onSkillScopeChange()">
+          <option value="local">Local</option>
+          <option value="group">Group</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div class="search-meta" id="skillSearchMeta"></div>
       <div class="tasks-header">
         <div class="tasks-stats">
           <div class="tasks-stat"><span class="tasks-stat-value" id="skillsTotalCount">-</span><span class="tasks-stat-label" data-i18n="skills.total">Total Skills</span></div>
@@ -843,6 +915,10 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         </div>
       </div>
       <div class="tasks-list" id="skillsList"><div class="spinner"></div></div>
+      <div style="margin-top:16px">
+        <div class="section-title" style="margin-bottom:12px">Hub Skills</div>
+        <div class="tasks-list" id="hubSkillsList"><div style="color:var(--text-muted);padding:16px">No hub skills loaded.</div></div>
+      </div>
     </div>
     <div class="task-detail-overlay" id="skillDetailOverlay" onclick="closeSkillDetail(event)">
       <div class="task-detail-panel" onclick="event.stopPropagation()">
@@ -1073,6 +1149,22 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         </div>
       </div>
 
+      <div class="settings-group" id="settingsSharingConfig">
+        <h2 class="settings-group-title">Hub & Team</h2>
+        <div class="settings-section">
+          <h3><span class="icon">\u{1F517}</span> Hub Connection</h3>
+          <div id="sharingStatusPanel" style="font-size:13px;color:var(--text-sec)">Loading...</div>
+        </div>
+        <div class="settings-section">
+          <h3><span class="icon">\u{1F465}</span> Team & Groups</h3>
+          <div id="sharingTeamPanel" style="font-size:13px;color:var(--text-sec)">Loading...</div>
+        </div>
+        <div class="settings-section">
+          <h3><span class="icon">\u{1F6E1}</span> Admin Pending Users</h3>
+          <div id="sharingAdminPanel" style="font-size:13px;color:var(--text-sec)">Loading...</div>
+        </div>
+      </div>
+
       <div class="settings-actions">
         <span class="settings-saved" id="settingsSaved">\u2713 <span data-i18n="settings.saved">Saved</span></span>
         <button class="btn btn-ghost" onclick="loadConfig()" data-i18n="settings.reset">Reset</button>
@@ -1250,7 +1342,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 <div class="toast-container" id="toasts"></div>
 
 <script>
-let activeSession=null,activeRole='',editingId=null,searchTimer=null,memoryCache={},currentPage=1,totalPages=1,totalCount=0,PAGE_SIZE=40,metricsDays=30;
+let activeSession=null,activeRole='',editingId=null,searchTimer=null,skillSearchTimer=null,memoryCache={},currentPage=1,totalPages=1,totalCount=0,PAGE_SIZE=40,metricsDays=30,memorySearchScope='local',skillSearchScope='local',sharingStatusCache=null,currentTaskDetail=null,currentSharedMemoryHitId='';
 
 /* ─── i18n ─── */
 const I18N={
@@ -1926,18 +2018,278 @@ function switchView(view){
   } else if(view==='skills'){
     skillsView.classList.add('show');
     loadSkills();
+    loadSharingStatus(false);
   } else if(view==='logs'){
     logsView.classList.add('show');
     loadLogs();
   } else if(view==='settings'){
     settingsView.classList.add('show');
     loadConfig();
+    loadSharingStatus(true);
+    loadSharingPendingUsers();
   } else if(view==='import'){
     migrateView.classList.add('show');
     if(!window._migrateRunning) migrateScan();
   } else {
     feedWrap.classList.remove('hide');
   }
+}
+
+function onMemoryScopeChange(){
+  memorySearchScope=document.getElementById('memorySearchScope')?.value||'local';
+  if(document.getElementById('searchInput').value.trim()) doSearch(document.getElementById('searchInput').value);
+  else { document.getElementById('sharingSearchMeta').textContent=''; loadMemories(); }
+}
+
+function onSkillScopeChange(){
+  skillSearchScope=document.getElementById('skillSearchScope')?.value||'local';
+  loadSkills();
+}
+
+async function loadSharingStatus(forcePending){
+  try{
+    const r=await fetch('/api/sharing/status');
+    const d=await r.json();
+    sharingStatusCache=d;
+    renderSharingSidebar(d);
+    renderSharingSettings(d);
+    if(forcePending && d && d.admin && d.admin.canManageUsers) loadSharingPendingUsers();
+  }catch(e){
+    renderSharingSidebar(null);
+    renderSharingSettings(null);
+  }
+}
+
+function renderSharingSidebar(data){
+  var statusEl=document.getElementById('sharingSidebarStatus');
+  var hintEl=document.getElementById('sharingSidebarHint');
+  if(!statusEl||!hintEl) return;
+  if(!data||!data.enabled){
+    statusEl.innerHTML='<strong>Sharing disabled</strong>';
+    hintEl.textContent='Enable sharing in plugin config to connect a Hub.';
+    return;
+  }
+  if(data.role!=='client'){
+    statusEl.innerHTML='<strong>Hub mode</strong>';
+    hintEl.textContent='This node is currently running as the Hub server.';
+    return;
+  }
+  var conn=data.connection||{};
+  if(conn.connected&&conn.user){
+    var groups=(conn.user.groups||[]).map(function(g){return g.name;}).join(', ')||'(none)';
+    statusEl.innerHTML='<strong>'+esc(conn.user.username)+'</strong> · '+esc(conn.user.role)+'<br>Team: '+esc(conn.teamName||'Unknown')+'<br>Hub: '+esc(conn.hubUrl||data.hubUrl||'')+'<br>Groups: '+esc(groups);
+    hintEl.textContent=conn.apiVersion?'API '+conn.apiVersion:'';
+  }else if(data.clientConfigured){
+    statusEl.innerHTML='<strong>Client configured</strong><br>Hub: '+esc(data.hubUrl||'')+'<br>Status: disconnected';
+    hintEl.textContent='Viewer will keep showing local data; Hub actions may fail until the connection is restored.';
+  }else{
+    statusEl.innerHTML='<strong>Client not configured</strong>';
+    hintEl.textContent='Set hubAddress and userToken in sharing.client to enable team features.';
+  }
+}
+
+function renderSharingSettings(data){
+  var statusEl=document.getElementById('sharingStatusPanel');
+  var teamEl=document.getElementById('sharingTeamPanel');
+  var adminEl=document.getElementById('sharingAdminPanel');
+  if(!statusEl||!teamEl||!adminEl) return;
+  if(!data||!data.enabled){
+    statusEl.innerHTML='<div class="line"><strong>Sharing is disabled.</strong></div><div class="line">Enable sharing in config to use Hub memory and skill collaboration.</div>';
+    teamEl.innerHTML='<div class="line">No team connection.</div>';
+    adminEl.innerHTML='<div class="line">Admin tools unavailable.</div>';
+    return;
+  }
+  var conn=data.connection||{};
+  var user=conn.user||{};
+  var groups=(user.groups||[]).map(function(g){return g.name;}).join(', ')||'(none)';
+  var statusLines=[];
+  statusLines.push('<div class="line"><strong>Role:</strong> '+esc(data.role||'unknown')+'</div>');
+  statusLines.push('<div class="line"><strong>Client configured:</strong> '+(data.clientConfigured?'yes':'no')+'</div>');
+  if(data.hubUrl) statusLines.push('<div class="line"><strong>Configured Hub:</strong> '+esc(data.hubUrl)+'</div>');
+  statusLines.push('<div class="line"><strong>Connected:</strong> '+(conn.connected?'yes':'no')+'</div>');
+  if(conn.apiVersion) statusLines.push('<div class="line"><strong>API:</strong> '+esc(conn.apiVersion)+'</div>');
+  statusEl.innerHTML=statusLines.join('');
+
+  var teamLines=[];
+  if(conn.connected&&conn.user){
+    teamLines.push('<div class="line"><strong>User:</strong> '+esc(user.username)+' ('+esc(user.role)+')</div>');
+    teamLines.push('<div class="line"><strong>Team:</strong> '+esc(conn.teamName||'Unknown')+'</div>');
+    teamLines.push('<div class="line"><strong>Groups:</strong> '+esc(groups)+'</div>');
+  }else{
+    teamLines.push('<div class="line">Not connected to Hub.</div>');
+  }
+  teamEl.innerHTML=teamLines.join('');
+
+  adminEl.innerHTML=(data.admin&&data.admin.canManageUsers)
+    ? '<div class="line"><span class="hub-source-badge">Admin controls enabled</span></div><div class="line">Pending users will appear below.</div>'
+    : '<div class="line">Current user is not an admin.</div>';
+}
+
+async function loadSharingPendingUsers(){
+  var el=document.getElementById('sharingAdminPanel');
+  if(!el) return;
+  el.innerHTML='Loading...';
+  try{
+    const r=await fetch('/api/sharing/pending-users');
+    const d=await r.json();
+    const users=Array.isArray(d.users)?d.users:[];
+    renderSharingPendingUsers(users, d.error, sharingStatusCache&&sharingStatusCache.admin?sharingStatusCache.admin.rejectSupported:false);
+  }catch(e){
+    el.innerHTML='<div class="line">Failed to load pending users: '+esc(String(e))+'</div>';
+  }
+}
+
+function renderSharingPendingUsers(users, error, rejectSupported){
+  var el=document.getElementById('sharingAdminPanel');
+  if(!el) return;
+  if(error){
+    el.innerHTML='<div class="line">'+esc(error)+'</div>';
+    return;
+  }
+  if(!users||users.length===0){
+    el.innerHTML='<div class="line">No pending users.</div>';
+    return;
+  }
+  el.innerHTML='<div class="pending-user-list">'+users.map(function(user){
+    return '<div class="pending-user-card">'+
+      '<div class="pending-user-name">'+esc(user.username||user.id||'Pending User')+'</div>'+
+      '<div class="pending-user-meta">Device: '+esc(user.deviceName||'unknown')+'</div>'+
+      '<div class="pending-user-actions">'+
+        '<button class="btn btn-sm" onclick="approveSharingUser(\''+escAttr(user.id)+'\',\''+escAttr(user.username||'')+'\')">Approve</button>'+
+        (rejectSupported?'<button class="btn btn-sm btn-ghost" onclick="rejectSharingUser(\''+escAttr(user.id)+'\',\''+escAttr(user.username||'')+'\')">Reject</button>':'')+
+      '</div>'+
+    '</div>';
+  }).join('')+'</div>';
+}
+
+async function approveSharingUser(userId,username){
+  try{
+    const r=await fetch('/api/sharing/approve-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
+    const d=await r.json();
+    if(d.ok){toast('User approved','success');loadSharingPendingUsers();loadSharingStatus(true);} else {toast(d.error||'Approve failed','error');}
+  }catch(e){toast('Approve failed: '+e.message,'error');}
+}
+
+async function rejectSharingUser(userId,username){
+  try{
+    const r=await fetch('/api/sharing/reject-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
+    const d=await r.json();
+    if(d.ok){toast('User rejected','success');loadSharingPendingUsers();} else {toast(d.error||'Reject failed','error');}
+  }catch(e){toast('Reject failed: '+e.message,'error');}
+}
+
+function renderSharingMemorySearchResults(data,query){
+  const list=document.getElementById('memoryList');
+  const localHits=(data&&data.local&&Array.isArray(data.local.hits))?data.local.hits:[];
+  const hubHits=(data&&data.hub&&Array.isArray(data.hub.hits))?data.hub.hits:[];
+  document.getElementById('searchMeta').textContent='Search results for "'+query+'"';
+  document.getElementById('sharingSearchMeta').textContent='Local '+localHits.length+' · Hub '+hubHits.length;
+  document.getElementById('pagination').innerHTML='';
+  list.innerHTML=''+
+    '<div class="result-section">'+
+      '<div class="result-section-header"><div class="result-section-title">Local Results</div><div class="result-section-sub">'+localHits.length+' hit(s)</div></div>'+
+      '<div class="search-hit-list">'+(localHits.length?localHits.map(function(hit,idx){
+        return '<div class="search-hit-card">'+
+          '<div class="summary">'+(idx+1)+'. '+esc(hit.summary||'(no summary)')+'</div>'+
+          '<div class="excerpt">'+esc(hit.excerpt||'')+'</div>'+
+          '<div class="search-hit-meta">'+
+            '<span class="meta-chip">role: '+esc(hit.role||'unknown')+'</span>'+
+            (hit.score!=null?'<span class="meta-chip">score: '+Math.round(hit.score*100)+'%</span>':'')+
+            (hit.taskId?'<span class="meta-chip">task: '+esc(hit.taskId)+'</span>':'')+
+          '</div>'+
+        '</div>';
+      }).join(''):'<div class="search-hit-card"><div class="excerpt">No local results.</div></div>')+'</div>'+
+    '</div>'+
+    '<div class="result-section">'+
+      '<div class="result-section-header"><div class="result-section-title">Hub Results</div><div class="result-section-sub">'+hubHits.length+' hit(s)</div></div>'+
+      '<div class="search-hit-list">'+(hubHits.length?hubHits.map(function(hit,idx){
+        return '<div class="hub-hit-card">'+
+          '<div class="summary">'+(idx+1)+'. '+esc(hit.summary||'(no summary)')+'</div>'+
+          '<div class="excerpt">'+esc(hit.excerpt||'')+'</div>'+
+          '<div class="hub-hit-meta">'+
+            '<span class="meta-chip">owner: '+esc(hit.ownerName||'unknown')+'</span>'+
+            (hit.groupName?'<span class="meta-chip">group: '+esc(hit.groupName)+'</span>':'')+
+            '<span class="meta-chip">visibility: '+esc(hit.visibility||'hub')+'</span>'+
+          '</div>'+
+          '<div class="hub-hit-actions">'+
+            '<button class="btn btn-sm" onclick="openSharedMemoryDetail(\''+escAttr(hit.remoteHitId)+'\',\''+escAttr(hit.summary||'Shared Memory')+'\',\''+escAttr(hit.ownerName||'')+'\',\''+escAttr(hit.groupName||'')+'\')">View Detail</button>'+
+          '</div>'+
+        '</div>';
+      }).join(''):'<div class="hub-hit-card"><div class="excerpt">No Hub results.</div></div>')+'</div>'+
+    '</div>';
+}
+
+async function openSharedMemoryDetail(remoteHitId,title,owner,groupName){
+  currentSharedMemoryHitId=remoteHitId;
+  document.getElementById('sharedMemoryOverlay').classList.add('show');
+  document.getElementById('sharedMemoryTitle').textContent=title||'Shared Memory';
+  document.getElementById('sharedMemoryMeta').innerHTML='<span class="meta-item">Hub</span>'+(owner?'<span class="meta-item">Owner: '+esc(owner)+'</span>':'')+(groupName?'<span class="meta-item">Group: '+esc(groupName)+'</span>':'');
+  document.getElementById('sharedMemorySummary').textContent='Loading...';
+  document.getElementById('sharedMemoryContent').textContent='';
+  try{
+    const r=await fetch('/api/sharing/memory-detail',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({remoteHitId:remoteHitId})});
+    const d=await r.json();
+    if(d.error) throw new Error(d.error);
+    document.getElementById('sharedMemorySummary').textContent=d.summary||'';
+    document.getElementById('sharedMemoryContent').textContent=d.content||'';
+  }catch(e){
+    document.getElementById('sharedMemorySummary').textContent='Failed to load shared memory';
+    document.getElementById('sharedMemoryContent').textContent=String(e.message||e);
+  }
+}
+
+function closeSharedMemoryDetail(event){
+  if(event && event.target!==document.getElementById('sharedMemoryOverlay')) return;
+  document.getElementById('sharedMemoryOverlay').classList.remove('show');
+}
+
+function escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function renderTaskShareActions(task){
+  currentTaskDetail=task||null;
+  const el=document.getElementById('taskShareActions');
+  if(!el){return;}
+  if(!task||!task.id){el.innerHTML='';return;}
+  const current=(task.sharingVisibility||task.visibility||'private');
+  el.innerHTML=''+
+    '<select id="taskShareScope" class="filter-select" style="min-width:120px">'+
+      '<option value="group"'+(current==='group'?' selected':'')+'>Share to Group</option>'+
+      '<option value="public"'+(current==='public'?' selected':'')+'>Share to Public</option>'+
+    '</select>'+
+    '<button class="btn btn-sm" onclick="shareCurrentTask()">Share</button>'+
+    '<button class="btn btn-sm btn-ghost" onclick="unshareCurrentTask()">Unshare</button>';
+}
+
+async function shareCurrentTask(){
+  if(!currentTaskDetail) return;
+  const visibility=document.getElementById('taskShareScope').value||'public';
+  try{
+    const r=await fetch('/api/sharing/tasks/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({taskId:currentTaskDetail.id,visibility:visibility})});
+    const d=await r.json();
+    if(d.ok||d.shared){toast('Task shared','success');} else {toast(d.error||'Task share failed','error');}
+  }catch(e){toast('Task share failed: '+e.message,'error');}
+}
+
+async function unshareCurrentTask(){
+  if(!currentTaskDetail) return;
+  try{
+    const r=await fetch('/api/sharing/tasks/unshare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({taskId:currentTaskDetail.id})});
+    const d=await r.json();
+    if(d.ok||d.unshared){toast('Task unshared','success');} else {toast(d.error||'Task unshare failed','error');}
+  }catch(e){toast('Task unshare failed: '+e.message,'error');}
+}
+
+function debounceSkillSearch(){
+  clearTimeout(skillSearchTimer);
+  skillSearchTimer=setTimeout(function(){loadSkills();},300);
+}
+
+async function pullHubSkill(skillId){
+  try{
+    const r=await fetch('/api/sharing/skills/pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skillId:skillId})});
+    const d=await r.json();
+    if(d.ok||d.pulled||d.details){toast('Skill pulled to local storage','success');loadSkills();} else {toast(d.error||'Skill pull failed','error');}
+  }catch(e){toast('Skill pull failed: '+e.message,'error');}
 }
 
 // ─── Logs ───
@@ -2246,12 +2598,15 @@ async function openTaskDetail(taskId){
   document.getElementById('taskSkillSection').className='task-skill-section';
   document.getElementById('taskDetailSummary').textContent='';
   document.getElementById('taskDetailChunks').innerHTML='<div class="spinner"></div>';
+  document.getElementById('taskShareActions').innerHTML='';
 
   try{
     const r=await fetch('/api/task/'+taskId);
     const task=await r.json();
+    currentTaskDetail=task;
 
     document.getElementById('taskDetailTitle').textContent=task.title||t('tasks.untitled');
+    renderTaskShareActions(task);
 
     const meta=[
       '<span class="meta-item"><span class="task-status-badge '+task.status+'">'+t('tasks.status.'+task.status)+'</span></span>',
@@ -2352,55 +2707,141 @@ function setSkillStatusFilter(btn,status){
 
 async function loadSkills(){
   const list=document.getElementById('skillsList');
+  const hubList=document.getElementById('hubSkillsList');
   list.innerHTML='<div class="spinner"></div>';
+  if(hubList){
+    hubList.innerHTML=skillSearchScope==='local'
+      ? '<div style="color:var(--text-muted);padding:16px">Hub search disabled in local scope.</div>'
+      : '<div class="spinner"></div>';
+  }
+
+  const query=(document.getElementById('skillSearchInput')?.value||'').trim();
+  const scope=document.getElementById('skillSearchScope') ? document.getElementById('skillSearchScope').value : skillSearchScope;
+  skillSearchScope=scope||'local';
+
   try{
     const params=new URLSearchParams();
     if(skillsStatusFilter) params.set('status',skillsStatusFilter);
     const visFilter=document.getElementById('skillVisibilityFilter')?.value;
     if(visFilter) params.set('visibility',visFilter);
-    const r=await fetch('/api/skills?'+params);
-    const data=await r.json();
 
-    document.getElementById('skillsTotalCount').textContent=formatNum(data.skills.length);
-    document.getElementById('skillsActiveCount').textContent=formatNum(data.skills.filter(s=>s.status==='active').length);
-    document.getElementById('skillsDraftCount').textContent=formatNum(data.skills.filter(s=>s.status==='draft').length);
-    document.getElementById('skillsInstalledCount').textContent=formatNum(data.skills.filter(s=>s.installed).length);
-    document.getElementById('skillsPublicCount').textContent=formatNum(data.skills.filter(s=>s.visibility==='public').length);
+    const localRes=await fetch('/api/skills?'+params.toString());
+    const localData=await localRes.json();
+    let localSkills=Array.isArray(localData.skills)?localData.skills:[];
+    if(query){
+      const q=query.toLowerCase();
+      localSkills=localSkills.filter(skill=>{
+        const haystack=[skill.name,skill.description,skill.tags].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
+    }
 
-    if(!data.skills||data.skills.length===0){
-      list.innerHTML='<div style="text-align:center;padding:48px;color:var(--text-muted);font-size:14px">'+t('skills.empty')+'</div>';
+    const renderLocalCards=function(skills){
+      if(!skills||skills.length===0){
+        return '<div style="text-align:center;padding:48px;color:var(--text-muted);font-size:14px">'+(query?'No local skill results.':t('skills.empty'))+'</div>';
+      }
+      return skills.map(skill=>{
+        const timeStr=formatTime(skill.createdAt);
+        const tags=parseTags(skill.tags);
+        const installedClass=skill.installed?'installed':'';
+        const statusClass=skill.status==='archived'?'archived':(skill.status==='draft'?'draft':'');
+        const sourceLabel=tags.includes('hub-import')?'hub-import':skill.sourceType;
+        const qs=skill.qualityScore;
+        const qsBadge=qs!==null&&qs!==undefined?'<span class="skill-badge quality '+(qs>=7?'high':qs>=5?'mid':'low')+'">★ '+qs.toFixed(1)+'</span>':'';
+        const visBadge=skill.visibility==='public'?'<span class="skill-badge visibility-public">🌐 '+t('skills.visibility.public')+'</span>':'';
+        return '<div class="skill-card '+installedClass+' '+statusClass+'" onclick="openSkillDetail(''+skill.id+'')">'+
+          '<div class="skill-card-top">'+
+            '<div class="skill-card-name">🧠 '+esc(skill.name)+'</div>'+
+            '<div class="skill-card-badges">'+
+              qsBadge+
+              '<span class="skill-badge version">v'+skill.version+'</span>'+
+              visBadge+
+              (skill.installed?'<span class="skill-badge installed">'+t('skills.installed.badge')+'</span>':'')+
+              '<span class="skill-badge status-'+skill.status+'">'+t('skills.status.'+skill.status)+'</span>'+
+            '</div>'+
+          '</div>'+
+          '<div class="skill-card-desc">'+esc(skill.description)+'</div>'+
+          '<div class="skill-card-bottom">'+
+            '<span class="tag"><span class="icon">📅</span> '+timeStr+'</span>'+
+            '<span class="tag"><span class="icon">📦</span> '+sourceLabel+'</span>'+
+            (tags.length>0?'<div class="skill-card-tags">'+tags.map(t=>'<span class="skill-tag">'+esc(t)+'</span>').join('')+'</div>':'')+
+          '</div>'+
+        '</div>';
+      }).join('');
+    };
+
+    list.innerHTML=renderLocalCards(localSkills);
+
+    if(skillSearchScope==='local'){
+      if(hubList){
+        hubList.innerHTML='<div style="color:var(--text-muted);padding:16px">Hub search disabled in local scope.</div>';
+      }
+      document.getElementById('skillSearchMeta').textContent=query?('Local '+localSkills.length):'';
+      document.getElementById('skillsTotalCount').textContent=formatNum(localSkills.length);
+      document.getElementById('skillsActiveCount').textContent=formatNum(localSkills.filter(s=>s.status==='active').length);
+      document.getElementById('skillsDraftCount').textContent=formatNum(localSkills.filter(s=>s.status==='draft').length);
+      document.getElementById('skillsInstalledCount').textContent=formatNum(localSkills.filter(s=>s.installed).length);
+      document.getElementById('skillsPublicCount').textContent=formatNum(localSkills.filter(s=>s.visibility==='public').length);
       return;
     }
 
-    list.innerHTML=data.skills.map(skill=>{
-      const timeStr=formatTime(skill.createdAt);
-      const tags=parseTags(skill.tags);
-      const installedClass=skill.installed?'installed':'';
-      const statusClass=skill.status==='archived'?'archived':(skill.status==='draft'?'draft':'');
-      const qs=skill.qualityScore;
-      const qsBadge=qs!==null&&qs!==undefined?'<span class="skill-badge quality '+(qs>=7?'high':qs>=5?'mid':'low')+'">\\u2605 '+qs.toFixed(1)+'</span>':'';
-      const visBadge=skill.visibility==='public'?'<span class="skill-badge visibility-public">\\u{1F310} '+t('skills.visibility.public')+'</span>':'';
-      return '<div class="skill-card '+installedClass+' '+statusClass+'" onclick="openSkillDetail(\\''+skill.id+'\\')">'+
-        '<div class="skill-card-top">'+
-          '<div class="skill-card-name">\\u{1F9E0} '+esc(skill.name)+'</div>'+
-          '<div class="skill-card-badges">'+
-            qsBadge+
-            '<span class="skill-badge version">v'+skill.version+'</span>'+
-            visBadge+
-            (skill.installed?'<span class="skill-badge installed">'+t('skills.installed.badge')+'</span>':'')+
-            '<span class="skill-badge status-'+skill.status+'">'+t('skills.status.'+skill.status)+'</span>'+
-          '</div>'+
-        '</div>'+
-        '<div class="skill-card-desc">'+esc(skill.description)+'</div>'+
-        '<div class="skill-card-bottom">'+
-          '<span class="tag"><span class="icon">\\u{1F4C5}</span> '+timeStr+'</span>'+
-          '<span class="tag"><span class="icon">\\u{1F4E6}</span> '+skill.sourceType+'</span>'+
-          (tags.length>0?'<div class="skill-card-tags">'+tags.map(t=>'<span class="skill-tag">'+esc(t)+'</span>').join('')+'</div>':'')+
-        '</div>'+
+    if(!query){
+      if(hubList){
+        hubList.innerHTML='<div style="color:var(--text-muted);padding:16px">Enter a query to search Hub skills.</div>';
+      }
+      document.getElementById('skillSearchMeta').textContent='Local '+localSkills.length+' · Hub 0';
+      document.getElementById('skillsTotalCount').textContent=formatNum(localSkills.length);
+      document.getElementById('skillsActiveCount').textContent=formatNum(localSkills.filter(s=>s.status==='active').length);
+      document.getElementById('skillsDraftCount').textContent=formatNum(localSkills.filter(s=>s.status==='draft').length);
+      document.getElementById('skillsInstalledCount').textContent=formatNum(localSkills.filter(s=>s.installed).length);
+      document.getElementById('skillsPublicCount').textContent=formatNum(localSkills.filter(s=>s.visibility==='public').length);
+      return;
+    }
+
+    const sharingParams=new URLSearchParams();
+    sharingParams.set('query',query);
+    sharingParams.set('scope',skillSearchScope);
+    sharingParams.set('maxResults','20');
+    const r=await fetch('/api/sharing/search/skills?'+sharingParams.toString());
+    const data=await r.json();
+    const localHits=(data.local&&Array.isArray(data.local.hits))?data.local.hits:[];
+    const hubHits=(data.hub&&Array.isArray(data.hub.hits))?data.hub.hits:[];
+
+    list.innerHTML=localHits.length?localHits.map(function(skill){
+      return '<div class="hub-skill-card" onclick="openSkillDetail(''+skill.skillId+'')">'+
+        '<div class="summary">'+esc(skill.name)+'</div>'+
+        '<div class="excerpt">'+esc(skill.description||'')+'</div>'+
+        '<div class="hub-skill-meta"><span class="meta-chip">visibility: '+esc(skill.visibility||'private')+'</span><span class="meta-chip">owner: '+esc(skill.owner||'agent:main')+'</span></div>'+
       '</div>';
-    }).join('');
+    }).join(''):'<div class="hub-skill-card"><div class="excerpt">No local skill results.</div></div>';
+
+    if(hubList){
+      hubList.innerHTML=hubHits.length?hubHits.map(function(skill){
+        return '<div class="hub-skill-card">'+
+          '<div class="summary">'+esc(skill.name)+'</div>'+
+          '<div class="excerpt">'+esc(skill.description||'')+'</div>'+
+          '<div class="hub-skill-meta">'+
+            '<span class="meta-chip">owner: '+esc(skill.ownerName||'unknown')+'</span>'+
+            (skill.groupName?'<span class="meta-chip">group: '+esc(skill.groupName)+'</span>':'')+
+            '<span class="meta-chip">visibility: '+esc(skill.visibility||'hub')+'</span>'+
+            (skill.version!=null?'<span class="meta-chip">v'+skill.version+'</span>':'')+
+          '</div>'+
+          '<div class="hub-skill-actions"><button class="btn btn-sm" onclick="event.stopPropagation();pullHubSkill(''+escAttr(skill.skillId)+'')">Pull to Local</button></div>'+
+        '</div>';
+      }).join(''):'<div class="hub-skill-card"><div class="excerpt">No Hub skill results.</div></div>';
+    }
+
+    document.getElementById('skillSearchMeta').textContent='Local '+localHits.length+' · Hub '+hubHits.length;
+    document.getElementById('skillsTotalCount').textContent=formatNum(localHits.length+hubHits.length);
+    document.getElementById('skillsActiveCount').textContent=formatNum(localHits.length);
+    document.getElementById('skillsDraftCount').textContent='0';
+    document.getElementById('skillsInstalledCount').textContent='-';
+    document.getElementById('skillsPublicCount').textContent=formatNum(hubHits.filter(function(s){return s.visibility==='public';}).length);
   }catch(e){
     list.innerHTML='<div style="text-align:center;padding:24px;color:var(--rose)">Failed to load skills: '+esc(String(e))+'</div>';
+    if(hubList){
+      hubList.innerHTML='<div style="text-align:center;padding:24px;color:var(--rose)">Failed to load Hub skills: '+esc(String(e))+'</div>';
+    }
   }
 }
 
@@ -2942,7 +3383,7 @@ function renderBreakdown(obj,containerId){
 
 /* ─── Data loading ─── */
 async function loadAll(){
-  await Promise.all([loadStats(),loadMemories()]);
+  await Promise.all([loadStats(),loadMemories(),loadSharingStatus(false)]);
   checkMigrateStatus();
   connectPPSSE();
 }
@@ -3044,20 +3485,31 @@ async function loadMemories(page){
 }
 
 async function doSearch(q){
+  const scope=(document.getElementById('memorySearchScope')?.value)||memorySearchScope||'local';
   if(!q.trim()){currentPage=1;loadMemories();return}
   const list=document.getElementById('memoryList');
   list.innerHTML='<div class="spinner"></div>';
-  const p=getFilterParams();
-  p.set('q',q);
-  const r=await fetch('/api/search?'+p.toString());
-  const d=await r.json();
-  const meta=[];
-  if(d.vectorCount>0) meta.push(d.vectorCount+t('search.meta.semantic'));
-  if(d.ftsCount>0) meta.push(d.ftsCount+t('search.meta.text'));
-  meta.push(d.total+t('search.meta.results'));
-  document.getElementById('searchMeta').textContent=meta.join(' \\u00B7 ');
-  renderMemories(d.results||[]);
   document.getElementById('pagination').innerHTML='';
+  if(scope==='local'){
+    const p=getFilterParams();
+    p.set('q',q);
+    const r=await fetch('/api/search?'+p.toString());
+    const d=await r.json();
+    const meta=[];
+    if(d.vectorCount>0) meta.push(d.vectorCount+t('search.meta.semantic'));
+    if(d.ftsCount>0) meta.push(d.ftsCount+t('search.meta.text'));
+    meta.push(d.total+t('search.meta.results'));
+    document.getElementById('searchMeta').textContent=meta.join(' · ');
+    document.getElementById('sharingSearchMeta').textContent='';
+    renderMemories(d.results||[]);
+    return;
+  }
+  const r=await fetch('/api/sharing/search/memories',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({query:q,scope:scope,maxResults:10,role:activeRole||undefined})
+  });
+  const d=await r.json();
+  renderSharingMemorySearchResults(d,q);
 }
 
 function debounceSearch(){
@@ -3841,6 +4293,7 @@ function ppDone(wasStopped,wasFailed,skipReload){
   }
   if(!skipReload) loadAll();
 }
+
 
 /* ─── Toast ─── */
 function toast(msg,type='info'){

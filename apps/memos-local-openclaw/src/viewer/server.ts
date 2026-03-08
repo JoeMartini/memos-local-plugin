@@ -14,6 +14,9 @@ import { TaskProcessor } from "../ingest/task-processor";
 import { RecallEngine } from "../recall/engine";
 import { SkillEvolver } from "../skill/evolver";
 import { resolveConfig } from "../config";
+import { getHubStatus } from "../client/connector";
+import { hubGetMemoryDetail, hubRequestJson, hubSearchMemories, hubSearchSkills, normalizeHubUrl, resolveHubClient } from "../client/hub";
+import { fetchHubSkillBundle, restoreSkillBundleFromHub } from "../client/skill-sync";
 import type { Logger, Chunk, PluginContext, MemosLocalConfig } from "../types";
 import { viewerHTML } from "./html";
 import { v4 as uuid } from "uuid";
@@ -209,6 +212,16 @@ export class ViewerServer {
       else if (p === "/api/memories" && req.method === "DELETE") this.handleDeleteAll(res);
       else if (p === "/api/logs" && req.method === "GET") this.serveLogs(res, url);
       else if (p === "/api/log-tools" && req.method === "GET") this.serveLogTools(res);
+      else if (p === "/api/sharing/status" && req.method === "GET") this.serveSharingStatus(res);
+      else if (p === "/api/sharing/pending-users" && req.method === "GET") this.serveSharingPendingUsers(res);
+      else if (p === "/api/sharing/approve-user" && req.method === "POST") this.handleSharingApproveUser(req, res);
+      else if (p === "/api/sharing/reject-user" && req.method === "POST") this.handleSharingRejectUser(req, res);
+      else if (p === "/api/sharing/search/memories" && req.method === "POST") this.handleSharingMemorySearch(req, res);
+      else if (p === "/api/sharing/memory-detail" && req.method === "POST") this.handleSharingMemoryDetail(req, res);
+      else if (p === "/api/sharing/search/skills" && req.method === "GET") this.serveSharingSkillSearch(res, url);
+      else if (p === "/api/sharing/tasks/share" && req.method === "POST") this.handleSharingTaskShare(req, res);
+      else if (p === "/api/sharing/tasks/unshare" && req.method === "POST") this.handleSharingTaskUnshare(req, res);
+      else if (p === "/api/sharing/skills/pull" && req.method === "POST") this.handleSharingSkillPull(req, res);
       else if (p === "/api/config" && req.method === "GET") this.serveConfig(res);
       else if (p === "/api/config" && req.method === "PUT") this.handleSaveConfig(req, res);
       else if (p === "/api/auth/logout" && req.method === "POST") this.handleLogout(req, res);
@@ -438,6 +451,7 @@ export class ViewerServer {
     const db = (this.store as any).db;
     const meta = db.prepare("SELECT skill_status, skill_reason FROM tasks WHERE id = ?").get(taskId) as
       { skill_status: string | null; skill_reason: string | null } | undefined;
+    const sharedTask = db.prepare("SELECT visibility, group_id FROM hub_tasks WHERE source_task_id = ? ORDER BY updated_at DESC LIMIT 1").get(taskId) as { visibility: string | null; group_id: string | null } | undefined;
 
     this.jsonResponse(res, {
       id: task.id,
@@ -451,6 +465,8 @@ export class ViewerServer {
       skillStatus: meta?.skill_status ?? null,
       skillReason: meta?.skill_reason ?? null,
       skillLinks,
+      sharingVisibility: sharedTask?.visibility ?? null,
+      sharingGroupId: sharedTask?.group_id ?? null,
     });
   }
 
@@ -859,6 +875,279 @@ export class ViewerServer {
     if (!summarizer?.provider) return false;
     if (summarizer.provider === "openclaw") return false;
     return true;
+  }
+
+  private async serveSharingStatus(res: http.ServerResponse): Promise<void> {
+    const sharing = this.ctx?.config?.sharing;
+    const base = {
+      enabled: Boolean(sharing?.enabled),
+      role: sharing?.role ?? null,
+      clientConfigured: Boolean(sharing?.client?.hubAddress && sharing?.client?.userToken),
+      hubUrl: sharing?.client?.hubAddress ? normalizeHubUrl(sharing.client.hubAddress) : null,
+      connection: { connected: false, user: null as any, hubUrl: undefined as string | undefined, teamName: null as string | null, apiVersion: null as string | null },
+      admin: { canManageUsers: false, rejectSupported: false },
+    };
+
+    if (!this.ctx || !sharing?.enabled || sharing.role !== "client") {
+      this.jsonResponse(res, base);
+      return;
+    }
+
+    try {
+      const status = await getHubStatus(this.store, this.ctx.config);
+      const output = { ...base, connection: { ...base.connection, ...status } } as any;
+      if (status.connected && status.hubUrl) {
+        try {
+          const userToken = this.store.getClientHubConnection()?.userToken || this.ctx.config.sharing?.client?.userToken || "";
+          const info = await fetch(`${status.hubUrl}/api/v1/hub/info`).then((r) => (r.ok ? r.json() : null)).catch(() => null) as any;
+          output.connection.teamName = info?.teamName ?? null;
+          output.connection.apiVersion = info?.apiVersion ?? null;
+        } catch {}
+      }
+      output.admin.canManageUsers = status.connected && status.user?.role === "admin";
+      output.admin.rejectSupported = output.admin.canManageUsers;
+      this.jsonResponse(res, output);
+    } catch (err) {
+      this.jsonResponse(res, { ...base, error: String(err) });
+    }
+  }
+
+  private async serveSharingPendingUsers(res: http.ServerResponse): Promise<void> {
+    if (!this.ctx) return this.jsonResponse(res, { users: [], error: "sharing_unavailable" });
+    try {
+      const conn = this.store.getClientHubConnection();
+      const hubUrl = conn?.hubUrl || this.ctx.config.sharing?.client?.hubAddress || "";
+      const userToken = conn?.userToken || this.ctx.config.sharing?.client?.userToken || "";
+      if (!hubUrl || !userToken) return this.jsonResponse(res, { users: [], error: "not_configured" });
+      const data = await hubRequestJson(normalizeHubUrl(hubUrl), userToken, "/api/v1/hub/admin/pending-users", { method: "GET" }) as any;
+      this.jsonResponse(res, { users: Array.isArray(data?.users) ? data.users : [] });
+    } catch (err) {
+      this.jsonResponse(res, { users: [], error: String(err) });
+    }
+  }
+
+  private handleSharingApproveUser(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const conn = this.store.getClientHubConnection();
+        const hubUrl = conn?.hubUrl || this.ctx.config.sharing?.client?.hubAddress || "";
+        const userToken = conn?.userToken || this.ctx.config.sharing?.client?.userToken || "";
+        const result = await hubRequestJson(normalizeHubUrl(hubUrl), userToken, "/api/v1/hub/admin/approve-user", {
+          method: "POST",
+          body: JSON.stringify({ userId: parsed.userId, username: parsed.username }),
+        });
+        this.jsonResponse(res, { ok: true, result });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private handleSharingRejectUser(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const conn = this.store.getClientHubConnection();
+        const hubUrl = conn?.hubUrl || this.ctx.config.sharing?.client?.hubAddress || "";
+        const userToken = conn?.userToken || this.ctx.config.sharing?.client?.userToken || "";
+        const result = await hubRequestJson(normalizeHubUrl(hubUrl), userToken, "/api/v1/hub/admin/reject-user", {
+          method: "POST",
+          body: JSON.stringify({ userId: parsed.userId }),
+        });
+        this.jsonResponse(res, { ok: true, result });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private handleSharingMemorySearch(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { local: { hits: [], meta: {} }, hub: { hits: [], meta: { totalCandidates: 0, searchedGroups: [], includedPublic: false } }, error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const query = String(parsed.query || "");
+        const role = typeof parsed.role === "string" ? parsed.role : undefined;
+        const minScore = typeof parsed.minScore === "number" ? parsed.minScore : undefined;
+        const maxResults = typeof parsed.maxResults === "number" ? parsed.maxResults : 10;
+        const scope = parsed.scope === "group" || parsed.scope === "all" ? parsed.scope : "local";
+        const local = this.searchLocalViewerMemories(query, { role, maxResults });
+        const localHits = local.hits;
+        const hub = scope === "local"
+          ? { hits: [], meta: { totalCandidates: 0, searchedGroups: [], includedPublic: false } }
+          : await hubSearchMemories(this.store, this.ctx, { query, maxResults, scope });
+        this.jsonResponse(res, { local: { hits: localHits, meta: local.meta }, hub });
+      } catch (err) {
+        this.jsonResponse(res, { local: { hits: [], meta: {} }, hub: { hits: [], meta: { totalCandidates: 0, searchedGroups: [], includedPublic: false } }, error: String(err) });
+      }
+    });
+  }
+
+  private handleSharingMemoryDetail(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const detail = await hubGetMemoryDetail(this.store, this.ctx, { remoteHitId: String(parsed.remoteHitId || "") });
+        this.jsonResponse(res, detail);
+      } catch (err) {
+        this.jsonResponse(res, { error: String(err) });
+      }
+    });
+  }
+
+  private async serveSharingSkillSearch(res: http.ServerResponse, url: URL): Promise<void> {
+    if (!this.ctx) return this.jsonResponse(res, { local: { hits: [] }, hub: { hits: [] }, error: "sharing_unavailable" });
+    try {
+      const query = String(url.searchParams.get("query") || "");
+      const scope = url.searchParams.get("scope") === "group" || url.searchParams.get("scope") === "all" ? url.searchParams.get("scope")! : "local";
+      const recall = new RecallEngine(this.store, this.embedder, this.ctx);
+      const localHits = scope === "local" ? await recall.searchSkills(query, "mix" as any, "agent:main") : await recall.searchSkills(query, "mix" as any, "agent:main");
+      const hub = scope === "local" ? { hits: [] } : await hubSearchSkills(this.store, this.ctx, { query, maxResults: Number(url.searchParams.get("maxResults") || 20) });
+      this.jsonResponse(res, { local: { hits: localHits }, hub });
+    } catch (err) {
+      this.jsonResponse(res, { local: { hits: [] }, hub: { hits: [] }, error: String(err) });
+    }
+  }
+
+  private searchLocalViewerMemories(query: string, options?: { role?: string; maxResults?: number }): { hits: any[]; meta: Record<string, unknown> } {
+    const db = (this.store as any).db;
+    const role = options?.role;
+    const maxResults = options?.maxResults ?? 10;
+    const params: any[] = [];
+    let rows: any[] = [];
+    try {
+      let sql = "SELECT c.* FROM chunks_fts f JOIN chunks c ON f.rowid = c.rowid WHERE chunks_fts MATCH ?";
+      params.push(query);
+      if (role) {
+        sql += " AND c.role = ?";
+        params.push(role);
+      }
+      sql += " ORDER BY rank LIMIT ?";
+      params.push(maxResults);
+      rows = db.prepare(sql).all(...params);
+    } catch {
+      const likeParams: any[] = [`%${query}%`, `%${query}%`];
+      let sql = "SELECT * FROM chunks WHERE (content LIKE ? OR summary LIKE ?)";
+      if (role) {
+        sql += " AND role = ?";
+        likeParams.push(role);
+      }
+      sql += " ORDER BY created_at DESC LIMIT ?";
+      likeParams.push(maxResults);
+      rows = db.prepare(sql).all(...likeParams);
+    }
+    const hits = rows.map((row: any, idx: number) => ({
+      id: row.id,
+      summary: row.summary || row.content?.slice(0, 120) || "",
+      excerpt: row.content || "",
+      score: Math.max(0.3, 1 - idx * 0.1),
+      role: row.role,
+      ref: { sessionKey: row.session_key, chunkId: row.id, turnId: row.turn_id, seq: row.seq },
+      taskId: row.task_id ?? null,
+      skillId: row.skill_id ?? null,
+    }));
+    return { hits, meta: { total: hits.length, usedMaxResults: maxResults } };
+  }
+
+  private handleSharingTaskShare(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const taskId = String(parsed.taskId || "");
+        const visibility = parsed.visibility === "group" ? "group" : "public";
+        const groupId = typeof parsed.groupId === "string" ? parsed.groupId : undefined;
+        const task = this.store.getTask(taskId);
+        if (!task) return this.jsonResponse(res, { ok: false, error: "task_not_found" });
+        const chunks = this.store.getChunksByTask(taskId);
+        if (chunks.length === 0) return this.jsonResponse(res, { ok: false, error: "no_chunks" });
+        const hubClient = await resolveHubClient(this.store, this.ctx);
+        const response = await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/tasks/share", {
+          method: "POST",
+          body: JSON.stringify({
+            task: {
+              id: task.id,
+              sourceTaskId: task.id,
+              title: task.title,
+              summary: task.summary,
+              groupId: visibility === "group" ? groupId ?? null : null,
+              visibility,
+              createdAt: task.startedAt ?? Date.now(),
+              updatedAt: task.updatedAt ?? Date.now(),
+            },
+            chunks: chunks.map((chunk) => ({
+              id: chunk.id,
+              hubTaskId: task.id,
+              sourceTaskId: task.id,
+              sourceChunkId: chunk.id,
+              role: chunk.role,
+              content: chunk.content,
+              summary: chunk.summary,
+              kind: chunk.kind,
+              createdAt: chunk.createdAt,
+            })),
+          }),
+        });
+        const hubUserId = hubClient.userId;
+        if (hubUserId) {
+          this.store.upsertHubTask({
+            id: task.id,
+            sourceTaskId: task.id,
+            sourceUserId: hubUserId,
+            title: task.title,
+            summary: task.summary,
+            groupId: visibility === "group" ? groupId ?? null : null,
+            visibility,
+            createdAt: task.startedAt ?? Date.now(),
+            updatedAt: task.updatedAt ?? Date.now(),
+          });
+        }
+        this.jsonResponse(res, { ok: true, taskId, visibility, response });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private handleSharingTaskUnshare(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const taskId = String(parsed.taskId || "");
+        const task = this.store.getTask(taskId);
+        if (!task) return this.jsonResponse(res, { ok: false, error: "task_not_found" });
+        const hubClient = await resolveHubClient(this.store, this.ctx);
+        await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/tasks/unshare", {
+          method: "POST",
+          body: JSON.stringify({ sourceTaskId: task.id }),
+        });
+        const hubUserId = hubClient.userId;
+        if (hubUserId) this.store.deleteHubTaskBySource(hubUserId, task.id);
+        this.jsonResponse(res, { ok: true, taskId });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private handleSharingSkillPull(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const skillId = String(parsed.skillId || "");
+        const payload = await fetchHubSkillBundle(this.store, this.ctx, { skillId });
+        const restored = restoreSkillBundleFromHub(this.store, this.ctx, payload);
+        this.jsonResponse(res, { ok: true, pulled: true, hubSkillId: skillId, ...restored });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
   }
 
   private serveConfig(res: http.ServerResponse): void {
