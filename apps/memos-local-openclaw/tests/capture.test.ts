@@ -46,7 +46,7 @@ describe("captureMessages", () => {
     expect(result[0].toolName).toBe("web_search");
   });
 
-  it("should preserve original content without any stripping", () => {
+  it("should strip explicit evidence wrapper blocks from assistant messages", () => {
     const msgs = [
       {
         role: "assistant",
@@ -55,9 +55,21 @@ describe("captureMessages", () => {
     ];
     const result = captureMessages(msgs, "s1", "t1", "STORED_MEMORY", noopLog);
     expect(result).toHaveLength(1);
-    expect(result[0].content).toBe(
-      "Based on memory: [STORED_MEMORY]some evidence[/STORED_MEMORY] the answer is 42.",
-    );
+    expect(result[0].content).toBe("Based on memory: the answer is 42.");
+  });
+
+  it("should not strip ordinary mentions of the evidence tag", () => {
+    const msgs = [
+      {
+        role: "assistant",
+        content: "The literal token STORED_MEMORY appears in this docs note.",
+      },
+    ];
+
+    const result = captureMessages(msgs, "s1", "t1", "STORED_MEMORY", noopLog);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].content).toBe("The literal token STORED_MEMORY appears in this docs note.");
   });
 
   it("should skip empty messages", () => {

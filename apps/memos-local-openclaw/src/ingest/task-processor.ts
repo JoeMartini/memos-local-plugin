@@ -30,6 +30,8 @@ const SKIP_REASONS = {
 export class TaskProcessor {
   private summarizer: Summarizer;
   private processing = false;
+  private pendingEvents: Array<{ sessionKey: string; latestTimestamp: number; owner: string }> = [];
+  private drainPromise: Promise<void> | null = null;
   private onTaskCompletedCallback?: (task: Task) => void;
 
   constructor(
@@ -48,18 +50,31 @@ export class TaskProcessor {
    * Determines if a new task boundary was crossed and handles transition.
    */
   async onChunksIngested(sessionKey: string, latestTimestamp: number, owner?: string): Promise<void> {
-    this.ctx.log.debug(`TaskProcessor.onChunksIngested called session=${sessionKey} ts=${latestTimestamp} owner=${owner ?? "agent:main"} processing=${this.processing}`);
-    if (this.processing) {
-      this.ctx.log.debug("TaskProcessor.onChunksIngested skipped — already processing");
-      return;
+    const resolvedOwner = owner ?? "agent:main";
+    this.ctx.log.debug(`TaskProcessor.onChunksIngested called session=${sessionKey} ts=${latestTimestamp} owner=${resolvedOwner} processing=${this.processing}`);
+    this.pendingEvents.push({ sessionKey, latestTimestamp, owner: resolvedOwner });
+
+    if (!this.drainPromise) {
+      this.drainPromise = this.drainPending();
     }
+
+    await this.drainPromise;
+  }
+
+  private async drainPending(): Promise<void> {
     this.processing = true;
     try {
-      await this.detectAndProcess(sessionKey, latestTimestamp, owner ?? "agent:main");
-    } catch (err) {
-      this.ctx.log.error(`TaskProcessor error: ${err}`);
+      while (this.pendingEvents.length > 0) {
+        const next = this.pendingEvents.shift()!;
+        try {
+          await this.detectAndProcess(next.sessionKey, next.latestTimestamp, next.owner);
+        } catch (err) {
+          this.ctx.log.error(`TaskProcessor error: ${err}`);
+        }
+      }
     } finally {
       this.processing = false;
+      this.drainPromise = null;
     }
   }
 

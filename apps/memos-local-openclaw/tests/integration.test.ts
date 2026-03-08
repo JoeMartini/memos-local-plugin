@@ -41,6 +41,21 @@ I think the path alias is wrong in the tsconfig configuration.` },
     { role: "assistant", content: "The error shows a missing path alias for @/components/Chart. Check your tsconfig.json paths configuration - it should have: \"@/*\": [\"./src/*\"] or similar mapping." },
   ], "session-frontend");
 
+  plugin.onConversationTurn([
+    { role: "user", content: "alpha private marker only alpha should see this rollout note" },
+    { role: "assistant", content: "Recorded alpha private marker deployment note." },
+  ], "session-alpha-private", "agent:alpha");
+
+  plugin.onConversationTurn([
+    { role: "user", content: "beta private marker only beta should see this rollback note" },
+    { role: "assistant", content: "Recorded beta private marker rollback note." },
+  ], "session-beta-private", "agent:beta");
+
+  plugin.onConversationTurn([
+    { role: "user", content: "shared public marker all agents can use this shared convention" },
+    { role: "assistant", content: "Recorded shared public marker convention." },
+  ], "session-public", "public");
+
   // Wait for all async ingest to complete
   await plugin.flush();
 }, 120_000);
@@ -153,6 +168,61 @@ describe("Integration: memory_get", () => {
     const getResult = (await getTool.handler({ ref, maxChars: 50 })) as any;
 
     expect(getResult.content.length).toBeLessThanOrEqual(52); // 50 + "…"
+  });
+});
+
+describe("Integration: owner isolation for initPlugin tools", () => {
+  it("memory_search should respect owner on initPlugin path", async () => {
+    const searchTool = plugin.tools.find((t) => t.name === "memory_search")!;
+
+    const betaSearch = (await searchTool.handler({
+      query: "alpha private marker",
+      owner: "agent:beta",
+    })) as any;
+
+    expect(betaSearch.hits).toHaveLength(0);
+
+    const publicSearch = (await searchTool.handler({
+      query: "shared public marker",
+      owner: "agent:beta",
+    })) as any;
+
+    expect(publicSearch.hits.length).toBeGreaterThan(0);
+    expect(publicSearch.hits.some((hit: any) => hit.ref.sessionKey === "session-public")).toBe(true);
+  });
+
+  it("memory_timeline should not expose another owner's chunks on initPlugin path", async () => {
+    const searchTool = plugin.tools.find((t) => t.name === "memory_search")!;
+    const timelineTool = plugin.tools.find((t) => t.name === "memory_timeline")!;
+
+    const alphaSearch = (await searchTool.handler({
+      query: "alpha private marker",
+      owner: "agent:alpha",
+    })) as any;
+
+    expect(alphaSearch.hits.length).toBeGreaterThan(0);
+
+    const ref = alphaSearch.hits[0].ref;
+    const leaked = (await timelineTool.handler({ ref, owner: "agent:beta", window: 2 })) as any;
+
+    expect(leaked.entries).toEqual([]);
+  });
+
+  it("memory_get should not expose another owner's chunk on initPlugin path", async () => {
+    const searchTool = plugin.tools.find((t) => t.name === "memory_search")!;
+    const getTool = plugin.tools.find((t) => t.name === "memory_get")!;
+
+    const alphaSearch = (await searchTool.handler({
+      query: "alpha private marker",
+      owner: "agent:alpha",
+    })) as any;
+
+    expect(alphaSearch.hits.length).toBeGreaterThan(0);
+
+    const ref = alphaSearch.hits[0].ref;
+    const leaked = (await getTool.handler({ ref, owner: "agent:beta" })) as any;
+
+    expect(leaked.error).toContain(ref.chunkId);
   });
 });
 

@@ -13,6 +13,11 @@ import { captureMessages } from "./src/capture";
 import { DEFAULTS } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
 
+function ownerFilterFor(agentId: string | undefined): string[] {
+  const resolvedAgentId = agentId && agentId.trim().length > 0 ? agentId : "main";
+  return [`agent:${resolvedAgentId}`, "public"];
+}
+
 const pluginConfigSchema = {
   type: "object" as const,
   additionalProperties: true,
@@ -99,7 +104,7 @@ const memosLocalPlugin = {
           };
 
           const agentId = (context as any)?.agentId ?? "main";
-          const ownerFilter = [`agent:${agentId}`, "public"];
+          const ownerFilter = ownerFilterFor(agentId);
           const result = await engine.search({ query, maxResults, minScore, ownerFilter });
 
           if (result.hits.length === 0) {
@@ -157,7 +162,7 @@ const memosLocalPlugin = {
           seq: Type.Number({ description: "From search hit ref.seq" }),
           window: Type.Optional(Type.Number({ description: "Context window ±N (default 2)" })),
         }),
-        async execute(_toolCallId, params) {
+        async execute(_toolCallId, params, context) {
           const { sessionKey, chunkId, turnId, seq, window: win } = params as {
             sessionKey: string;
             chunkId: string;
@@ -166,9 +171,17 @@ const memosLocalPlugin = {
             window?: number;
           };
 
+          const agentId = (context as any)?.agentId ?? "main";
+          const ownerFilter = ownerFilterFor(agentId);
           const w = win ?? DEFAULTS.timelineWindowDefault;
-          const neighbors = store.getNeighborChunks(sessionKey, turnId, seq, w);
-          const anchorChunk = store.getChunk(chunkId);
+          const anchorChunk = store.getChunkForOwners(chunkId, ownerFilter);
+          if (!anchorChunk) {
+            return {
+              content: [{ type: "text", text: "Timeline (0 entries):\n\n" }],
+              details: { entries: [], anchorRef: { sessionKey, chunkId, turnId, seq } },
+            };
+          }
+          const neighbors = store.getNeighborChunks(sessionKey, turnId, seq, w, ownerFilter);
           const anchorTs = anchorChunk?.createdAt ?? 0;
 
           const entries = neighbors.map((chunk) => {
@@ -212,11 +225,12 @@ const memosLocalPlugin = {
             Type.Number({ description: `Max chars (default ${DEFAULTS.getMaxCharsDefault}, max ${DEFAULTS.getMaxCharsMax})` }),
           ),
         }),
-        async execute(_toolCallId, params) {
+        async execute(_toolCallId, params, context) {
           const { chunkId, maxChars } = params as { chunkId: string; maxChars?: number };
           const limit = Math.min(maxChars ?? DEFAULTS.getMaxCharsDefault, DEFAULTS.getMaxCharsMax);
 
-          const chunk = store.getChunk(chunkId);
+          const agentId = (context as any)?.agentId ?? "main";
+          const chunk = store.getChunkForOwners(chunkId, ownerFilterFor(agentId));
           if (!chunk) {
             return {
               content: [{ type: "text", text: `Chunk not found: ${chunkId}` }],
@@ -515,8 +529,9 @@ const memosLocalPlugin = {
           api.logger.info(`memos-local: started (embedding: ${embedder.provider})`);
         }
       },
-      stop: () => {
+      stop: async () => {
         viewer.stop();
+        await worker.flush();
         store.close();
         api.logger.info("memos-local: stopped");
       },
