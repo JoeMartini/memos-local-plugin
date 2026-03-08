@@ -640,16 +640,37 @@ export class SqliteStore {
     return row ? rowToChunk(row) : null;
   }
 
-  getChunksByRef(ref: ChunkRef): Chunk | null {
-    return this.getChunk(ref.chunkId);
+  getChunkForOwners(chunkId: string, ownerFilter?: string[]): Chunk | null {
+    if (!ownerFilter || ownerFilter.length === 0) return this.getChunk(chunkId);
+
+    const placeholders = ownerFilter.map(() => "?").join(",");
+    const row = this.db.prepare(
+      `SELECT * FROM chunks WHERE id = ? AND owner IN (${placeholders}) LIMIT 1`,
+    ).get(chunkId, ...ownerFilter) as ChunkRow | undefined;
+    return row ? rowToChunk(row) : null;
   }
 
-  getNeighborChunks(sessionKey: string, turnId: string, seq: number, window: number): Chunk[] {
-    const allRows = this.db.prepare(`
+  getChunksByRef(ref: ChunkRef, ownerFilter?: string[]): Chunk | null {
+    return this.getChunkForOwners(ref.chunkId, ownerFilter);
+  }
+
+  getNeighborChunks(sessionKey: string, turnId: string, seq: number, window: number, ownerFilter?: string[]): Chunk[] {
+    let sql = `
       SELECT * FROM chunks
-      WHERE session_key = ?
+      WHERE session_key = ?`;
+    const params: any[] = [sessionKey];
+
+    if (ownerFilter && ownerFilter.length > 0) {
+      const placeholders = ownerFilter.map(() => "?").join(",");
+      sql += ` AND owner IN (${placeholders})`;
+      params.push(...ownerFilter);
+    }
+
+    sql += `
       ORDER BY created_at, seq
-    `).all(sessionKey) as ChunkRow[];
+    `;
+
+    const allRows = this.db.prepare(sql).all(...params) as ChunkRow[];
 
     const targetIdx = allRows.findIndex(
       (r) => r.turn_id === turnId && r.seq === seq,

@@ -2,6 +2,11 @@ import type { SqliteStore } from "../storage/sqlite";
 import type { ToolDefinition, TimelineResult, TimelineEntry, ChunkRef } from "../types";
 import { DEFAULTS } from "../types";
 
+function resolveOwnerFilter(owner: unknown): string[] {
+  const resolvedOwner = typeof owner === "string" && owner.trim().length > 0 ? owner : "agent:main";
+  return resolvedOwner === "public" ? ["public"] : [resolvedOwner, "public"];
+}
+
 export function createMemoryTimelineTool(store: SqliteStore): ToolDefinition {
   return {
     name: "memory_timeline",
@@ -33,18 +38,25 @@ export function createMemoryTimelineTool(store: SqliteStore): ToolDefinition {
       const ref = input.ref as ChunkRef;
       const window = (input.window as number) ?? DEFAULTS.timelineWindowDefault;
 
+      const ownerFilter = resolveOwnerFilter(input.owner);
+      const anchorChunk = store.getChunksByRef(ref, ownerFilter);
+      if (!anchorChunk) {
+        return { entries: [], anchorRef: ref } satisfies TimelineResult;
+      }
+
       const neighbors = store.getNeighborChunks(
         ref.sessionKey,
         ref.turnId,
         ref.seq,
         window,
+        ownerFilter,
       );
 
       const entries: TimelineEntry[] = neighbors.map((chunk) => {
         let relation: TimelineEntry["relation"] = "before";
         if (chunk.id === ref.chunkId) {
           relation = "current";
-        } else if (chunk.createdAt > (store.getChunk(ref.chunkId)?.createdAt ?? 0)) {
+        } else if (chunk.createdAt > anchorChunk.createdAt) {
           relation = "after";
         }
 
