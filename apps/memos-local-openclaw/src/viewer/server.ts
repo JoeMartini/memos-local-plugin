@@ -13,7 +13,8 @@ import { vectorSearch } from "../storage/vector";
 import { TaskProcessor } from "../ingest/task-processor";
 import { RecallEngine } from "../recall/engine";
 import { SkillEvolver } from "../skill/evolver";
-import type { Logger, Chunk, PluginContext } from "../types";
+import { resolveConfig } from "../config";
+import type { Logger, Chunk, PluginContext, MemosLocalConfig } from "../types";
 import { viewerHTML } from "./html";
 import { v4 as uuid } from "uuid";
 
@@ -832,6 +833,34 @@ export class ViewerServer {
     return path.join(home, ".openclaw", "openclaw.json");
   }
 
+  private getPluginEntryConfig(raw: any): Record<string, unknown> {
+    const entries = raw?.plugins?.entries ?? {};
+    return entries["memos-local-openclaw-plugin"]?.config
+      ?? entries["memos-lite-openclaw-plugin"]?.config
+      ?? entries["memos-lite"]?.config
+      ?? {};
+  }
+
+  private getResolvedViewerConfig(raw?: any): MemosLocalConfig {
+    const pluginCfg = this.getPluginEntryConfig(raw);
+    const stateDir = this.ctx?.stateDir ?? this.getOpenClawHome();
+    return resolveConfig(pluginCfg as Partial<MemosLocalConfig>, stateDir);
+  }
+
+  private hasUsableEmbeddingProvider(cfg: MemosLocalConfig): boolean {
+    const embedding = cfg.embedding;
+    if (!embedding?.provider) return false;
+    if (embedding.provider === "openclaw") return false;
+    return true;
+  }
+
+  private hasUsableSummarizerProvider(cfg: MemosLocalConfig): boolean {
+    const summarizer = cfg.summarizer;
+    if (!summarizer?.provider) return false;
+    if (summarizer.provider === "openclaw") return false;
+    return true;
+  }
+
   private serveConfig(res: http.ServerResponse): void {
     try {
       const cfgPath = this.getOpenClawConfigPath();
@@ -841,16 +870,16 @@ export class ViewerServer {
       }
       const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
       const entries = raw?.plugins?.entries ?? {};
-      const pluginEntry = entries["memos-local-openclaw-plugin"]?.config
-        ?? entries["memos-lite-openclaw-plugin"]?.config
-        ?? entries["memos-lite"]?.config
-        ?? {};
-      const result: Record<string, unknown> = { ...pluginEntry };
+      const resolved = this.getResolvedViewerConfig(raw) as Record<string, unknown>;
+      const result: Record<string, unknown> = { ...resolved };
+      const pluginEntry = this.getPluginEntryConfig(raw);
       const topEntry = entries["memos-local-openclaw-plugin"]
         ?? entries["memos-lite-openclaw-plugin"]
         ?? entries["memos-lite"]
         ?? {};
-      if (pluginEntry.viewerPort == null && topEntry.viewerPort) {
+      if ((pluginEntry as any).viewerPort != null) {
+        result.viewerPort = (pluginEntry as any).viewerPort;
+      } else if (topEntry.viewerPort) {
         result.viewerPort = topEntry.viewerPort;
       }
       this.jsonResponse(res, result);
@@ -980,13 +1009,9 @@ export class ViewerServer {
       if (fs.existsSync(cfgPath)) {
         try {
           const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
-          const pluginCfg = raw?.plugins?.entries?.["memos-local-openclaw-plugin"]?.config ??
-                            raw?.plugins?.entries?.["memos-lite"]?.config ??
-                            raw?.plugins?.entries?.["memos-lite-openclaw-plugin"]?.config ?? {};
-          const emb = pluginCfg.embedding;
-          hasEmbedding = !!(emb && emb.provider);
-          const sum = pluginCfg.summarizer;
-          hasSummarizer = !!(sum && sum.provider);
+          const resolved = this.getResolvedViewerConfig(raw);
+          hasEmbedding = this.hasUsableEmbeddingProvider(resolved);
+          hasSummarizer = this.hasUsableSummarizerProvider(resolved);
         } catch { /* ignore */ }
       }
 
@@ -1164,10 +1189,7 @@ export class ViewerServer {
     let summarizerCfg: any;
     try {
       const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
-      const pluginCfg = raw?.plugins?.entries?.["memos-local-openclaw-plugin"]?.config ??
-                        raw?.plugins?.entries?.["memos-lite"]?.config ??
-                        raw?.plugins?.entries?.["memos-lite-openclaw-plugin"]?.config ?? {};
-      summarizerCfg = pluginCfg.summarizer;
+      summarizerCfg = this.getResolvedViewerConfig(raw).summarizer;
     } catch { /* no config */ }
 
     const summarizer = new Summarizer(summarizerCfg, this.log);

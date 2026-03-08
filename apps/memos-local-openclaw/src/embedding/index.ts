@@ -13,6 +13,9 @@ export class Embedder {
   ) {}
 
   get provider(): string {
+    if (this.cfg?.provider === "openclaw" && this.cfg.capabilities?.hostEmbedding !== true) {
+      return "local";
+    }
     return this.cfg?.provider ?? "local";
   }
 
@@ -61,6 +64,8 @@ export class Embedder {
           return await embedMistral(texts, cfg!, this.log);
         case "voyage":
           return await embedVoyage(texts, cfg!, this.log);
+        case "openclaw":
+          throw new Error("OpenClaw host embedding is not available in this sidecar build");
         case "local":
         default:
           return await embedLocal(texts, this.log);
