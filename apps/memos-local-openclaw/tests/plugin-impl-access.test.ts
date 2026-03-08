@@ -3,14 +3,16 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import plugin from "../plugin-impl";
+import { SqliteStore } from "../src/storage/sqlite";
+import { issueUserToken } from "../src/hub/auth";
 
-function makeApi(stateDir: string) {
+function makeApi(stateDir: string, pluginConfig: Record<string, unknown> = {}) {
   const tools = new Map<string, any>();
   const events = new Map<string, Function>();
   let service: any;
 
   const api = {
-    pluginConfig: {},
+    pluginConfig,
     resolvePath(input: string) {
       return input === "~/.openclaw" ? stateDir : input;
     },
@@ -42,6 +44,89 @@ async function waitFor(predicate: () => Promise<boolean> | boolean, timeoutMs = 
   }
   throw new Error("Timed out waiting for condition");
 }
+
+describe("plugin-impl hub service skeleton", () => {
+  let tmpDir: string;
+  let service: any;
+  let port: number;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-plugin-impl-hub-"));
+    port = 18901 + Math.floor(Math.random() * 2000);
+    ({ service } = makeApi(tmpDir, {
+      sharing: {
+        enabled: true,
+        role: "hub",
+        hub: {
+          port,
+          teamName: "Core Team",
+          teamToken: "team-secret",
+        },
+      },
+    }));
+  });
+
+  afterEach(async () => {
+    await service?.stop?.();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("should start hub service and expose info/join skeleton routes", async () => {
+    await service.start();
+
+    const dbPath = path.join(tmpDir, "memos-local", "memos.db");
+    const store = new SqliteStore(dbPath, { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} });
+    const admins = store.listHubUsers().filter((user) => user.role === "admin" && user.status === "active");
+    expect(admins.length).toBeGreaterThanOrEqual(1);
+    store.close();
+
+    const info = await fetch(`http://127.0.0.1:${port}/api/v1/hub/info`);
+    expect(info.status).toBe(200);
+    const infoJson = await info.json();
+    expect(infoJson.teamName).toBe("Core Team");
+    expect(infoJson.apiVersion).toBe("v1");
+
+    const me = await fetch(`http://127.0.0.1:${port}/api/v1/hub/me`);
+    expect(me.status).toBe(401);
+
+    const join = await fetch(`http://127.0.0.1:${port}/api/v1/hub/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: "bob",
+        deviceName: "Bob Mac",
+        teamToken: "team-secret",
+      }),
+    });
+    expect(join.status).toBe(202);
+    const joinJson = await join.json();
+    expect(joinJson.status).toBe("pending");
+    expect(joinJson.userId).toBeTruthy();
+  });
+
+  it("should reject forged admin tokens derived from the team token", async () => {
+    await service.start();
+
+    const forged = issueUserToken(
+      {
+        userId: "forged-admin",
+        username: "mallory",
+        role: "admin",
+        status: "active",
+      },
+      "team-secret",
+      60_000,
+    );
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/hub/admin/pending-users`, {
+      headers: {
+        authorization: `Bearer ${forged}`,
+      },
+    });
+
+    expect([401, 403]).toContain(res.status);
+  });
+});
 
 describe("plugin-impl owner isolation", () => {
   let tmpDir: string;

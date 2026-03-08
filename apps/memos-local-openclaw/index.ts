@@ -17,6 +17,7 @@ import { RecallEngine } from "./src/recall/engine";
 import { captureMessages, stripInboundMetadata } from "./src/capture";
 import { DEFAULTS } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
+import { HubServer } from "./src/hub/server";
 import { SkillEvolver } from "./src/skill/evolver";
 import { SkillInstaller } from "./src/skill/installer";
 import { Summarizer } from "./src/ingest/providers";
@@ -1202,11 +1203,19 @@ const memosLocalPlugin = {
       ctx,
     });
 
+    const hubServer = ctx.config.sharing?.enabled && ctx.config.sharing.role === "hub"
+      ? new HubServer({ store, log: ctx.log, config: ctx.config, dataDir: stateDir })
+      : null;
+
     // ─── Service lifecycle ───
 
     api.registerService({
       id: "memos-local-openclaw-plugin",
       start: async () => {
+        if (hubServer) {
+          const hubUrl = await hubServer.start();
+          api.logger.info(`memos-local: hub started at ${hubUrl}`);
+        }
         try {
           const viewerUrl = await viewer.start();
           api.logger.info(`memos-local: started (embedding: ${embedder.provider})`);
@@ -1228,6 +1237,7 @@ const memosLocalPlugin = {
       },
       stop: async () => {
         await telemetry.shutdown();
+        await hubServer?.stop();
         viewer.stop();
         store.close();
         api.logger.info("memos-local: stopped");
