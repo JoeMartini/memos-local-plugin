@@ -27,10 +27,28 @@ export class HubServer {
   private readonly authStatePath: string;
   private authState: HubAuthState;
 
+  private static readonly RATE_WINDOW_MS = 60_000;
+  private static readonly RATE_LIMIT_DEFAULT = 60;
+  private static readonly RATE_LIMIT_SEARCH = 30;
+  private rateBuckets = new Map<string, { count: number; windowStart: number }>();
+
   constructor(private opts: HubServerOptions) {
     this.userManager = new HubUserManager(opts.store, opts.log);
     this.authStatePath = path.join(opts.dataDir, "hub-auth.json");
     this.authState = this.loadAuthState();
+  }
+
+  private checkRateLimit(userId: string, endpoint: string): boolean {
+    const key = `${userId}:${endpoint}`;
+    const now = Date.now();
+    const limit = endpoint === "search" ? HubServer.RATE_LIMIT_SEARCH : HubServer.RATE_LIMIT_DEFAULT;
+    const bucket = this.rateBuckets.get(key);
+    if (!bucket || now - bucket.windowStart > HubServer.RATE_WINDOW_MS) {
+      this.rateBuckets.set(key, { count: 1, windowStart: now });
+      return true;
+    }
+    bucket.count++;
+    return bucket.count <= limit;
   }
 
   async start(): Promise<string> {
@@ -126,9 +144,9 @@ export class HubServer {
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = new URL(req.url || "/", `http://127.0.0.1:${this.port}`);
-    const path = url.pathname;
+    const routePath = url.pathname;
 
-    if (req.method === "GET" && path === "/api/v1/hub/info") {
+    if (req.method === "GET" && routePath === "/api/v1/hub/info") {
       return this.json(res, 200, {
         teamName: this.teamName,
         version: "0.0.0",
@@ -136,7 +154,7 @@ export class HubServer {
       });
     }
 
-    if (req.method === "POST" && path === "/api/v1/hub/join") {
+    if (req.method === "POST" && routePath === "/api/v1/hub/join") {
       const body = await this.readJson(req);
       if (!body || body.teamToken !== this.teamToken) {
         return this.json(res, 403, { error: "invalid_team_token" });
@@ -148,24 +166,27 @@ export class HubServer {
       return this.json(res, 202, { status: "pending", userId: pending.id });
     }
 
-    if (req.method === "GET" && path === "/api/v1/hub/me") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    // All endpoints below require authentication + rate limiting
+    const auth = this.authenticate(req);
+    if (!auth) return this.json(res, 401, { error: "unauthorized" });
+
+    const endpointKey = routePath.replace(/^\/api\/v1\/hub\//, "").replace(/\/[^/]+\/bundle$/, "/bundle");
+    if (!this.checkRateLimit(auth.userId, endpointKey)) {
+      return this.json(res, 429, { error: "rate_limit_exceeded", retryAfterMs: HubServer.RATE_WINDOW_MS });
+    }
+
+    if (req.method === "GET" && routePath === "/api/v1/hub/me") {
       const user = this.opts.store.getHubUser(auth.userId);
       if (!user) return this.json(res, 401, { error: "unauthorized" });
       return this.json(res, 200, user);
     }
 
-    if (req.method === "GET" && path === "/api/v1/hub/admin/pending-users") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    if (req.method === "GET" && routePath === "/api/v1/hub/admin/pending-users") {
       if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
       return this.json(res, 200, { users: this.userManager.listPendingUsers() });
     }
 
-    if (req.method === "POST" && path === "/api/v1/hub/admin/approve-user") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    if (req.method === "POST" && routePath === "/api/v1/hub/admin/approve-user") {
       if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
       const body = await this.readJson(req);
       const token = issueUserToken({ userId: String(body.userId), username: String(body.username || ""), role: "member", status: "active" }, this.authSecret);
@@ -174,9 +195,7 @@ export class HubServer {
       return this.json(res, 200, { status: "active", token });
     }
 
-    if (req.method === "POST" && path === "/api/v1/hub/admin/reject-user") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    if (req.method === "POST" && routePath === "/api/v1/hub/admin/reject-user") {
       if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
       const body = await this.readJson(req);
       const rejected = this.userManager.rejectUser(String(body.userId));
@@ -184,9 +203,7 @@ export class HubServer {
       return this.json(res, 200, { status: "rejected" });
     }
 
-    if (req.method === "POST" && path === "/api/v1/hub/tasks/share") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    if (req.method === "POST" && routePath === "/api/v1/hub/tasks/share") {
       const body = await this.readJson(req);
       if (!body?.task) return this.json(res, 400, { error: "invalid_payload" });
       const task = { ...body.task, sourceUserId: auth.userId };
@@ -197,17 +214,13 @@ export class HubServer {
       return this.json(res, 200, { ok: true, chunks: Array.isArray(body.chunks) ? body.chunks.length : 0 });
     }
 
-    if (req.method === "POST" && path === "/api/v1/hub/tasks/unshare") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    if (req.method === "POST" && routePath === "/api/v1/hub/tasks/unshare") {
       const body = await this.readJson(req);
       this.opts.store.deleteHubTaskBySource(auth.userId, String(body.sourceTaskId));
       return this.json(res, 200, { ok: true });
     }
 
-    if (req.method === "POST" && path === "/api/v1/hub/search") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    if (req.method === "POST" && routePath === "/api/v1/hub/search") {
       const body = await this.readJson(req);
       const hits = this.opts.store.searchHubChunks(String(body.query || ""), { userId: auth.userId, maxResults: Number(body.maxResults || 10) })
         .map(({ hit, rank }) => {
@@ -228,9 +241,7 @@ export class HubServer {
       return this.json(res, 200, { hits, meta: { totalCandidates: hits.length, searchedGroups: [], includedPublic: true } });
     }
 
-    if (req.method === "GET" && path === "/api/v1/hub/skills") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    if (req.method === "GET" && routePath === "/api/v1/hub/skills") {
       const hits = this.opts.store.searchHubSkills(String(url.searchParams.get("query") || ""), {
         userId: auth.userId,
         maxResults: Number(url.searchParams.get("maxResults") || 10),
@@ -247,9 +258,7 @@ export class HubServer {
       return this.json(res, 200, { hits });
     }
 
-    if (req.method === "POST" && path === "/api/v1/hub/skills/publish") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    if (req.method === "POST" && routePath === "/api/v1/hub/skills/publish") {
       const body = await this.readJson(req);
       const metadata = body?.metadata ?? {};
       const sourceSkillId = String(metadata.id || "");
@@ -274,10 +283,8 @@ export class HubServer {
       return this.json(res, 200, { ok: true, skillId, visibility });
     }
 
-    const skillBundleMatch = req.method === "GET" ? path.match(/^\/api\/v1\/hub\/skills\/([^/]+)\/bundle$/) : null;
+    const skillBundleMatch = req.method === "GET" ? routePath.match(/^\/api\/v1\/hub\/skills\/([^/]+)\/bundle$/) : null;
     if (skillBundleMatch) {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
       const skill = this.opts.store.getHubSkillById(decodeURIComponent(skillBundleMatch[1]));
       if (!skill) return this.json(res, 404, { error: "not_found" });
       const user = this.opts.store.getHubUser(auth.userId);
@@ -297,17 +304,13 @@ export class HubServer {
       });
     }
 
-    if (req.method === "POST" && path === "/api/v1/hub/skills/unpublish") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    if (req.method === "POST" && routePath === "/api/v1/hub/skills/unpublish") {
       const body = await this.readJson(req);
       this.opts.store.deleteHubSkillBySource(auth.userId, String(body?.sourceSkillId || ""));
       return this.json(res, 200, { ok: true });
     }
 
-    if (req.method === "POST" && path === "/api/v1/hub/memory-detail") {
-      const auth = this.authenticate(req);
-      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+    if (req.method === "POST" && routePath === "/api/v1/hub/memory-detail") {
       const body = await this.readJson(req);
       const hit = this.remoteHitMap.get(String(body.remoteHitId));
       if (!hit || hit.expiresAt < Date.now()) return this.json(res, 404, { error: "not_found" });
