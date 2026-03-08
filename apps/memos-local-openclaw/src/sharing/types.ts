@@ -57,6 +57,16 @@ export interface HubSearchResult {
   meta: HubSearchMeta;
 }
 
+export interface HubMemoryDetail {
+  remoteHitId: string;
+  content: string;
+  summary: string;
+  source: {
+    ts: number;
+    role: Role;
+  };
+}
+
 export interface NetworkSearchResult {
   local: SearchResult;
   hub: HubSearchResult;

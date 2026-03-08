@@ -1,6 +1,6 @@
 import type { PluginContext } from "../types";
 import type { SqliteStore } from "../storage/sqlite";
-import type { HubScope, HubSearchResult } from "../sharing/types";
+import type { HubMemoryDetail, HubScope, HubSearchResult } from "../sharing/types";
 
 export interface ResolvedHubClient {
   hubUrl: string;
@@ -54,6 +54,30 @@ export async function hubSearchMemories(
       scope: input.scope,
     }),
   }) as Promise<HubSearchResult>;
+}
+
+export async function hubGetMemoryDetail(
+  store: SqliteStore,
+  ctx: PluginContext,
+  input: { remoteHitId: string; hubAddress?: string; userToken?: string },
+): Promise<HubMemoryDetail> {
+  const client = await resolveHubClient(store, ctx, { hubAddress: input.hubAddress, userToken: input.userToken });
+  const detail = await hubRequestJson(client.hubUrl, client.userToken, "/api/v1/hub/memory-detail", {
+    method: "POST",
+    body: JSON.stringify({
+      remoteHitId: input.remoteHitId,
+    }),
+  }) as Omit<HubMemoryDetail, "remoteHitId">;
+
+  return {
+    remoteHitId: input.remoteHitId,
+    content: String(detail.content ?? ""),
+    summary: String(detail.summary ?? ""),
+    source: {
+      ts: Number(detail.source?.ts ?? 0),
+      role: String(detail.source?.role ?? "assistant") as any,
+    },
+  };
 }
 
 export async function hubRequestJson(

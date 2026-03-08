@@ -18,7 +18,7 @@ import { captureMessages, stripInboundMetadata } from "./src/capture";
 import { DEFAULTS } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
 import { HubServer } from "./src/hub/server";
-import { hubRequestJson, resolveHubClient } from "./src/client/hub";
+import { hubGetMemoryDetail, hubRequestJson, resolveHubClient } from "./src/client/hub";
 import { SkillEvolver } from "./src/skill/evolver";
 import { SkillInstaller } from "./src/skill/installer";
 import { Summarizer } from "./src/ingest/providers";
@@ -685,6 +685,40 @@ const memosLocalPlugin = {
         }),
       },
       { name: "task_unshare" },
+    );
+
+    api.registerTool(
+      {
+        name: "network_memory_detail",
+        label: "Network Memory Detail",
+        description: "Fetch the full detail for a Hub search hit returned by memory_search(scope=group|all).",
+        parameters: Type.Object({
+          remoteHitId: Type.String({ description: "The remoteHitId returned by a Hub search hit" }),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for tests or manual routing" })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for tests" })),
+        }),
+        execute: trackTool("network_memory_detail", async (_toolCallId: any, params: any) => {
+          const { remoteHitId, hubAddress, userToken } = params as {
+            remoteHitId: string;
+            hubAddress?: string;
+            userToken?: string;
+          };
+
+          const detail = await hubGetMemoryDetail(store, ctx, { remoteHitId, hubAddress, userToken });
+          return {
+            content: [{
+              type: "text",
+              text: `## Shared Memory Detail
+
+${detail.summary}
+
+${detail.content}`,
+            }],
+            details: detail,
+          };
+        }),
+      },
+      { name: "network_memory_detail" },
     );
 
     // ─── Tool: skill_get ───

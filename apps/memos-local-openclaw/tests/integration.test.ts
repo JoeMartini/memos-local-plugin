@@ -579,6 +579,25 @@ describe("Integration: memory_search", () => {
       await teardownFederatedMemorySearchHarness(harness);
     }
   });
+
+  it("should return memory detail for a hub search hit", async () => {
+    const harness = await setupFederatedMemorySearchHarness();
+
+    try {
+      const searchTool = harness.clientPlugin.tools.find((t) => t.name === "memory_search")!;
+      const detailTool = harness.clientPlugin.tools.find((t) => t.name === "network_memory_detail")!;
+      const result = (await searchTool.handler({ query: "shared rollout checklist", scope: "all", maxResults: 5 })) as any;
+      const targetHit = result.hub.hits.find((hit: any) => hit.visibility === "public") ?? result.hub.hits[0];
+
+      const detail = (await detailTool.handler({ remoteHitId: targetHit.remoteHitId })) as any;
+
+      expect(detail.summary).toContain("rollout checklist");
+      expect(detail.content).toContain("announce deploy window");
+      expect(detail.source.role).toBe("assistant");
+    } finally {
+      await teardownFederatedMemorySearchHarness(harness);
+    }
+  });
 });
 
 describe("Integration: memory_timeline", () => {
@@ -833,6 +852,117 @@ describe("Integration: task sharing MVP", () => {
       expect(harness.hubStore.getHubTaskBySource(harness.userId, "task-local-1")).not.toBeNull();
     } finally {
       await teardownTaskSharingHarness(harness);
+    }
+  });
+});
+
+describe("Integration: network memory detail tool", () => {
+  async function setupNetworkMemoryDetailHarness() {
+    const clientDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-network-detail-client-"));
+    const hubDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-network-detail-hub-"));
+    const port = 19300 + Math.floor(Math.random() * 1000);
+    const hubStore = new SqliteStore(path.join(hubDir, "hub.db"), noopLog as any);
+    const hubServer = new HubServer({
+      store: hubStore,
+      log: noopLog as any,
+      config: {
+        sharing: {
+          enabled: true,
+          role: "hub",
+          hub: {
+            port,
+            teamName: "Memory Detail Test",
+            teamToken: "memory-detail-secret",
+          },
+        },
+      } as any,
+      dataDir: hubDir,
+    } as any);
+
+    await hubServer.start();
+    const authState = JSON.parse(fs.readFileSync(path.join(hubDir, "hub-auth.json"), "utf8"));
+    const userToken = authState.bootstrapAdminToken as string;
+    const userId = authState.bootstrapAdminUserId as string;
+
+    hubStore.upsertHubTask({
+      id: "hub-task-detail-1",
+      sourceTaskId: "task-detail-1",
+      sourceUserId: userId,
+      title: "Deploy Nginx",
+      summary: "deploy nginx summary",
+      groupId: null,
+      visibility: "public",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    hubStore.upsertHubChunk({
+      id: "hub-chunk-detail-1",
+      hubTaskId: "hub-task-detail-1",
+      sourceTaskId: "task-detail-1",
+      sourceChunkId: "chunk-detail-1",
+      sourceUserId: userId,
+      role: "assistant",
+      content: "Use nginx upstream and proxy_pass to port 3000.",
+      summary: "nginx upstream to port 3000",
+      kind: "paragraph",
+      createdAt: 2,
+    });
+
+    const searchRes = await fetch(`http://127.0.0.1:${port}/api/v1/hub/search`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${userToken}`,
+      },
+      body: JSON.stringify({ query: "nginx upstream 3000", scope: "all", maxResults: 5 }),
+    });
+    const searchJson = await searchRes.json();
+
+    const { tools, service } = makePluginApi(clientDir, {
+      sharing: {
+        enabled: true,
+        role: "client",
+        client: {
+          hubAddress: `127.0.0.1:${port}`,
+          userToken,
+        },
+      },
+      telemetry: { enabled: false },
+    });
+
+    return {
+      clientDir,
+      hubDir,
+      tools,
+      service,
+      hubStore,
+      hubServer,
+      remoteHitId: searchJson.hits[0].remoteHitId as string,
+    };
+  }
+
+  async function teardownNetworkMemoryDetailHarness(harness: Awaited<ReturnType<typeof setupNetworkMemoryDetailHarness>>) {
+    await harness.service?.stop?.();
+    await harness.hubServer.stop();
+    harness.hubStore.close();
+    fs.rmSync(harness.clientDir, { recursive: true, force: true });
+    fs.rmSync(harness.hubDir, { recursive: true, force: true });
+  }
+
+  it("network_memory_detail should fetch hub detail via config fallback", async () => {
+    const harness = await setupNetworkMemoryDetailHarness();
+
+    try {
+      const detailTool = harness.tools.get("network_memory_detail");
+      expect(detailTool).toBeDefined();
+
+      const result = await detailTool.execute("call-network-detail", { remoteHitId: harness.remoteHitId }, { agentId: "main" });
+      expect(result.details.remoteHitId).toBe(harness.remoteHitId);
+      expect(result.details.content).toContain("proxy_pass");
+      expect(result.details.summary).toContain("nginx upstream");
+      expect(result.details.source.role).toBe("assistant");
+    } finally {
+      await teardownNetworkMemoryDetailHarness(harness);
     }
   });
 });

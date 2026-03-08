@@ -5,7 +5,7 @@ import { Embedder } from "./embedding";
 import { IngestWorker } from "./ingest/worker";
 import { RecallEngine } from "./recall/engine";
 import { captureMessages } from "./capture";
-import { createMemorySearchTool, createMemoryTimelineTool, createMemoryGetTool } from "./tools";
+import { createMemorySearchTool, createMemoryTimelineTool, createMemoryGetTool, createNetworkMemoryDetailTool } from "./tools";
 import type { MemosLocalConfig, ToolDefinition, Logger } from "./types";
 
 export interface MemosLocalPlugin {
@@ -63,6 +63,7 @@ export function initPlugin(opts: PluginInitOptions = {}): MemosLocalPlugin {
     createMemorySearchTool(engine),
     createMemoryTimelineTool(store),
     createMemoryGetTool(store),
+    createNetworkMemoryDetailTool(store, ctx),
   ];
 
   ctx.log.info(`Plugin ready. DB: ${ctx.config.storage!.dbPath}, Embedding: ${embedder.provider}`);
