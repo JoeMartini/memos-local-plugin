@@ -258,7 +258,7 @@ const memosLocalPlugin = {
           hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for tests or manual routing" })),
           userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for tests" })),
         }),
-        execute: trackTool("memory_search", async (_toolCallId: any, params: any) => {
+        execute: trackTool("memory_search", async (_toolCallId: any, params: any, context?: any) => {
           const { query, maxResults, minScore, role, scope, hubAddress, userToken } = params as {
             query: string;
             maxResults?: number;
@@ -271,7 +271,7 @@ const memosLocalPlugin = {
 
           const searchScope = scope === "group" || scope === "all" ? scope : "local";
           const searchLimit = Math.min(maxResults ?? 20, 20);
-          const agentId = (params as any).agentId ?? "main";
+          const agentId = context?.agentId ?? (params as any).agentId ?? "main";
           const ownerFilter = [`agent:${agentId}`, "public"];
           ctx.log.debug(`memory_search query="${query}" minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId} scope=${searchScope}`);
           const result = await engine.search({ query, maxResults: searchLimit, minScore, role, ownerFilter });
@@ -323,11 +323,13 @@ const memosLocalPlugin = {
               if (t && t.status === "skipped") effectiveTaskId = null;
             }
             return {
+              ref: h.ref,
               chunkId: h.ref.chunkId,
               taskId: effectiveTaskId,
               skillId: h.skillId,
               role: h.source.role,
               score: h.score,
+              summary: h.summary,
             };
           });
 
@@ -428,23 +430,27 @@ const memosLocalPlugin = {
           chunkId: Type.String({ description: "The chunkId from a memory_search hit" }),
           window: Type.Optional(Type.Number({ description: "Context window ±N (default 2)" })),
         }),
-        execute: trackTool("memory_timeline", async (_toolCallId: any, params: any) => {
+        execute: trackTool("memory_timeline", async (_toolCallId: any, params: any, context?: any) => {
           ctx.log.debug(`memory_timeline called`);
           const { chunkId, window: win } = params as {
             chunkId: string;
             window?: number;
           };
 
+          const timelineAgentId = context?.agentId ?? (params as any).agentId ?? "main";
+          const allowedOwners = new Set([`agent:${timelineAgentId}`, "public"]);
+
           const anchorChunk = store.getChunk(chunkId);
-          if (!anchorChunk) {
+          if (!anchorChunk || !allowedOwners.has(anchorChunk.owner)) {
             return {
               content: [{ type: "text", text: `Chunk not found: ${chunkId}` }],
-              details: { error: "not_found" },
+              details: { error: "not_found", entries: [] },
             };
           }
 
           const w = win ?? DEFAULTS.timelineWindowDefault;
-          const neighbors = store.getNeighborChunks(anchorChunk.sessionKey, anchorChunk.turnId, anchorChunk.seq, w);
+          const allNeighbors = store.getNeighborChunks(anchorChunk.sessionKey, anchorChunk.turnId, anchorChunk.seq, w);
+          const neighbors = allNeighbors.filter((c) => allowedOwners.has(c.owner));
           const anchorTs = anchorChunk?.createdAt ?? 0;
 
           const entries = neighbors.map((chunk) => {
@@ -488,12 +494,15 @@ const memosLocalPlugin = {
             Type.Number({ description: `Max chars (default ${DEFAULTS.getMaxCharsDefault}, max ${DEFAULTS.getMaxCharsMax})` }),
           ),
         }),
-        execute: trackTool("memory_get", async (_toolCallId: any, params: any) => {
+        execute: trackTool("memory_get", async (_toolCallId: any, params: any, context?: any) => {
           const { chunkId, maxChars } = params as { chunkId: string; maxChars?: number };
           const limit = Math.min(maxChars ?? DEFAULTS.getMaxCharsDefault, DEFAULTS.getMaxCharsMax);
 
+          const getAgentId = context?.agentId ?? (params as any).agentId ?? "main";
+          const allowedOwners = new Set([`agent:${getAgentId}`, "public"]);
+
           const chunk = store.getChunk(chunkId);
-          if (!chunk) {
+          if (!chunk || !allowedOwners.has(chunk.owner)) {
             return {
               content: [{ type: "text", text: `Chunk not found: ${chunkId}` }],
               details: { error: "not_found" },
@@ -1014,9 +1023,9 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
           query: Type.String({ description: "Natural language description of the needed skill" }),
           scope: Type.Optional(Type.String({ description: "Search scope: 'mix'/'self'/'public' for local search, or 'group'/'all' for local + Hub search" })),
         }),
-        execute: trackTool("skill_search", async (_toolCallId: any, params: any) => {
+        execute: trackTool("skill_search", async (_toolCallId: any, params: any, context?: any) => {
           const { query: skillQuery, scope: rawScope } = params as { query: string; scope?: string };
-          const skillAgentId = (params as any).agentId ?? "main";
+          const skillAgentId = context?.agentId ?? (params as any).agentId ?? "main";
           const currentOwner = `agent:${skillAgentId}`;
 
           if (rawScope === "group" || rawScope === "all") {
@@ -1600,8 +1609,8 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
         );
       },
       stop: async () => {
-        await telemetry.shutdown();
         await worker.flush();
+        await telemetry.shutdown();
         await hubServer?.stop();
         viewer.stop();
         store.close();
