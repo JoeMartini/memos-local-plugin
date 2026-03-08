@@ -65,6 +65,134 @@ function makeTaskChunk(overrides: Record<string, unknown> = {}) {
   };
 }
 
+async function setupFederatedMemorySearchHarness() {
+  const clientDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-federated-client-"));
+  const hubDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-federated-hub-"));
+  const port = 19200 + Math.floor(Math.random() * 1000);
+  const hubStore = new SqliteStore(path.join(hubDir, "hub.db"), noopLog as any);
+  const hubServer = new HubServer({
+    store: hubStore,
+    log: noopLog as any,
+    config: {
+      sharing: {
+        enabled: true,
+        role: "hub",
+        hub: {
+          port,
+          teamName: "Federated Search Test",
+          teamToken: "federated-search-secret",
+        },
+      },
+    } as any,
+    dataDir: hubDir,
+  } as any);
+
+  await hubServer.start();
+  const authState = JSON.parse(fs.readFileSync(path.join(hubDir, "hub-auth.json"), "utf8"));
+  const userToken = authState.bootstrapAdminToken as string;
+  const userId = authState.bootstrapAdminUserId as string;
+
+  hubStore.upsertHubGroup({
+    id: "group-rollout",
+    name: "Rollout",
+    description: "Rollout group",
+    createdAt: 1,
+  });
+  hubStore.addHubGroupMember("group-rollout", userId, 1);
+
+  hubStore.upsertHubTask({
+    id: "hub-task-group-rollout",
+    sourceTaskId: "group-rollout-task",
+    sourceUserId: userId,
+    title: "Group rollout checklist",
+    summary: "Group-only rollout checklist for the release train",
+    groupId: "group-rollout",
+    visibility: "group",
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  hubStore.upsertHubChunk({
+    id: "hub-chunk-group-rollout",
+    hubTaskId: "hub-task-group-rollout",
+    sourceTaskId: "group-rollout-task",
+    sourceChunkId: "group-rollout-chunk",
+    sourceUserId: userId,
+    role: "assistant",
+    content: "Shared rollout checklist for the group hub: verify canary deploy, smoke tests, and rollback owner.",
+    summary: "Shared rollout checklist for the group hub",
+    kind: "paragraph",
+    createdAt: 2,
+  });
+
+  hubStore.upsertHubTask({
+    id: "hub-task-public-rollout",
+    sourceTaskId: "public-rollout-task",
+    sourceUserId: userId,
+    title: "Public rollout checklist",
+    summary: "Public rollout checklist for all clients",
+    groupId: null,
+    visibility: "public",
+    createdAt: 3,
+    updatedAt: 3,
+  });
+  hubStore.upsertHubChunk({
+    id: "hub-chunk-public-rollout",
+    hubTaskId: "hub-task-public-rollout",
+    sourceTaskId: "public-rollout-task",
+    sourceChunkId: "public-rollout-chunk",
+    sourceUserId: userId,
+    role: "assistant",
+    content: "Public shared rollout checklist: announce deploy window and verify dashboards after release.",
+    summary: "Public shared rollout checklist",
+    kind: "paragraph",
+    createdAt: 4,
+  });
+
+  const clientPlugin = initPlugin({
+    stateDir: clientDir,
+    config: {
+      sharing: {
+        enabled: true,
+        role: "client",
+        client: {
+          hubAddress: `127.0.0.1:${port}`,
+          userToken,
+        },
+      },
+      telemetry: { enabled: false },
+    },
+  });
+
+  clientPlugin.onConversationTurn([
+    {
+      role: "user",
+      content: "Keep a local rollout checklist for the client deploy: verify migrations, confirm local smoke tests, and post status.",
+    },
+    {
+      role: "assistant",
+      content: "Local rollout checklist captured with client-only smoke test details.",
+    },
+  ], "session-federated-rollout");
+
+  await clientPlugin.flush();
+
+  return {
+    clientDir,
+    hubDir,
+    hubStore,
+    hubServer,
+    clientPlugin,
+  };
+}
+
+async function teardownFederatedMemorySearchHarness(harness: Awaited<ReturnType<typeof setupFederatedMemorySearchHarness>>) {
+  await harness.clientPlugin.shutdown();
+  await harness.hubServer.stop();
+  harness.hubStore.close();
+  fs.rmSync(harness.clientDir, { recursive: true, force: true });
+  fs.rmSync(harness.hubDir, { recursive: true, force: true });
+}
+
 let plugin: MemosLocalPlugin;
 let tmpDir: string;
 
@@ -196,6 +324,79 @@ describe("Integration: v4 types and config foundation", () => {
   });
 });
 
+describe("Integration: memory_search hub scope", () => {
+  it("should return split local and hub results for scope=group", async () => {
+    const hubDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-search-hub-"));
+    const port = 19200 + Math.floor(Math.random() * 500);
+    const hubStore = new SqliteStore(path.join(hubDir, "hub.db"), noopLog as any);
+    const hubServer = new HubServer({
+      store: hubStore,
+      log: noopLog as any,
+      config: { sharing: { enabled: true, role: "hub", hub: { port, teamName: "Search Hub", teamToken: "search-hub-secret" } } },
+      dataDir: hubDir,
+    } as any);
+
+    await hubServer.start();
+    const authState = JSON.parse(fs.readFileSync(path.join(hubDir, "hub-auth.json"), "utf8"));
+    const userId = authState.bootstrapAdminUserId as string;
+    const userToken = authState.bootstrapAdminToken as string;
+
+    const shareRes = await fetch(`http://127.0.0.1:${port}/api/v1/hub/tasks/share`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${userToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        task: {
+          id: "hub-task-search-1",
+          sourceTaskId: "task-hub-1",
+          sourceUserId: userId,
+          title: "Shared Nginx Notes",
+          summary: "nginx notes",
+          groupId: null,
+          visibility: "public",
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        chunks: [
+          {
+            id: "hub-chunk-search-1",
+            hubTaskId: "hub-task-search-1",
+            sourceTaskId: "task-hub-1",
+            sourceChunkId: "chunk-hub-1",
+            sourceUserId: userId,
+            role: "assistant",
+            content: "Shared nginx upstream config with proxy_pass to 3000.",
+            summary: "shared nginx upstream config",
+            kind: "paragraph",
+            createdAt: 2,
+          },
+        ],
+      }),
+    });
+    expect(shareRes.status).toBe(200);
+
+    const searchTool = plugin.tools.find((t) => t.name === "memory_search")!;
+    const result = (await searchTool.handler({
+      query: "nginx upstream config",
+      scope: "group",
+      hubAddress: `127.0.0.1:${port}`,
+      userToken,
+    })) as any;
+
+    expect(result.local).toBeDefined();
+    expect(result.hub).toBeDefined();
+    expect(Array.isArray(result.hub.hits)).toBe(true);
+    expect(result.hub.hits.length).toBeGreaterThan(0);
+    expect(result.hub.hits[0].taskTitle).toBe("Shared Nginx Notes");
+
+    await hubServer.stop();
+    hubStore.close();
+    fs.rmSync(hubDir, { recursive: true, force: true });
+  });
+});
+
 describe("Integration: memory_search", () => {
   it("should find docker deployment details", async () => {
     const searchTool = plugin.tools.find((t) => t.name === "memory_search")!;
@@ -246,6 +447,41 @@ describe("Integration: memory_search", () => {
 
     expect(result2.meta.note).toBeDefined();
     expect(result2.meta.note).toContain("already");
+  });
+
+  it("should return local and hub sections for scope=group", async () => {
+    const harness = await setupFederatedMemorySearchHarness();
+
+    try {
+      const searchTool = harness.clientPlugin.tools.find((t) => t.name === "memory_search")!;
+      const result = (await searchTool.handler({ query: "rollout checklist", scope: "group" })) as any;
+
+      expect(result.local.hits.length).toBeGreaterThan(0);
+      expect(result.local.meta.usedMaxResults).toBe(6);
+      expect(result.hub.hits.length).toBeGreaterThan(0);
+      expect(result.hub.hits.some((hit: any) => hit.visibility === "group")).toBe(true);
+      expect(result.hub.hits[0].remoteHitId).toBeTruthy();
+      expect(result.hub.meta.totalCandidates).toBeGreaterThan(0);
+    } finally {
+      await teardownFederatedMemorySearchHarness(harness);
+    }
+  });
+
+  it("should return local and hub sections for scope=all", async () => {
+    const harness = await setupFederatedMemorySearchHarness();
+
+    try {
+      const searchTool = harness.clientPlugin.tools.find((t) => t.name === "memory_search")!;
+      const result = (await searchTool.handler({ query: "shared rollout checklist", scope: "all", maxResults: 5 })) as any;
+
+      expect(result.local.hits.length).toBeGreaterThan(0);
+      expect(result.local.meta.usedMaxResults).toBe(5);
+      expect(result.hub.hits.length).toBeGreaterThan(0);
+      expect(result.hub.hits.some((hit: any) => hit.visibility === "public")).toBe(true);
+      expect(result.hub.meta.totalCandidates).toBeGreaterThan(0);
+    } finally {
+      await teardownFederatedMemorySearchHarness(harness);
+    }
   });
 });
 

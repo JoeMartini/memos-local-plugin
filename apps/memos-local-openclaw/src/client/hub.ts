@@ -1,5 +1,6 @@
 import type { PluginContext } from "../types";
 import type { SqliteStore } from "../storage/sqlite";
+import type { HubScope, HubSearchResult } from "../sharing/types";
 
 export interface ResolvedHubClient {
   hubUrl: string;
@@ -9,7 +10,7 @@ export interface ResolvedHubClient {
   role: string;
 }
 
-export async function resolveHubClient(store: SqliteStore, ctx: PluginContext): Promise<ResolvedHubClient> {
+export async function resolveHubClient(store: SqliteStore, ctx: PluginContext, overrides?: { hubAddress?: string; userToken?: string }): Promise<ResolvedHubClient> {
   const persisted = store.getClientHubConnection() as any;
   if (persisted?.hubUrl && persisted?.userToken) {
     return {
@@ -21,8 +22,8 @@ export async function resolveHubClient(store: SqliteStore, ctx: PluginContext): 
     };
   }
 
-  const hubAddress = ctx.config.sharing?.client?.hubAddress ?? "";
-  const userToken = ctx.config.sharing?.client?.userToken ?? "";
+  const hubAddress = overrides?.hubAddress ?? ctx.config.sharing?.client?.hubAddress ?? "";
+  const userToken = overrides?.userToken ?? ctx.config.sharing?.client?.userToken ?? "";
   if (!hubAddress || !userToken) {
     throw new Error("hub client connection is not configured");
   }
@@ -37,6 +38,22 @@ export async function resolveHubClient(store: SqliteStore, ctx: PluginContext): 
     username: String(me.username ?? ""),
     role: String(me.role ?? "member"),
   };
+}
+
+export async function hubSearchMemories(
+  store: SqliteStore,
+  ctx: PluginContext,
+  input: { query: string; maxResults?: number; scope?: HubScope; hubAddress?: string; userToken?: string },
+): Promise<HubSearchResult> {
+  const client = await resolveHubClient(store, ctx, { hubAddress: input.hubAddress, userToken: input.userToken });
+  return hubRequestJson(client.hubUrl, client.userToken, "/api/v1/hub/search", {
+    method: "POST",
+    body: JSON.stringify({
+      query: input.query,
+      maxResults: input.maxResults,
+      scope: input.scope,
+    }),
+  }) as Promise<HubSearchResult>;
 }
 
 export async function hubRequestJson(
