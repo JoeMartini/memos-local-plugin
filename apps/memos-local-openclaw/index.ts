@@ -449,8 +449,13 @@ const memosLocalPlugin = {
           }
 
           const w = win ?? DEFAULTS.timelineWindowDefault;
-          const allNeighbors = store.getNeighborChunks(anchorChunk.sessionKey, anchorChunk.turnId, anchorChunk.seq, w);
-          const neighbors = allNeighbors.filter((c) => allowedOwners.has(c.owner));
+          const neighbors = store.getNeighborChunks(
+            anchorChunk.sessionKey,
+            anchorChunk.turnId,
+            anchorChunk.seq,
+            w,
+            Array.from(allowedOwners),
+          );
           const anchorTs = anchorChunk?.createdAt ?? 0;
 
           const entries = neighbors.map((chunk) => {

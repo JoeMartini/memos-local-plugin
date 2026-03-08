@@ -223,6 +223,155 @@ describe("plugin-impl owner isolation", () => {
     expect(betaTimeline.details.entries).toEqual([]);
   });
 
+  it("memory_timeline should keep visible neighbors inside the requested window", async () => {
+    const store = new SqliteStore(path.join(tmpDir, "memos-local", "memos.db"), { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} });
+    const now = Date.now();
+
+    store.insertChunk({
+      id: "timeline-visible-before",
+      sessionKey: "mixed-session",
+      turnId: "mixed-turn-1",
+      seq: 0,
+      role: "assistant",
+      owner: "agent:alpha",
+      content: "visible before alpha chunk",
+      summary: "visible before alpha chunk",
+      kind: "paragraph",
+      createdAt: now,
+      updatedAt: now,
+      dedupStatus: "active",
+      dedupTargetId: null,
+      dedupReason: null,
+      taskId: null,
+      skillId: null,
+      contentHash: null,
+    });
+    store.insertChunk({
+      id: "timeline-hidden-1",
+      sessionKey: "mixed-session",
+      turnId: "mixed-turn-1",
+      seq: 1,
+      role: "assistant",
+      owner: "agent:beta",
+      content: "hidden beta chunk 1",
+      summary: "hidden beta chunk 1",
+      kind: "paragraph",
+      createdAt: now + 1,
+      updatedAt: now + 1,
+      dedupStatus: "active",
+      dedupTargetId: null,
+      dedupReason: null,
+      taskId: null,
+      skillId: null,
+      contentHash: null,
+    });
+    store.insertChunk({
+      id: "timeline-hidden-2",
+      sessionKey: "mixed-session",
+      turnId: "mixed-turn-1",
+      seq: 2,
+      role: "assistant",
+      owner: "agent:beta",
+      content: "hidden beta chunk 2",
+      summary: "hidden beta chunk 2",
+      kind: "paragraph",
+      createdAt: now + 2,
+      updatedAt: now + 2,
+      dedupStatus: "active",
+      dedupTargetId: null,
+      dedupReason: null,
+      taskId: null,
+      skillId: null,
+      contentHash: null,
+    });
+    store.insertChunk({
+      id: "timeline-anchor",
+      sessionKey: "mixed-session",
+      turnId: "mixed-turn-2",
+      seq: 0,
+      role: "assistant",
+      owner: "agent:alpha",
+      content: "anchor alpha chunk",
+      summary: "anchor alpha chunk",
+      kind: "paragraph",
+      createdAt: now + 3,
+      updatedAt: now + 3,
+      dedupStatus: "active",
+      dedupTargetId: null,
+      dedupReason: null,
+      taskId: null,
+      skillId: null,
+      contentHash: null,
+    });
+    store.insertChunk({
+      id: "timeline-hidden-3",
+      sessionKey: "mixed-session",
+      turnId: "mixed-turn-2",
+      seq: 1,
+      role: "assistant",
+      owner: "agent:beta",
+      content: "hidden beta chunk 3",
+      summary: "hidden beta chunk 3",
+      kind: "paragraph",
+      createdAt: now + 4,
+      updatedAt: now + 4,
+      dedupStatus: "active",
+      dedupTargetId: null,
+      dedupReason: null,
+      taskId: null,
+      skillId: null,
+      contentHash: null,
+    });
+    store.insertChunk({
+      id: "timeline-hidden-4",
+      sessionKey: "mixed-session",
+      turnId: "mixed-turn-2",
+      seq: 2,
+      role: "assistant",
+      owner: "agent:beta",
+      content: "hidden beta chunk 4",
+      summary: "hidden beta chunk 4",
+      kind: "paragraph",
+      createdAt: now + 5,
+      updatedAt: now + 5,
+      dedupStatus: "active",
+      dedupTargetId: null,
+      dedupReason: null,
+      taskId: null,
+      skillId: null,
+      contentHash: null,
+    });
+    store.insertChunk({
+      id: "timeline-visible-after",
+      sessionKey: "mixed-session",
+      turnId: "mixed-turn-3",
+      seq: 0,
+      role: "assistant",
+      owner: "agent:alpha",
+      content: "visible after alpha chunk",
+      summary: "visible after alpha chunk",
+      kind: "paragraph",
+      createdAt: now + 6,
+      updatedAt: now + 6,
+      dedupStatus: "active",
+      dedupTargetId: null,
+      dedupReason: null,
+      taskId: null,
+      skillId: null,
+      contentHash: null,
+    });
+    store.close();
+
+    const timeline = tools.get("memory_timeline");
+    const alphaTimeline = await timeline.execute("call-timeline", { chunkId: "timeline-anchor", window: 1 }, { agentId: "alpha" });
+
+    expect(alphaTimeline.details.entries.map((entry: any) => entry.excerpt)).toEqual([
+      "visible before alpha chunk",
+      "anchor alpha chunk",
+      "visible after alpha chunk",
+    ]);
+  });
+
   it("memory_get should not return another agent's private chunk", async () => {
     const search = tools.get("memory_search");
     const getTool = tools.get("memory_get");
