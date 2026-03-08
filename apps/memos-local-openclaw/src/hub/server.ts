@@ -3,6 +3,7 @@ import * as http from "http";
 import * as path from "path";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import type { SqliteStore } from "../storage/sqlite";
+import type { Embedder } from "../embedding";
 import type { Logger, MemosLocalConfig } from "../types";
 import { issueUserToken, verifyUserToken } from "./auth";
 import { HubUserManager } from "./user-manager";
@@ -12,6 +13,7 @@ type HubServerOptions = {
   log: Logger;
   config: MemosLocalConfig;
   dataDir: string;
+  embedder?: Embedder;
 };
 
 type HubAuthState = {
@@ -140,6 +142,22 @@ export class HubServer {
   private saveAuthState(): void {
     fs.mkdirSync(path.dirname(this.authStatePath), { recursive: true });
     fs.writeFileSync(this.authStatePath, JSON.stringify(this.authState, null, 2), "utf8");
+  }
+
+  private embedChunksAsync(chunkIds: string[], chunks: Array<{ id: string; summary?: string; content?: string }>): void {
+    const embedder = this.opts.embedder;
+    if (!embedder) return;
+    const texts = chunks.map(c => c.summary || (c.content ? c.content.slice(0, 500) : ""));
+    embedder.embed(texts).then((vectors) => {
+      for (let i = 0; i < vectors.length; i++) {
+        if (vectors[i]) {
+          this.opts.store.upsertHubEmbedding(chunkIds[i], vectors[i]);
+        }
+      }
+      this.opts.log.info(`hub: embedded ${vectors.filter(Boolean).length}/${chunkIds.length} shared chunks`);
+    }).catch((err) => {
+      this.opts.log.warn(`hub: embedding shared chunks failed: ${err}`);
+    });
   }
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -296,10 +314,17 @@ export class HubServer {
       if (!body?.task) return this.json(res, 400, { error: "invalid_payload" });
       const task = { ...body.task, sourceUserId: auth.userId };
       this.opts.store.upsertHubTask(task);
-      for (const chunk of Array.isArray(body.chunks) ? body.chunks : []) {
+      const chunks = Array.isArray(body.chunks) ? body.chunks : [];
+      const chunkIds: string[] = [];
+      for (const chunk of chunks) {
         this.opts.store.upsertHubChunk({ ...chunk, sourceUserId: auth.userId });
+        chunkIds.push(chunk.id);
       }
-      return this.json(res, 200, { ok: true, chunks: Array.isArray(body.chunks) ? body.chunks.length : 0 });
+      // Async embedding: don't block the response
+      if (this.opts.embedder && chunkIds.length > 0) {
+        this.embedChunksAsync(chunkIds, chunks);
+      }
+      return this.json(res, 200, { ok: true, chunks: chunkIds.length });
     }
 
     if (req.method === "POST" && routePath === "/api/v1/hub/tasks/unshare") {
@@ -310,22 +335,69 @@ export class HubServer {
 
     if (req.method === "POST" && routePath === "/api/v1/hub/search") {
       const body = await this.readJson(req);
-      const hits = this.opts.store.searchHubChunks(String(body.query || ""), { userId: auth.userId, maxResults: Number(body.maxResults || 10) })
-        .map(({ hit, rank }) => {
-          const remoteHitId = randomUUID();
-          this.remoteHitMap.set(remoteHitId, { chunkId: hit.id, expiresAt: Date.now() + 10 * 60 * 1000, requesterUserId: auth.userId });
-          return {
-            remoteHitId,
-            summary: hit.summary,
-            excerpt: hit.content.slice(0, 240),
-            hubRank: rank,
-            taskTitle: hit.task_title,
-            ownerName: hit.owner_name || "unknown",
-            groupName: hit.group_name,
-            visibility: hit.visibility,
-            source: { ts: hit.created_at, role: hit.role },
-          };
-        });
+      const query = String(body.query || "");
+      const maxResults = Number(body.maxResults || 10);
+      const ftsHits = this.opts.store.searchHubChunks(query, { userId: auth.userId, maxResults: maxResults * 2 });
+
+      // Attempt vector search and RRF merge if embedder is available
+      let mergedIds: string[];
+      if (this.opts.embedder) {
+        try {
+          const [queryVec] = await this.opts.embedder.embed([query]);
+          if (queryVec) {
+            const allEmb = this.opts.store.getAllHubEmbeddings();
+            const scored = allEmb.map(e => {
+              let dot = 0, nA = 0, nB = 0;
+              for (let i = 0; i < queryVec.length && i < e.vector.length; i++) {
+                dot += queryVec[i] * e.vector[i];
+                nA += queryVec[i] * queryVec[i];
+                nB += e.vector[i] * e.vector[i];
+              }
+              const sim = nA > 0 && nB > 0 ? dot / (Math.sqrt(nA) * Math.sqrt(nB)) : 0;
+              return { chunkId: e.chunkId, score: sim };
+            }).sort((a, b) => b.score - a.score).slice(0, maxResults * 2);
+
+            const K = 60;
+            const rrfScores = new Map<string, number>();
+            ftsHits.forEach(({ hit }, idx) => {
+              rrfScores.set(hit.id, (rrfScores.get(hit.id) ?? 0) + 1 / (K + idx + 1));
+            });
+            scored.forEach(({ chunkId }, idx) => {
+              rrfScores.set(chunkId, (rrfScores.get(chunkId) ?? 0) + 1 / (K + idx + 1));
+            });
+            mergedIds = [...rrfScores.entries()].sort((a, b) => b[1] - a[1]).slice(0, maxResults).map(([id]) => id);
+          } else {
+            mergedIds = ftsHits.slice(0, maxResults).map(({ hit }) => hit.id);
+          }
+        } catch {
+          mergedIds = ftsHits.slice(0, maxResults).map(({ hit }) => hit.id);
+        }
+      } else {
+        mergedIds = ftsHits.slice(0, maxResults).map(({ hit }) => hit.id);
+      }
+
+      const ftsMap = new Map(ftsHits.map(({ hit }) => [hit.id, hit]));
+      const hits = mergedIds.map((id, rank) => {
+        let hit = ftsMap.get(id);
+        if (!hit) {
+          const chunk = this.opts.store.getHubChunkById(id);
+          if (!chunk) return null;
+          hit = { id: chunk.id, content: chunk.content, summary: chunk.summary, role: chunk.role, created_at: chunk.createdAt, task_title: "", visibility: "public", group_name: null, owner_name: null, rank: 0 } as any;
+        }
+        const remoteHitId = randomUUID();
+        this.remoteHitMap.set(remoteHitId, { chunkId: id, expiresAt: Date.now() + 10 * 60 * 1000, requesterUserId: auth.userId });
+        return {
+          remoteHitId,
+          summary: hit!.summary,
+          excerpt: hit!.content.slice(0, 240),
+          hubRank: rank + 1,
+          taskTitle: hit!.task_title,
+          ownerName: hit!.owner_name || "unknown",
+          groupName: hit!.group_name,
+          visibility: hit!.visibility,
+          source: { ts: hit!.created_at, role: hit!.role },
+        };
+      }).filter(Boolean);
       return this.json(res, 200, { hits, meta: { totalCandidates: hits.length, searchedGroups: [], includedPublic: true } });
     }
 

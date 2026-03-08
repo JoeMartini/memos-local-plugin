@@ -1560,7 +1560,7 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
     });
 
     const hubServer = ctx.config.sharing?.enabled && ctx.config.sharing.role === "hub"
-      ? new HubServer({ store, log: ctx.log, config: ctx.config, dataDir: stateDir })
+      ? new HubServer({ store, log: ctx.log, config: ctx.config, dataDir: stateDir, embedder })
       : null;
 
     // ─── Service lifecycle ───

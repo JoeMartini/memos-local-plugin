@@ -1663,6 +1663,29 @@ export class SqliteStore {
     return rows.map((row, idx) => ({ hit: row, rank: idx + 1 }));
   }
 
+  upsertHubEmbedding(chunkId: string, vector: Float32Array): void {
+    const buf = Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength);
+    this.db.prepare(`
+      INSERT INTO hub_embeddings (chunk_id, vector, dimensions, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(chunk_id) DO UPDATE SET vector = excluded.vector, dimensions = excluded.dimensions, updated_at = excluded.updated_at
+    `).run(chunkId, buf, vector.length, Date.now());
+  }
+
+  getHubEmbedding(chunkId: string): Float32Array | null {
+    const row = this.db.prepare('SELECT vector, dimensions FROM hub_embeddings WHERE chunk_id = ?').get(chunkId) as { vector: Buffer; dimensions: number } | undefined;
+    if (!row) return null;
+    return new Float32Array(row.vector.buffer, row.vector.byteOffset, row.dimensions);
+  }
+
+  getAllHubEmbeddings(): Array<{ chunkId: string; vector: Float32Array }> {
+    const rows = this.db.prepare('SELECT chunk_id, vector, dimensions FROM hub_embeddings').all() as Array<{ chunk_id: string; vector: Buffer; dimensions: number }>;
+    return rows.map(r => ({
+      chunkId: r.chunk_id,
+      vector: new Float32Array(r.vector.buffer, r.vector.byteOffset, r.dimensions),
+    }));
+  }
+
   getHubChunkById(chunkId: string): HubChunkRecord | null {
     const row = this.db.prepare('SELECT * FROM hub_chunks WHERE id = ?').get(chunkId) as HubChunkRow | undefined;
     return row ? rowToHubChunk(row) : null;
