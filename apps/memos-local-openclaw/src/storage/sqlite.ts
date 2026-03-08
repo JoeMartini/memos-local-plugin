@@ -1467,6 +1467,27 @@ export class SqliteStore {
     `).run(groupId, userId, joinedAt);
   }
 
+  getHubGroupById(groupId: string): HubGroupRecord | undefined {
+    const row = this.db.prepare('SELECT * FROM hub_groups WHERE id = ?').get(groupId) as HubGroupRow | undefined;
+    return row ? rowToHubGroup(row) : undefined;
+  }
+
+  deleteHubGroup(groupId: string): boolean {
+    const result = this.db.prepare('DELETE FROM hub_groups WHERE id = ?').run(groupId);
+    return result.changes > 0;
+  }
+
+  listHubGroupMembers(groupId: string): Array<{ userId: string; username: string; joinedAt: number }> {
+    const rows = this.db.prepare(`
+      SELECT gm.user_id, hu.username, gm.joined_at
+      FROM hub_group_members gm
+      JOIN hub_users hu ON hu.id = gm.user_id
+      WHERE gm.group_id = ?
+      ORDER BY gm.joined_at
+    `).all(groupId) as Array<{ user_id: string; username: string; joined_at: number }>;
+    return rows.map(r => ({ userId: r.user_id, username: r.username, joinedAt: r.joined_at }));
+  }
+
   removeHubGroupMember(groupId: string, userId: string): void {
     this.db.prepare('DELETE FROM hub_group_members WHERE group_id = ? AND user_id = ?').run(groupId, userId);
   }
