@@ -41,6 +41,15 @@ describe("client connector", () => {
 
     const authState = JSON.parse(fs.readFileSync(path.join(dir, "hub-auth.json"), "utf8"));
     const token = authState.bootstrapAdminToken;
+    const userId = authState.bootstrapAdminUserId;
+
+    store.upsertHubGroup({
+      id: "group-backend",
+      name: "Backend",
+      description: "Backend team",
+      createdAt: 1,
+    });
+    store.addHubGroupMember("group-backend", userId, 1);
 
     const clientDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-client-state-"));
     dirs.push(clientDir);
@@ -73,6 +82,8 @@ describe("client connector", () => {
       },
     } as any);
     expect(status.connected).toBe(true);
+    expect(status.hubUrl).toBe("http://127.0.0.1:18917");
     expect(status.user?.role).toBe("admin");
+    expect(status.user?.groups.map((group: any) => group.name)).toEqual(["Backend"]);
   });
 });

@@ -1,5 +1,5 @@
 import type { MemosLocalConfig } from "../types";
-import type { UserRole, UserStatus } from "../sharing/types";
+import type { GroupInfo, UserRole, UserStatus } from "../sharing/types";
 import type { SqliteStore } from "../storage/sqlite";
 import { hubRequestJson, normalizeHubUrl } from "./hub";
 
@@ -14,7 +14,14 @@ export interface HubSessionInfo {
 
 export interface HubStatusInfo {
   connected: boolean;
-  user: null | { id: string; username: string; role: UserRole; status: UserStatus | string };
+  hubUrl?: string;
+  user: null | {
+    id: string;
+    username: string;
+    role: UserRole;
+    status: UserStatus | string;
+    groups: GroupInfo[];
+  };
 }
 
 export async function connectToHub(store: SqliteStore, config: MemosLocalConfig): Promise<HubSessionInfo> {
@@ -49,11 +56,19 @@ export async function getHubStatus(store: SqliteStore, config: MemosLocalConfig)
     const me = await hubRequestJson(normalizeHubUrl(hubAddress), userToken, "/api/v1/hub/me", { method: "GET" }) as any;
     return {
       connected: true,
+      hubUrl: normalizeHubUrl(hubAddress),
       user: {
         id: String(me.id),
         username: String(me.username ?? ""),
         role: String(me.role ?? "member") as UserRole,
         status: String(me.status ?? "active"),
+        groups: Array.isArray(me.groups)
+          ? me.groups.map((group: any) => ({
+              id: String(group.id),
+              name: String(group.name),
+              description: typeof group.description === "string" ? group.description : undefined,
+            }))
+          : [],
       },
     };
   } catch {

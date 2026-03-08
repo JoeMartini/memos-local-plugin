@@ -19,6 +19,7 @@ import { DEFAULTS } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
 import { HubServer } from "./src/hub/server";
 import { hubGetMemoryDetail, hubRequestJson, resolveHubClient } from "./src/client/hub";
+import { getHubStatus } from "./src/client/connector";
 import { SkillEvolver } from "./src/skill/evolver";
 import { SkillInstaller } from "./src/skill/installer";
 import { Summarizer } from "./src/ingest/providers";
@@ -719,6 +720,39 @@ ${detail.content}`,
         }),
       },
       { name: "network_memory_detail" },
+    );
+
+    api.registerTool(
+      {
+        name: "network_team_info",
+        label: "Network Team Info",
+        description: "Show current Hub connection status, signed-in user, role, and group memberships.",
+        parameters: Type.Object({}),
+        execute: trackTool("network_team_info", async () => {
+          const status = await getHubStatus(store, ctx.config);
+          if (!status.connected || !status.user) {
+            return {
+              content: [{ type: "text", text: "Hub is not connected." }],
+              details: status,
+            };
+          }
+
+          const groupNames = status.user.groups.map((group) => group.name);
+          return {
+            content: [{
+              type: "text",
+              text: `## Team Connection
+
+User: ${status.user.username}
+Role: ${status.user.role}
+Hub: ${status.hubUrl ?? "(unknown)"}
+Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
+            }],
+            details: status,
+          };
+        }),
+      },
+      { name: "network_team_info" },
     );
 
     // ─── Tool: skill_get ───

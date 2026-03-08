@@ -967,6 +967,91 @@ describe("Integration: network memory detail tool", () => {
   });
 });
 
+describe("Integration: network team info tool", () => {
+  async function setupNetworkTeamInfoHarness() {
+    const clientDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-network-team-client-"));
+    const hubDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-network-team-hub-"));
+    const port = 19400 + Math.floor(Math.random() * 1000);
+    const hubStore = new SqliteStore(path.join(hubDir, "hub.db"), noopLog as any);
+    const hubServer = new HubServer({
+      store: hubStore,
+      log: noopLog as any,
+      config: {
+        sharing: {
+          enabled: true,
+          role: "hub",
+          hub: {
+            port,
+            teamName: "Team Info Test",
+            teamToken: "team-info-secret",
+          },
+        },
+      } as any,
+      dataDir: hubDir,
+    } as any);
+
+    await hubServer.start();
+    const authState = JSON.parse(fs.readFileSync(path.join(hubDir, "hub-auth.json"), "utf8"));
+    const userToken = authState.bootstrapAdminToken as string;
+    const userId = authState.bootstrapAdminUserId as string;
+
+    hubStore.upsertHubGroup({
+      id: "group-devops",
+      name: "DevOps",
+      description: "DevOps team",
+      createdAt: 1,
+    });
+    hubStore.addHubGroupMember("group-devops", userId, 1);
+
+    const { tools, service } = makePluginApi(clientDir, {
+      sharing: {
+        enabled: true,
+        role: "client",
+        client: {
+          hubAddress: `127.0.0.1:${port}`,
+          userToken,
+        },
+      },
+      telemetry: { enabled: false },
+    });
+
+    return {
+      clientDir,
+      hubDir,
+      tools,
+      service,
+      hubStore,
+      hubServer,
+    };
+  }
+
+  async function teardownNetworkTeamInfoHarness(harness: Awaited<ReturnType<typeof setupNetworkTeamInfoHarness>>) {
+    await harness.service?.stop?.();
+    await harness.hubServer.stop();
+    harness.hubStore.close();
+    fs.rmSync(harness.clientDir, { recursive: true, force: true });
+    fs.rmSync(harness.hubDir, { recursive: true, force: true });
+  }
+
+  it("network_team_info should report hub connection, user, and groups", async () => {
+    const harness = await setupNetworkTeamInfoHarness();
+
+    try {
+      const teamInfoTool = harness.tools.get("network_team_info");
+      expect(teamInfoTool).toBeDefined();
+
+      const result = await teamInfoTool.execute("call-team-info", {}, { agentId: "main" });
+      expect(result.details.connected).toBe(true);
+      expect(result.details.hubUrl).toContain("127.0.0.1:");
+      expect(result.details.user.username).toBe("admin");
+      expect(result.details.user.role).toBe("admin");
+      expect(result.details.user.groups.map((group: any) => group.name)).toEqual(["DevOps"]);
+    } finally {
+      await teardownNetworkTeamInfoHarness(harness);
+    }
+  });
+});
+
 describe("Integration: evidence anti-writeback", () => {
   it("should not store evidence wrapper blocks in memory", async () => {
     plugin.onConversationTurn([
