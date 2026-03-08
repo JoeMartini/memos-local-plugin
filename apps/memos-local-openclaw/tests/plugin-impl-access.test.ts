@@ -98,10 +98,11 @@ describe("plugin-impl hub service skeleton", () => {
         teamToken: "team-secret",
       }),
     });
-    expect(join.status).toBe(202);
+    expect(join.status).toBe(200);
     const joinJson = await join.json();
-    expect(joinJson.status).toBe("pending");
+    expect(joinJson.status).toBe("active");
     expect(joinJson.userId).toBeTruthy();
+    expect(joinJson.userToken).toBeTruthy();
   });
 
   it("should reject forged admin tokens derived from the team token", async () => {

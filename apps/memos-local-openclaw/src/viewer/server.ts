@@ -896,7 +896,13 @@ export class ViewerServer {
       admin: { canManageUsers: false, rejectSupported: false },
     };
 
-    if (!this.ctx || !sharing?.enabled || sharing.role !== "client") {
+    if (!this.ctx || !sharing?.enabled) {
+      this.jsonResponse(res, base);
+      return;
+    }
+
+    const hasClientConfig = Boolean(sharing.client?.hubAddress && sharing.client?.userToken);
+    if (!hasClientConfig) {
       this.jsonResponse(res, base);
       return;
     }
@@ -906,7 +912,6 @@ export class ViewerServer {
       const output = { ...base, connection: { ...base.connection, ...status } } as any;
       if (status.connected && status.hubUrl) {
         try {
-          const userToken = this.store.getClientHubConnection()?.userToken || this.ctx.config.sharing?.client?.userToken || "";
           const info = await fetch(`${status.hubUrl}/api/v1/hub/info`).then((r) => (r.ok ? r.json() : null)).catch(() => null) as any;
           output.connection.teamName = info?.teamName ?? null;
           output.connection.apiVersion = info?.apiVersion ?? null;

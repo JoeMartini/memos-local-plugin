@@ -177,11 +177,43 @@ export class HubServer {
       if (!body || body.teamToken !== this.teamToken) {
         return this.json(res, 403, { error: "invalid_team_token" });
       }
-      const pending = this.userManager.createPendingUser({
-        username: String(body.username || `user-${randomUUID().slice(0, 8)}`),
+      const username = String(body.username || `user-${randomUUID().slice(0, 8)}`);
+      const user = this.userManager.createPendingUser({
+        username,
         deviceName: typeof body.deviceName === "string" ? body.deviceName : undefined,
       });
-      return this.json(res, 202, { status: "pending", userId: pending.id });
+      const token = issueUserToken(
+        { userId: user.id, username, role: "member", status: "active" },
+        this.authSecret,
+      );
+      this.userManager.approveUser(user.id, token);
+      this.opts.log.info(`Hub: auto-approved user "${username}" (${user.id})`);
+      return this.json(res, 200, { status: "active", userId: user.id, userToken: token });
+    }
+
+    if (req.method === "POST" && routePath === "/api/v1/hub/registration-status") {
+      const body = await this.readJson(req);
+      if (!body || body.teamToken !== this.teamToken) {
+        return this.json(res, 403, { error: "invalid_team_token" });
+      }
+      const userId = String(body.userId || "");
+      if (!userId) return this.json(res, 400, { error: "missing_user_id" });
+      const user = this.opts.store.getHubUser(userId);
+      if (!user) return this.json(res, 404, { error: "not_found" });
+      if (user.status === "pending") {
+        return this.json(res, 200, { status: "pending" });
+      }
+      if (user.status === "rejected") {
+        return this.json(res, 200, { status: "rejected" });
+      }
+      if (user.status === "active") {
+        const token = issueUserToken(
+          { userId: user.id, username: user.username, role: user.role, status: user.status },
+          this.authSecret,
+        );
+        return this.json(res, 200, { status: "active", userToken: token });
+      }
+      return this.json(res, 200, { status: user.status });
     }
 
     // All endpoints below require authentication + rate limiting

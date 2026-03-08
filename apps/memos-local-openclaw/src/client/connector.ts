@@ -1,4 +1,4 @@
-import type { MemosLocalConfig } from "../types";
+import type { Logger, MemosLocalConfig } from "../types";
 import type { GroupInfo, UserRole, UserStatus } from "../sharing/types";
 import type { SqliteStore } from "../storage/sqlite";
 import { hubRequestJson, normalizeHubUrl } from "./hub";
@@ -24,9 +24,20 @@ export interface HubStatusInfo {
   };
 }
 
-export async function connectToHub(store: SqliteStore, config: MemosLocalConfig): Promise<HubSessionInfo> {
+export async function connectToHub(store: SqliteStore, config: MemosLocalConfig, log?: Logger): Promise<HubSessionInfo> {
   const hubAddress = config.sharing?.client?.hubAddress ?? "";
-  const userToken = config.sharing?.client?.userToken ?? "";
+  let userToken = config.sharing?.client?.userToken ?? "";
+
+  if (!userToken) {
+    const persisted = store.getClientHubConnection();
+    if (persisted?.userToken) userToken = persisted.userToken;
+  }
+
+  if (!userToken && config.sharing?.client?.teamToken) {
+    if (!log) throw new Error("hub client connection is not configured (no userToken, has teamToken but no logger for auto-join)");
+    return autoJoinHub(store, config, log);
+  }
+
   if (!hubAddress || !userToken) {
     throw new Error("hub client connection is not configured");
   }
@@ -74,4 +85,40 @@ export async function getHubStatus(store: SqliteStore, config: MemosLocalConfig)
   } catch {
     return { connected: false, user: null };
   }
+}
+
+export async function autoJoinHub(
+  store: SqliteStore,
+  config: MemosLocalConfig,
+  log: Logger,
+): Promise<HubSessionInfo> {
+  const hubAddress = config.sharing?.client?.hubAddress ?? "";
+  const teamToken = config.sharing?.client?.teamToken ?? "";
+  if (!hubAddress || !teamToken) {
+    throw new Error("hubAddress and teamToken are required for auto-join");
+  }
+  const hubUrl = normalizeHubUrl(hubAddress);
+  const hostname = typeof globalThis.process !== "undefined" ? (await import("os")).hostname() : "unknown";
+  const username = typeof globalThis.process !== "undefined" ? (await import("os")).userInfo().username : "user";
+
+  log.info(`Joining Hub at ${hubUrl} as "${username}"...`);
+  const result = await hubRequestJson(hubUrl, "", "/api/v1/hub/join", {
+    method: "POST",
+    body: JSON.stringify({ teamToken, username, deviceName: hostname }),
+  }) as any;
+
+  if (!result.userToken) {
+    throw new Error(`Hub join failed: ${JSON.stringify(result)}`);
+  }
+
+  log.info(`Joined Hub successfully! userId=${result.userId}`);
+  store.setClientHubConnection({
+    hubUrl,
+    userId: String(result.userId),
+    username,
+    userToken: result.userToken,
+    role: "member",
+    connectedAt: Date.now(),
+  });
+  return store.getClientHubConnection()!;
 }

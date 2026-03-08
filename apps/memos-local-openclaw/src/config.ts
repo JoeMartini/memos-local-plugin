@@ -114,6 +114,8 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
       client: {
         hubAddress: cfg.sharing?.client?.hubAddress ?? "",
         userToken: cfg.sharing?.client?.userToken ?? "",
+        teamToken: cfg.sharing?.client?.teamToken ?? "",
+        pendingUserId: cfg.sharing?.client?.pendingUserId ?? "",
       },
       capabilities: sharingCapabilities,
     },

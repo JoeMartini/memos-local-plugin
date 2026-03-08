@@ -58,7 +58,10 @@ describe("viewer sharing endpoints", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ username: "bob", deviceName: "Bob Mac", teamToken: "viewer-secret" }),
     });
-    const pending = await join.json();
+    const joinJson = await join.json();
+    expect(join.status).toBe(200);
+    expect(joinJson.status).toBe("active");
+    expect(joinJson.userToken).toBeTruthy();
 
     viewer = new ViewerServer({
       store: viewerStore,
@@ -88,30 +91,16 @@ describe("viewer sharing endpoints", () => {
 
     const pendingRes = await fetch(`${viewerUrl}/api/sharing/pending-users`, { headers: { cookie } });
     const pendingJson = await pendingRes.json();
-    expect(pendingJson.users.length).toBeGreaterThan(0);
-    expect(pendingJson.users[0].id).toBe(pending.userId);
+    expect(pendingJson.users.length).toBe(0);
 
-    const approveRes = await fetch(`${viewerUrl}/api/sharing/approve-user`, {
-      method: "POST",
-      headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ userId: pending.userId, username: "bob" }),
-    });
-    const approveJson = await approveRes.json();
-    expect(approveJson.ok).toBe(true);
-
-    const joinReject = await fetch("http://127.0.0.1:19831/api/v1/hub/join", {
+    const joinEve = await fetch("http://127.0.0.1:19831/api/v1/hub/join", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ username: "eve", deviceName: "Eve Mac", teamToken: "viewer-secret" }),
     });
-    const rejectPending = await joinReject.json();
-    const rejectRes = await fetch(`${viewerUrl}/api/sharing/reject-user`, {
-      method: "POST",
-      headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ userId: rejectPending.userId, username: "eve" }),
-    });
-    const rejectJson = await rejectRes.json();
-    expect(rejectJson.ok).toBe(true);
+    const eveJson = await joinEve.json();
+    expect(joinEve.status).toBe(200);
+    expect(eveJson.userToken).toBeTruthy();
   });
 
   it("serves split sharing memory and skill search payloads", async () => {

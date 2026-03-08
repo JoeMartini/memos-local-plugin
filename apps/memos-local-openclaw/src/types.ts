@@ -274,6 +274,8 @@ export interface HubModeConfig {
 export interface ClientModeConfig {
   hubAddress?: string;
   userToken?: string;
+  teamToken?: string;
+  pendingUserId?: string;
 }
 
 export interface SharingConfig {
