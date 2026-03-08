@@ -2,8 +2,68 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import memosLocalPlugin from "../index";
 import { initPlugin, type MemosLocalPlugin } from "../src/index";
 import { buildContext, resolveConfig } from "../src/config";
+import { HubServer } from "../src/hub/server";
+import { SqliteStore } from "../src/storage/sqlite";
+
+const noopLog = {
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
+
+function makePluginApi(stateDir: string, pluginConfig: Record<string, unknown> = {}) {
+  const tools = new Map<string, any>();
+  let service: any;
+
+  const api = {
+    pluginConfig,
+    resolvePath(input: string) {
+      return input === "~/.openclaw" ? stateDir : input;
+    },
+    logger: noopLog,
+    registerTool(def: any) {
+      tools.set(def.name, def);
+    },
+    registerService(def: any) {
+      service = def;
+    },
+    on() {},
+  } as any;
+
+  memosLocalPlugin.register(api);
+  return { tools, service };
+}
+
+function makeTaskChunk(overrides: Record<string, unknown> = {}) {
+  const now = Date.now();
+  return {
+    id: "chunk-local-1",
+    sessionKey: "session-local-share",
+    turnId: "turn-local-share",
+    seq: 0,
+    role: "user",
+    content: "Share the Docker rollout checklist with the hub.",
+    kind: "paragraph",
+    summary: "Docker rollout checklist",
+    embedding: null,
+    taskId: "task-local-1",
+    skillId: null,
+    owner: "agent:main",
+    dedupStatus: "active",
+    dedupTarget: null,
+    dedupReason: null,
+    mergeCount: 0,
+    lastHitAt: null,
+    mergeHistory: "[]",
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
 
 let plugin: MemosLocalPlugin;
 let tmpDir: string;
@@ -294,6 +354,154 @@ describe("Integration: owner isolation for initPlugin tools", () => {
     const leaked = (await getTool.handler({ ref, owner: "agent:beta" })) as any;
 
     expect(leaked.error).toContain(ref.chunkId);
+  });
+});
+
+describe("Integration: task sharing MVP", () => {
+  async function setupTaskSharingHarness(opts: {
+    usePersistedConnection?: boolean;
+    fallbackHubAddress?: string;
+    fallbackUserToken?: string;
+  } = {}) {
+    const clientDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-share-client-"));
+    const hubDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-share-hub-"));
+    const port = 19100 + Math.floor(Math.random() * 1000);
+    const hubStore = new SqliteStore(path.join(hubDir, "hub.db"), noopLog as any);
+    const hubServer = new HubServer({
+      store: hubStore,
+      log: noopLog as any,
+      config: {
+        sharing: {
+          enabled: true,
+          role: "hub",
+          hub: {
+            port,
+            teamName: "Task Share Test",
+            teamToken: "task-share-secret",
+          },
+        },
+      } as any,
+      dataDir: hubDir,
+    } as any);
+
+    await hubServer.start();
+    const authState = JSON.parse(fs.readFileSync(path.join(hubDir, "hub-auth.json"), "utf8"));
+    const userToken = authState.bootstrapAdminToken as string;
+    const userId = authState.bootstrapAdminUserId as string;
+
+    const { tools, service } = makePluginApi(clientDir, {
+      sharing: {
+        enabled: true,
+        role: "client",
+        client: {
+          hubAddress: opts.fallbackHubAddress ?? `127.0.0.1:${port}`,
+          userToken: opts.fallbackUserToken ?? userToken,
+        },
+      },
+      telemetry: { enabled: false },
+    });
+
+    const clientStore = new SqliteStore(path.join(clientDir, "memos-local", "memos.db"), noopLog as any);
+    clientStore.insertTask({
+      id: "task-local-1",
+      sessionKey: "session-local-share",
+      title: "Docker rollout checklist",
+      summary: "Steps to share the Docker rollout checklist with the team hub",
+      status: "completed",
+      owner: "agent:main",
+      startedAt: 100,
+      endedAt: 200,
+      updatedAt: 200,
+    });
+    clientStore.insertChunk(makeTaskChunk());
+    clientStore.insertChunk(makeTaskChunk({
+      id: "chunk-local-2",
+      seq: 1,
+      role: "assistant",
+      content: "Verify port 8443 and POSTGRES_PASSWORD before deploy.",
+      summary: "Verify port 8443 and POSTGRES_PASSWORD",
+    }));
+
+    if (opts.usePersistedConnection) {
+      clientStore.setClientHubConnection({
+        hubUrl: `http://127.0.0.1:${port}`,
+        userId,
+        username: "admin",
+        userToken,
+        role: "admin",
+        connectedAt: Date.now(),
+      });
+    }
+
+    return {
+      clientDir,
+      hubDir,
+      port,
+      userId,
+      userToken,
+      tools,
+      service,
+      clientStore,
+      hubStore,
+      hubServer,
+    };
+  }
+
+  async function teardownTaskSharingHarness(harness: Awaited<ReturnType<typeof setupTaskSharingHarness>>) {
+    await harness.service?.stop?.();
+    harness.clientStore.close();
+    await harness.hubServer.stop();
+    harness.hubStore.close();
+    fs.rmSync(harness.clientDir, { recursive: true, force: true });
+    fs.rmSync(harness.hubDir, { recursive: true, force: true });
+  }
+
+  it("task_share and task_unshare should push and remove a local task via config fallback", async () => {
+    const harness = await setupTaskSharingHarness();
+
+    try {
+      const shareTool = harness.tools.get("task_share");
+      const unshareTool = harness.tools.get("task_unshare");
+      expect(shareTool).toBeDefined();
+      expect(unshareTool).toBeDefined();
+
+      const shareResult = await shareTool.execute("call-share", { taskId: "task-local-1", visibility: "public" }, { agentId: "main" });
+      expect(shareResult.details.shared).toBe(true);
+      expect(shareResult.details.chunkCount).toBe(2);
+
+      const sharedTask = harness.hubStore.getHubTaskBySource(harness.userId, "task-local-1");
+      expect(sharedTask).not.toBeNull();
+      expect(sharedTask!.title).toBe("Docker rollout checklist");
+
+      const sharedChunk = harness.hubStore.getHubChunkBySource(harness.userId, "chunk-local-1");
+      expect(sharedChunk).not.toBeNull();
+      expect(sharedChunk!.summary).toBe("Docker rollout checklist");
+
+      const unshareResult = await unshareTool.execute("call-unshare", { taskId: "task-local-1" }, { agentId: "main" });
+      expect(unshareResult.details.unshared).toBe(true);
+      expect(harness.hubStore.getHubTaskBySource(harness.userId, "task-local-1")).toBeNull();
+      expect(harness.hubStore.getHubChunkBySource(harness.userId, "chunk-local-1")).toBeNull();
+    } finally {
+      await teardownTaskSharingHarness(harness);
+    }
+  });
+
+  it("task_share should prefer persisted hub connection over fallback config", async () => {
+    const harness = await setupTaskSharingHarness({
+      usePersistedConnection: true,
+      fallbackHubAddress: "127.0.0.1:9",
+      fallbackUserToken: "bad-token",
+    });
+
+    try {
+      const shareTool = harness.tools.get("task_share");
+      const shareResult = await shareTool.execute("call-share", { taskId: "task-local-1", visibility: "public" }, { agentId: "main" });
+
+      expect(shareResult.details.shared).toBe(true);
+      expect(harness.hubStore.getHubTaskBySource(harness.userId, "task-local-1")).not.toBeNull();
+    } finally {
+      await teardownTaskSharingHarness(harness);
+    }
   });
 });
 

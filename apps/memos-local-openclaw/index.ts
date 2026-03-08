@@ -18,6 +18,7 @@ import { captureMessages, stripInboundMetadata } from "./src/capture";
 import { DEFAULTS } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
 import { HubServer } from "./src/hub/server";
+import { hubRequestJson, resolveHubClient } from "./src/client/hub";
 import { SkillEvolver } from "./src/skill/evolver";
 import { SkillInstaller } from "./src/skill/installer";
 import { Summarizer } from "./src/ingest/providers";
@@ -554,6 +555,136 @@ const memosLocalPlugin = {
         }),
       },
       { name: "task_summary" },
+    );
+
+    // ─── Tool: task_share ───
+
+    api.registerTool(
+      {
+        name: "task_share",
+        label: "Task Share",
+        description:
+          "Share one existing local task and its chunks to the configured hub. " +
+          "Minimal MVP path for validating team task sharing.",
+        parameters: Type.Object({
+          taskId: Type.String({ description: "Local task ID to share" }),
+          visibility: Type.Optional(Type.String({ description: "Share visibility: 'public' (default) or 'group'" })),
+          groupId: Type.Optional(Type.String({ description: "Optional group ID when visibility='group'" })),
+        }),
+        execute: trackTool("task_share", async (_toolCallId: any, params: any) => {
+          const { taskId, visibility: rawVisibility, groupId } = params as {
+            taskId: string;
+            visibility?: string;
+            groupId?: string;
+          };
+
+          const task = store.getTask(taskId);
+          if (!task) {
+            return {
+              content: [{ type: "text", text: `Task not found: ${taskId}` }],
+              details: { error: "not_found", taskId },
+            };
+          }
+
+          const chunks = store.getChunksByTask(taskId);
+          if (chunks.length === 0) {
+            return {
+              content: [{ type: "text", text: `Task ${taskId} has no chunks to share.` }],
+              details: { error: "no_chunks", taskId },
+            };
+          }
+
+          const visibility = rawVisibility === "group" ? "group" : "public";
+          const hubClient = await resolveHubClient(store, ctx);
+          const { v4: uuidv4 } = require("uuid");
+          const hubTaskId = uuidv4();
+
+          const response = await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/tasks/share", {
+            method: "POST",
+            body: JSON.stringify({
+              task: {
+                id: hubTaskId,
+                sourceTaskId: task.id,
+                sourceUserId: hubClient.userId,
+                title: task.title,
+                summary: task.summary,
+                groupId: visibility === "group" ? (groupId ?? null) : null,
+                visibility,
+                createdAt: task.startedAt,
+                updatedAt: task.updatedAt,
+              },
+              chunks: chunks.map((chunk) => ({
+                id: uuidv4(),
+                hubTaskId,
+                sourceTaskId: task.id,
+                sourceChunkId: chunk.id,
+                sourceUserId: hubClient.userId,
+                role: chunk.role,
+                content: chunk.content,
+                summary: chunk.summary,
+                kind: chunk.kind,
+                createdAt: chunk.createdAt,
+              })),
+            }),
+          }) as any;
+
+          return {
+            content: [{ type: "text", text: `Shared task "${task.title}" with ${chunks.length} chunks to the hub.` }],
+            details: {
+              shared: true,
+              taskId: task.id,
+              visibility,
+              chunkCount: chunks.length,
+              hubUrl: hubClient.hubUrl,
+              response,
+            },
+          };
+        }),
+      },
+      { name: "task_share" },
+    );
+
+    // ─── Tool: task_unshare ───
+
+    api.registerTool(
+      {
+        name: "task_unshare",
+        label: "Task Unshare",
+        description: "Remove one previously shared task from the configured hub.",
+        parameters: Type.Object({
+          taskId: Type.String({ description: "Local task ID to unshare" }),
+        }),
+        execute: trackTool("task_unshare", async (_toolCallId: any, params: any) => {
+          const { taskId } = params as { taskId: string };
+
+          const task = store.getTask(taskId);
+          if (!task) {
+            return {
+              content: [{ type: "text", text: `Task not found: ${taskId}` }],
+              details: { error: "not_found", taskId },
+            };
+          }
+
+          const hubClient = await resolveHubClient(store, ctx);
+          await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/tasks/unshare", {
+            method: "POST",
+            body: JSON.stringify({
+              sourceUserId: hubClient.userId,
+              sourceTaskId: task.id,
+            }),
+          });
+
+          return {
+            content: [{ type: "text", text: `Unshared task "${task.title}" from the hub.` }],
+            details: {
+              unshared: true,
+              taskId: task.id,
+              hubUrl: hubClient.hubUrl,
+            },
+          };
+        }),
+      },
+      { name: "task_unshare" },
     );
 
     // ─── Tool: skill_get ───
