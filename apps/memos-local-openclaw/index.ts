@@ -170,7 +170,7 @@ const memosLocalPlugin = {
     });
 
     const store = new SqliteStore(ctx.config.storage!.dbPath!, ctx.log);
-    const embedder = new Embedder(ctx.config.embedding, ctx.log);
+    const embedder = new Embedder(ctx.config.embedding, ctx.log, ctx.openclawAPI);
     const worker = new IngestWorker(store, embedder, ctx);
     const engine = new RecallEngine(store, embedder, ctx);
     const evidenceTag = ctx.config.capture?.evidenceWrapperTag ?? DEFAULTS.evidenceWrapperTag;
@@ -211,7 +211,7 @@ const memosLocalPlugin = {
       });
     });
 
-    const summarizer = new Summarizer(ctx.config.summarizer, ctx.log);
+    const summarizer = new Summarizer(ctx.config.summarizer, ctx.log, ctx.openclawAPI);
 
     api.logger.info(`memos-local: initialized (db: ${ctx.config.storage!.dbPath})`);
 

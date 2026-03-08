@@ -1,5 +1,5 @@
 import * as path from "path";
-import { DEFAULTS, type MemosLocalConfig, type PluginContext, type Logger } from "./types";
+import { DEFAULTS, type MemosLocalConfig, type PluginContext, type Logger, type EmbeddingConfig, type SummarizerConfig } from "./types";
 import { OpenClawAPIClient } from "./openclaw-api";
 
 const ENV_RE = /\$\{([A-Z_][A-Z0-9_]*)\}/g;
@@ -19,6 +19,24 @@ function deepResolveEnv<T>(obj: T): T {
     return out as T;
   }
   return obj;
+}
+
+function resolveProviderFallback<T extends { provider?: string; capabilities?: unknown }>(
+  config: T | undefined,
+  fallbackProvider: T["provider"],
+  enabled: boolean,
+): T | undefined {
+  if (!config) {
+    return enabled
+      ? ({ provider: fallbackProvider } as T)
+      : undefined;
+  }
+
+  if (config.provider == null && enabled) {
+    return { ...config, provider: fallbackProvider };
+  }
+
+  return config;
 }
 
 export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateDir: string): MemosLocalConfig {
@@ -59,22 +77,32 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
       posthogApiKey: cfg.telemetry?.posthogApiKey ?? process.env.POSTHOG_API_KEY ?? "",
       posthogHost: cfg.telemetry?.posthogHost ?? process.env.POSTHOG_HOST ?? "",
     },
-    summarizer: cfg.summarizer
-      ? {
-          ...cfg.summarizer,
-          capabilities: sharingCapabilities,
-        }
-      : sharingCapabilities.hostCompletion
-        ? { provider: "openclaw" as const, capabilities: sharingCapabilities }
-        : undefined,
-    embedding: cfg.embedding
-      ? {
-          ...cfg.embedding,
-          capabilities: sharingCapabilities,
-        }
-      : sharingCapabilities.hostEmbedding
-        ? { provider: "openclaw" as const, capabilities: sharingCapabilities }
-        : undefined,
+    summarizer: (() => {
+      const summarizerConfig = resolveProviderFallback<SummarizerConfig>(
+        cfg.summarizer,
+        "openclaw",
+        sharingCapabilities.hostCompletion,
+      );
+      return summarizerConfig
+        ? {
+            ...summarizerConfig,
+            capabilities: sharingCapabilities,
+          }
+        : undefined;
+    })(),
+    embedding: (() => {
+      const embeddingConfig = resolveProviderFallback<EmbeddingConfig>(
+        cfg.embedding,
+        "openclaw",
+        sharingCapabilities.hostEmbedding,
+      );
+      return embeddingConfig
+        ? {
+            ...embeddingConfig,
+            capabilities: sharingCapabilities,
+          }
+        : undefined;
+    })(),
     sharing: {
       enabled: cfg.sharing?.enabled ?? false,
       role: cfg.sharing?.role ?? "client",
