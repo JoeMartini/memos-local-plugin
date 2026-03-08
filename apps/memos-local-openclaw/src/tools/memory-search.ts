@@ -1,6 +1,11 @@
 import type { RecallEngine } from "../recall/engine";
 import type { ToolDefinition } from "../types";
 
+function resolveOwnerFilter(owner: unknown): string[] {
+  const resolvedOwner = typeof owner === "string" && owner.trim().length > 0 ? owner : "agent:main";
+  return resolvedOwner === "public" ? ["public"] : [resolvedOwner, "public"];
+}
+
 export function createMemorySearchTool(engine: RecallEngine): ToolDefinition {
   return {
     name: "memory_search",
@@ -29,6 +34,7 @@ export function createMemorySearchTool(engine: RecallEngine): ToolDefinition {
         query: (input.query as string) ?? "",
         maxResults: input.maxResults as number | undefined,
         minScore: input.minScore as number | undefined,
+        ownerFilter: resolveOwnerFilter(input.owner),
       });
       return result;
     },
