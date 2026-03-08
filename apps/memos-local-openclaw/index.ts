@@ -667,6 +667,8 @@ const memosLocalPlugin = {
             }),
           }) as any;
 
+          store.markTaskShared(task.id, hubTaskId, chunks.length, visibility, groupId);
+
           return {
             content: [{ type: "text", text: `Shared task "${task.title}" with ${chunks.length} chunks to the hub.` }],
             details: {
@@ -712,6 +714,8 @@ const memosLocalPlugin = {
               sourceTaskId: task.id,
             }),
           });
+
+          store.unmarkTaskShared(task.id);
 
           return {
             content: [{ type: "text", text: `Unshared task "${task.title}" from the hub.` }],
@@ -1484,10 +1488,65 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
           worker.enqueue(filteredCaptured);
           telemetry.trackMemoryIngested(filteredCaptured.length);
         }
+
+        // Incremental push: sync new chunks for already-shared tasks
+        syncSharedTasksIncremental().catch((err) => {
+          ctx.log.warn(`incremental sync failed: ${err}`);
+        });
       } catch (err) {
         api.logger.warn(`memos-local: capture failed: ${String(err)}`);
       }
     });
+
+    async function syncSharedTasksIncremental(): Promise<void> {
+      if (!ctx.config.sharing?.enabled || ctx.config.sharing.role !== "client") return;
+      const shared = store.listLocalSharedTasks();
+      if (shared.length === 0) return;
+
+      let hubClient: { hubUrl: string; userToken: string; userId: string } | undefined;
+      try {
+        hubClient = await resolveHubClient(store, ctx);
+      } catch {
+        return;
+      }
+      const { v4: uuidv4 } = require("uuid");
+
+      for (const entry of shared) {
+        const chunks = store.getChunksByTask(entry.taskId);
+        if (chunks.length <= entry.syncedChunks) continue;
+
+        const newChunks = chunks.slice(entry.syncedChunks);
+        ctx.log.info(`incremental sync: task=${entry.taskId} pushing ${newChunks.length} new chunk(s)`);
+
+        try {
+          await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/tasks/share", {
+            method: "POST",
+            body: JSON.stringify({
+              task: {
+                id: entry.hubTaskId,
+                sourceTaskId: entry.taskId,
+                sourceUserId: hubClient.userId,
+              },
+              chunks: newChunks.map((chunk) => ({
+                id: uuidv4(),
+                hubTaskId: entry.hubTaskId,
+                sourceTaskId: entry.taskId,
+                sourceChunkId: chunk.id,
+                sourceUserId: hubClient.userId,
+                role: chunk.role,
+                content: chunk.content,
+                summary: chunk.summary,
+                kind: chunk.kind,
+                createdAt: chunk.createdAt,
+              })),
+            }),
+          });
+          store.markTaskShared(entry.taskId, entry.hubTaskId, chunks.length, "public");
+        } catch (err) {
+          ctx.log.warn(`incremental sync failed for task=${entry.taskId}: ${err}`);
+        }
+      }
+    }
 
     // ─── Memory Viewer (web UI) ───
 

@@ -599,6 +599,15 @@ export class SqliteStore {
         connected_at INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS local_shared_tasks (
+        task_id       TEXT PRIMARY KEY,
+        hub_task_id   TEXT NOT NULL,
+        visibility    TEXT NOT NULL DEFAULT 'public',
+        group_id      TEXT,
+        synced_chunks INTEGER NOT NULL DEFAULT 0,
+        shared_at     INTEGER NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS hub_users (
         id          TEXT PRIMARY KEY,
         username    TEXT NOT NULL UNIQUE,
@@ -1411,6 +1420,36 @@ export class SqliteStore {
 
   clearClientHubConnection(): void {
     this.db.prepare('DELETE FROM client_hub_connection WHERE id = 1').run();
+  }
+
+  // ─── Local Shared Tasks (client-side tracking) ───
+
+  markTaskShared(taskId: string, hubTaskId: string, syncedChunks: number, visibility: string, groupId?: string | null): void {
+    this.db.prepare(`
+      INSERT INTO local_shared_tasks (task_id, hub_task_id, visibility, group_id, synced_chunks, shared_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(task_id) DO UPDATE SET
+        hub_task_id = excluded.hub_task_id,
+        visibility = excluded.visibility,
+        group_id = excluded.group_id,
+        synced_chunks = excluded.synced_chunks,
+        shared_at = excluded.shared_at
+    `).run(taskId, hubTaskId, visibility, groupId ?? null, syncedChunks, Date.now());
+  }
+
+  unmarkTaskShared(taskId: string): void {
+    this.db.prepare('DELETE FROM local_shared_tasks WHERE task_id = ?').run(taskId);
+  }
+
+  getLocalSharedTask(taskId: string): { taskId: string; hubTaskId: string; visibility: string; groupId: string | null; syncedChunks: number; sharedAt: number } | null {
+    const row = this.db.prepare('SELECT * FROM local_shared_tasks WHERE task_id = ?').get(taskId) as any;
+    if (!row) return null;
+    return { taskId: row.task_id, hubTaskId: row.hub_task_id, visibility: row.visibility, groupId: row.group_id, syncedChunks: row.synced_chunks, sharedAt: row.shared_at };
+  }
+
+  listLocalSharedTasks(): Array<{ taskId: string; hubTaskId: string; syncedChunks: number }> {
+    const rows = this.db.prepare('SELECT task_id, hub_task_id, synced_chunks FROM local_shared_tasks').all() as any[];
+    return rows.map(r => ({ taskId: r.task_id, hubTaskId: r.hub_task_id, syncedChunks: r.synced_chunks }));
   }
 
   // ─── Hub Users / Groups ───
