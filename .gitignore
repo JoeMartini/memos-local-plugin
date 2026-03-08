@@ -230,3 +230,6 @@ cython_debug/
 outputs
 
 evaluation/data/temporal_locomo
+
+# Local git worktrees
+.worktrees/
