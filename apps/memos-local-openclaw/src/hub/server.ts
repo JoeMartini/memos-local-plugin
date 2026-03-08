@@ -22,6 +22,7 @@ type HubAuthState = {
 
 export class HubServer {
   private server?: http.Server;
+  private remoteHitMap = new Map<string, { chunkId: string; expiresAt: number; requesterUserId: string }>();
   private readonly userManager: HubUserManager;
   private readonly authStatePath: string;
   private authState: HubAuthState;
@@ -169,6 +170,66 @@ export class HubServer {
       const approved = this.userManager.approveUser(String(body.userId), token);
       if (!approved) return this.json(res, 404, { error: "not_found" });
       return this.json(res, 200, { status: "active", token });
+    }
+
+    if (req.method === "POST" && path === "/api/v1/hub/tasks/share") {
+      const auth = this.authenticate(req);
+      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+      const body = await this.readJson(req);
+      if (!body?.task) return this.json(res, 400, { error: "invalid_payload" });
+      const task = { ...body.task, sourceUserId: auth.userId };
+      this.opts.store.upsertHubTask(task);
+      for (const chunk of Array.isArray(body.chunks) ? body.chunks : []) {
+        this.opts.store.upsertHubChunk({ ...chunk, sourceUserId: auth.userId });
+      }
+      return this.json(res, 200, { ok: true, chunks: Array.isArray(body.chunks) ? body.chunks.length : 0 });
+    }
+
+    if (req.method === "POST" && path === "/api/v1/hub/tasks/unshare") {
+      const auth = this.authenticate(req);
+      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+      const body = await this.readJson(req);
+      this.opts.store.deleteHubTaskBySource(auth.userId, String(body.sourceTaskId));
+      return this.json(res, 200, { ok: true });
+    }
+
+    if (req.method === "POST" && path === "/api/v1/hub/search") {
+      const auth = this.authenticate(req);
+      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+      const body = await this.readJson(req);
+      const hits = this.opts.store.searchHubChunks(String(body.query || ""), { userId: auth.userId, maxResults: Number(body.maxResults || 10) })
+        .map(({ hit, rank }) => {
+          const remoteHitId = randomUUID();
+          this.remoteHitMap.set(remoteHitId, { chunkId: hit.id, expiresAt: Date.now() + 10 * 60 * 1000, requesterUserId: auth.userId });
+          return {
+            remoteHitId,
+            summary: hit.summary,
+            excerpt: hit.content.slice(0, 240),
+            hubRank: rank,
+            taskTitle: hit.task_title,
+            ownerName: hit.owner_name || "unknown",
+            groupName: hit.group_name,
+            visibility: hit.visibility,
+            source: { ts: hit.created_at, role: hit.role },
+          };
+        });
+      return this.json(res, 200, { hits, meta: { totalCandidates: hits.length, searchedGroups: [], includedPublic: true } });
+    }
+
+    if (req.method === "POST" && path === "/api/v1/hub/memory-detail") {
+      const auth = this.authenticate(req);
+      if (!auth) return this.json(res, 401, { error: "unauthorized" });
+      const body = await this.readJson(req);
+      const hit = this.remoteHitMap.get(String(body.remoteHitId));
+      if (!hit || hit.expiresAt < Date.now()) return this.json(res, 404, { error: "not_found" });
+      if (hit.requesterUserId !== auth.userId) return this.json(res, 403, { error: "forbidden" });
+      const chunk = this.opts.store.getHubChunkById(hit.chunkId);
+      if (!chunk) return this.json(res, 404, { error: "not_found" });
+      return this.json(res, 200, {
+        content: chunk.content,
+        summary: chunk.summary,
+        source: { ts: chunk.createdAt, role: chunk.role },
+      });
     }
 
     return this.json(res, 404, { error: "not_found" });

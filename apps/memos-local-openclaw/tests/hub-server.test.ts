@@ -155,3 +155,144 @@ describe("hub server", () => {
     await expect(server2.start()).rejects.toThrow();
   });
 });
+
+describe("hub search pipeline", () => {
+  it("should scope search/detail and ignore spoofed sourceUserId", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-hub-scope-"));
+    dirs.push(dir);
+    const store = new SqliteStore(path.join(dir, "test.db"), noopLog);
+    stores.push(store);
+
+    const server = new HubServer({
+      store,
+      log: noopLog,
+      config: { sharing: { enabled: true, role: "hub", hub: { port: 18916, teamName: "Scope", teamToken: "scope-secret" } } },
+      dataDir: dir,
+    } as any);
+    servers.push(server);
+    await server.start();
+
+    const authPath = path.join(dir, "hub-auth.json");
+    const adminState = JSON.parse(fs.readFileSync(authPath, "utf8"));
+    const adminToken = adminState.bootstrapAdminToken;
+
+    const joinA = await fetch("http://127.0.0.1:18916/api/v1/hub/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "alice", deviceName: "A", teamToken: "scope-secret" }) });
+    const joinB = await fetch("http://127.0.0.1:18916/api/v1/hub/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "bob", deviceName: "B", teamToken: "scope-secret" }) });
+    const userA = await joinA.json();
+    const userB = await joinB.json();
+
+    const approveA = await fetch("http://127.0.0.1:18916/api/v1/hub/admin/approve-user", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ userId: userA.userId, username: "alice" }) });
+    const approveB = await fetch("http://127.0.0.1:18916/api/v1/hub/admin/approve-user", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ userId: userB.userId, username: "bob" }) });
+    const tokenA = (await approveA.json()).token;
+    const tokenB = (await approveB.json()).token;
+
+    store.upsertHubGroup({ id: "group-1", name: "Backend", description: "backend", createdAt: 1 });
+    store.addHubGroupMember("group-1", userA.userId, 1);
+
+    const shareA = await fetch("http://127.0.0.1:18916/api/v1/hub/tasks/share", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${tokenA}` },
+      body: JSON.stringify({
+        task: { id: "hub-task-a", sourceTaskId: "task-a", sourceUserId: "spoof-user", title: "Group Task", summary: "group summary", groupId: "group-1", visibility: "group", createdAt: 1, updatedAt: 1 },
+        chunks: [{ id: "hub-chunk-a", hubTaskId: "hub-task-a", sourceTaskId: "task-a", sourceChunkId: "chunk-a", sourceUserId: "spoof-user", role: "assistant", content: "secret backend nginx config", summary: "secret backend nginx", kind: "paragraph", createdAt: 2 }],
+      }),
+    });
+    expect(shareA.status).toBe(200);
+    const storedTask = store.getHubTaskBySource(userA.userId, "task-a");
+    expect(storedTask).not.toBeNull();
+
+    const searchA = await fetch("http://127.0.0.1:18916/api/v1/hub/search", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${tokenA}` }, body: JSON.stringify({ query: "backend nginx", maxResults: 5 }) });
+    const searchB = await fetch("http://127.0.0.1:18916/api/v1/hub/search", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${tokenB}` }, body: JSON.stringify({ query: "backend nginx", maxResults: 5 }) });
+    const jsonA = await searchA.json();
+    const jsonB = await searchB.json();
+    expect(jsonA.hits.length).toBeGreaterThan(0);
+    expect(jsonB.hits).toEqual([]);
+
+    const detailA = await fetch("http://127.0.0.1:18916/api/v1/hub/memory-detail", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${tokenA}` }, body: JSON.stringify({ remoteHitId: jsonA.hits[0].remoteHitId }) });
+    expect(detailA.status).toBe(200);
+    const detailB = await fetch("http://127.0.0.1:18916/api/v1/hub/memory-detail", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${tokenB}` }, body: JSON.stringify({ remoteHitId: jsonA.hits[0].remoteHitId }) });
+    expect([403, 404]).toContain(detailB.status);
+  });
+
+  it("should accept shared task content and return searchable hits with details", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-hub-search-"));
+    dirs.push(dir);
+    const store = new SqliteStore(path.join(dir, "test.db"), noopLog);
+    stores.push(store);
+
+    const server = new HubServer({
+      store,
+      log: noopLog,
+      config: { sharing: { enabled: true, role: "hub", hub: { port: 18915, teamName: "Search", teamToken: "search-secret" } } },
+      dataDir: dir,
+    } as any);
+    servers.push(server);
+    await server.start();
+
+    const authPath = path.join(dir, "hub-auth.json");
+    const state = JSON.parse(fs.readFileSync(authPath, "utf8"));
+    const token = state.bootstrapAdminToken;
+
+    const shareRes = await fetch("http://127.0.0.1:18915/api/v1/hub/tasks/share", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        task: {
+          id: "hub-task-1",
+          sourceTaskId: "task-1",
+          sourceUserId: "user-1",
+          title: "Deploy Nginx",
+          summary: "deploy nginx summary",
+          groupId: null,
+          visibility: "public",
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        chunks: [
+          {
+            id: "hub-chunk-1",
+            hubTaskId: "hub-task-1",
+            sourceTaskId: "task-1",
+            sourceChunkId: "chunk-1",
+            sourceUserId: "user-1",
+            role: "assistant",
+            content: "Use nginx upstream and proxy_pass to port 3000",
+            summary: "nginx upstream to port 3000",
+            kind: "paragraph",
+            createdAt: 2,
+          },
+        ],
+      }),
+    });
+    expect(shareRes.status).toBe(200);
+
+    const searchRes = await fetch("http://127.0.0.1:18915/api/v1/hub/search", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ query: "nginx upstream 3000", scope: "all", maxResults: 5 }),
+    });
+    expect(searchRes.status).toBe(200);
+    const searchJson = await searchRes.json();
+    expect(searchJson.hits.length).toBeGreaterThan(0);
+    expect(searchJson.hits[0].remoteHitId).toBeTruthy();
+    expect(searchJson.hits[0].taskTitle).toBe("Deploy Nginx");
+
+    const detailRes = await fetch("http://127.0.0.1:18915/api/v1/hub/memory-detail", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ remoteHitId: searchJson.hits[0].remoteHitId }),
+    });
+    expect(detailRes.status).toBe(200);
+    const detailJson = await detailRes.json();
+    expect(detailJson.content).toContain("proxy_pass");
+  });
+});

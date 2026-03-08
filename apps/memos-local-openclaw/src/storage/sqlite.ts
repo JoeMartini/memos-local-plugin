@@ -1573,6 +1573,36 @@ export class SqliteStore {
     return out;
   }
 
+  searchHubChunks(query: string, options?: { userId?: string; maxResults?: number }): Array<{ hit: HubSearchRow; rank: number }> {
+    const limit = options?.maxResults ?? 10;
+    const userId = options?.userId ?? "";
+    const rows = this.db.prepare(`
+      SELECT hc.id, hc.content, hc.summary, hc.role, hc.created_at, ht.title as task_title, ht.visibility, hg.name as group_name, hu.username as owner_name,
+             bm25(hub_chunks_fts) as rank
+      FROM hub_chunks_fts f
+      JOIN hub_chunks hc ON hc.rowid = f.rowid
+      JOIN hub_tasks ht ON ht.id = hc.hub_task_id
+      LEFT JOIN hub_groups hg ON hg.id = ht.group_id
+      LEFT JOIN hub_users hu ON hu.id = ht.source_user_id
+      WHERE hub_chunks_fts MATCH ?
+        AND (
+          ht.visibility = 'public'
+          OR EXISTS (
+            SELECT 1 FROM hub_group_members gm
+            WHERE gm.group_id = ht.group_id AND gm.user_id = ?
+          )
+        )
+      ORDER BY rank
+      LIMIT ?
+    `).all(sanitizeFtsQuery(query), userId, limit) as HubSearchRow[];
+    return rows.map((row, idx) => ({ hit: row, rank: idx + 1 }));
+  }
+
+  getHubChunkById(chunkId: string): HubChunkRecord | null {
+    const row = this.db.prepare('SELECT * FROM hub_chunks WHERE id = ?').get(chunkId) as HubChunkRow | undefined;
+    return row ? rowToHubChunk(row) : null;
+  }
+
   deleteHubSkillBySource(sourceUserId: string, sourceSkillId: string): void {
     this.db.prepare('DELETE FROM hub_skills WHERE source_user_id = ? AND source_skill_id = ?').run(sourceUserId, sourceSkillId);
   }
@@ -1988,6 +2018,20 @@ function rowToHubSkill(row: HubSkillRow): HubSkillRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+
+interface HubSearchRow {
+  id: string;
+  content: string;
+  summary: string;
+  role: string;
+  created_at: number;
+  task_title: string | null;
+  visibility: string;
+  group_name: string | null;
+  owner_name: string | null;
+  rank: number;
 }
 
 
