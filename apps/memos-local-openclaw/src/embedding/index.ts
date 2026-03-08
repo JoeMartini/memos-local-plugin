@@ -1,4 +1,4 @@
-import type { EmbeddingConfig, Logger } from "../types";
+import type { EmbeddingConfig, Logger, OpenClawAPI } from "../types";
 import { embedOpenAI } from "./providers/openai";
 import { embedGemini } from "./providers/gemini";
 import { embedCohere, embedCohereQuery } from "./providers/cohere";
@@ -10,6 +10,7 @@ export class Embedder {
   constructor(
     private cfg: EmbeddingConfig | undefined,
     private log: Logger,
+    private openclawAPI?: OpenClawAPI,
   ) {}
 
   get provider(): string {
@@ -65,7 +66,7 @@ export class Embedder {
         case "voyage":
           return await embedVoyage(texts, cfg!, this.log);
         case "openclaw":
-          throw new Error("OpenClaw host embedding is not available in this sidecar build");
+          return await this.embedOpenClaw(texts);
         case "local":
         default:
           return await embedLocal(texts, this.log);
@@ -77,5 +78,21 @@ export class Embedder {
       }
       throw err;
     }
+  }
+
+  private async embedOpenClaw(texts: string[]): Promise<number[][]> {
+    if (!this.openclawAPI) {
+      throw new Error(
+        "OpenClaw API not available. Ensure sharing.capabilities.hostEmbedding is enabled in config."
+      );
+    }
+
+    this.log.debug(`Calling OpenClaw embed API for ${texts.length} texts`);
+    const response = await this.openclawAPI.embed({
+      texts,
+      model: this.cfg?.model,
+    });
+
+    return response.embeddings;
   }
 }

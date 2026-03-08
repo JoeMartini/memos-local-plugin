@@ -55,7 +55,7 @@ export function initPlugin(opts: PluginInitOptions = {}): MemosLocalPlugin {
   ctx.log.info("Initializing memos-local plugin...");
 
   const store = new SqliteStore(ctx.config.storage!.dbPath!, ctx.log);
-  const embedder = new Embedder(ctx.config.embedding, ctx.log);
+  const embedder = new Embedder(ctx.config.embedding, ctx.log, ctx.openclawAPI);
   const worker = new IngestWorker(store, embedder, ctx);
   const engine = new RecallEngine(store, embedder, ctx);
 

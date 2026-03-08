@@ -1631,7 +1631,7 @@ export class ViewerServer {
       summarizerCfg = this.getResolvedViewerConfig(raw).summarizer;
     } catch { /* no config */ }
 
-    const summarizer = new Summarizer(summarizerCfg, this.log);
+    const summarizer = new Summarizer(summarizerCfg, this.log, this.ctx?.openclawAPI);
 
     // Phase 1: Import SQLite memory chunks
     if (importSqlite) {

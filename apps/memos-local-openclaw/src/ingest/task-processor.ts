@@ -38,7 +38,7 @@ export class TaskProcessor {
     private store: SqliteStore,
     private ctx: PluginContext,
   ) {
-    this.summarizer = new Summarizer(ctx.config.summarizer, ctx.log);
+    this.summarizer = new Summarizer(ctx.config.summarizer, ctx.log, ctx.openclawAPI);
   }
 
   onTaskCompleted(cb: (task: Task) => void): void {

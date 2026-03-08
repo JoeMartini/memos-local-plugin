@@ -1,5 +1,6 @@
 import * as path from "path";
 import { DEFAULTS, type MemosLocalConfig, type PluginContext, type Logger } from "./types";
+import { OpenClawAPIClient } from "./openclaw-api";
 
 const ENV_RE = /\$\{([A-Z_][A-Z0-9_]*)\}/g;
 
@@ -63,13 +64,17 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
           ...cfg.summarizer,
           capabilities: sharingCapabilities,
         }
-      : undefined,
+      : sharingCapabilities.hostCompletion
+        ? { provider: "openclaw" as const, capabilities: sharingCapabilities }
+        : undefined,
     embedding: cfg.embedding
       ? {
           ...cfg.embedding,
           capabilities: sharingCapabilities,
         }
-      : undefined,
+      : sharingCapabilities.hostEmbedding
+        ? { provider: "openclaw" as const, capabilities: sharingCapabilities }
+        : undefined,
     sharing: {
       enabled: cfg.sharing?.enabled ?? false,
       role: cfg.sharing?.role ?? "client",
@@ -100,10 +105,19 @@ export function buildContext(
     error: (...args) => console.error("[memos-local]", ...args),
   };
 
+  const logger = log ?? defaultLog;
+  const config = resolveConfig(rawConfig, stateDir);
+
+  // Create OpenClawAPI instance if host capabilities are enabled
+  const openclawAPI = (config.sharing?.capabilities?.hostEmbedding || config.sharing?.capabilities?.hostCompletion)
+    ? new OpenClawAPIClient(logger)
+    : undefined;
+
   return {
     stateDir,
     workspaceDir,
-    config: resolveConfig(rawConfig, stateDir),
-    log: log ?? defaultLog,
+    config,
+    log: logger,
+    openclawAPI,
   };
 }

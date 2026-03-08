@@ -19,7 +19,7 @@ export class IngestWorker {
     private embedder: Embedder,
     private ctx: PluginContext,
   ) {
-    this.summarizer = new Summarizer(ctx.config.summarizer, ctx.log);
+    this.summarizer = new Summarizer(ctx.config.summarizer, ctx.log, ctx.openclawAPI);
     this.taskProcessor = new TaskProcessor(store, ctx);
   }
 

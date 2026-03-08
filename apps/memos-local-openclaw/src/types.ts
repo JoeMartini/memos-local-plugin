@@ -350,6 +350,12 @@ export interface PluginContext {
   workspaceDir: string;
   config: MemosLocalConfig;
   log: Logger;
+  openclawAPI?: OpenClawAPI;
+}
+
+export interface OpenClawAPI {
+  embed(request: { texts: string[]; model?: string }): Promise<{ embeddings: number[][]; dimensions: number }>;
+  complete(request: { prompt: string; maxTokens?: number; temperature?: number; model?: string }): Promise<{ text: string }>;
 }
 
 export interface Logger {
