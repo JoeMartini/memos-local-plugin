@@ -252,7 +252,7 @@ const memosLocalPlugin = {
           role: Type.Optional(Type.String({ description: "Filter by role: 'user', 'assistant', or 'tool'. Use 'user' to find what the user said." })),
         }),
         execute: trackTool("memory_search", async (_toolCallId: any, params: any) => {
-          const { query, minScore, role } = params as {
+          const { query, maxResults, minScore, role } = params as {
             query: string;
             maxResults?: number;
             minScore?: number;
@@ -261,8 +261,9 @@ const memosLocalPlugin = {
 
           const agentId = (params as any).agentId ?? "main";
           const ownerFilter = [`agent:${agentId}`, "public"];
-          ctx.log.debug(`memory_search query="${query}" minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId}`);
-          const result = await engine.search({ query, maxResults: 20, minScore, role, ownerFilter });
+          const effectiveMaxResults = maxResults ?? 20;
+          ctx.log.debug(`memory_search query="${query}" maxResults=${effectiveMaxResults} minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId}`);
+          const result = await engine.search({ query, maxResults: effectiveMaxResults, minScore, role, ownerFilter });
           ctx.log.debug(`memory_search raw candidates: ${result.hits.length}`);
 
           if (result.hits.length === 0) {
