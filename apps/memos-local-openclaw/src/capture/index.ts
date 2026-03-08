@@ -25,8 +25,11 @@ const INBOUND_META_SENTINELS = [
 ];
 
 const SENTINEL_FAST_RE = new RegExp(
-  INBOUND_META_SENTINELS.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"),
+  INBOUND_META_SENTINELS.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"),
 );
+
+const ENVELOPE_PREFIX_RE =
+  /^\s*\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s+[A-Z]{3}[+-]\d{1,2}\]\s*/;
 
 /**
  * Extract writable messages from a conversation turn.
@@ -39,7 +42,7 @@ export function captureMessages(
   messages: Array<{ role: string; content: string; toolName?: string }>,
   sessionKey: string,
   turnId: string,
-  _evidenceTag: string,
+  evidenceTag: string,
   log: Logger,
   owner?: string,
 ): ConversationMessage[] {
@@ -59,6 +62,8 @@ export function captureMessages(
     let content = msg.content;
     if (role === "user") {
       content = stripInboundMetadata(content);
+    } else {
+      content = stripEvidenceWrappers(content, evidenceTag);
     }
     if (!content.trim()) continue;
 
@@ -89,17 +94,15 @@ export function captureMessages(
  * Also strips the envelope timestamp prefix like "[Tue 2026-03-03 21:58 GMT+8] "
  */
 export function stripInboundMetadata(text: string): string {
-  // Strip envelope timestamp prefix: "[Tue 2026-03-03 21:58 GMT+8] actual message"
-  let cleaned = text.replace(
-    /^\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s+[A-Z]{3}[+-]\d{1,2}\]\s*/,
-    "",
-  );
+  let cleaned = stripEnvelopePrefix(text);
 
   // Strip OpenClaw envelope tags: [message_id: ...], [[reply_to_current]], etc.
   cleaned = cleaned.replace(/\[message_id:\s*[a-f0-9-]+\]/gi, "");
   cleaned = cleaned.replace(/\[\[reply_to_current\]\]/gi, "");
 
-  if (!SENTINEL_FAST_RE.test(cleaned)) return cleaned.trim();
+  if (!SENTINEL_FAST_RE.test(cleaned)) {
+    return stripEnvelopePrefix(cleaned).trim();
+  }
 
   const lines = cleaned.split("\n");
   const result: string[] = [];
@@ -110,7 +113,7 @@ export function stripInboundMetadata(text: string): string {
     const line = lines[i];
     const trimmed = line.trim();
 
-    if (!inMetaBlock && INBOUND_META_SENTINELS.some(s => s === trimmed)) {
+    if (!inMetaBlock && INBOUND_META_SENTINELS.some((s) => s === trimmed)) {
       if (lines[i + 1]?.trim() === "```json") {
         inMetaBlock = true;
         inFencedJson = false;
@@ -135,5 +138,24 @@ export function stripInboundMetadata(text: string): string {
     result.push(line);
   }
 
-  return result.join("\n").trim();
+  return stripEnvelopePrefix(result.join("\n")).trim();
+}
+
+function stripEnvelopePrefix(text: string): string {
+  return text.replace(ENVELOPE_PREFIX_RE, "");
+}
+
+function stripEvidenceWrappers(text: string, evidenceTag: string): string {
+  const tag = evidenceTag.trim();
+  if (!tag) return text;
+
+  const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const wrapperRe = new RegExp(`\\[${escapedTag}\\][\\s\\S]*?\\[\\/${escapedTag}\\]`, "g");
+
+  return text
+    .replace(wrapperRe, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
