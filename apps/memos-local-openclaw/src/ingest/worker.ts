@@ -45,73 +45,79 @@ export class IngestWorker {
 
   private async processQueue(): Promise<void> {
     this.processing = true;
-    const t0 = performance.now();
 
-    let lastSessionKey: string | undefined;
-    let lastOwner: string | undefined;
-    let lastTimestamp = 0;
-    let stored = 0;
-    let skipped = 0;
-    let merged = 0;
-    let duplicated = 0;
-    let errors = 0;
-    const resultLines: string[] = [];
-    const inputLines: string[] = [];
-    const totalMessages = this.queue.length;
+    try {
+      while (this.queue.length > 0) {
+        const t0 = performance.now();
+        const batchSize = this.queue.length;
+        let lastSessionKey: string | undefined;
+        let lastOwner: string | undefined;
+        let lastTimestamp = 0;
+        let stored = 0;
+        let skipped = 0;
+        let merged = 0;
+        let duplicated = 0;
+        let errors = 0;
+        const resultLines: string[] = [];
+        const inputLines: string[] = [];
 
-    while (this.queue.length > 0) {
-      const msg = this.queue.shift()!;
-      inputLines.push(`[${msg.role}] ${msg.content}`);
-      try {
-        const result = await this.ingestMessage(msg);
-        lastSessionKey = msg.sessionKey;
-        lastOwner = msg.owner ?? "agent:main";
-        lastTimestamp = Math.max(lastTimestamp, msg.timestamp);
-        if (result === "skipped") {
-          skipped++;
-          resultLines.push(`[${msg.role}] ⏭ exact-dup → ${msg.content}`);
-        } else if (result.action === "stored") {
-          stored++;
-          resultLines.push(`[${msg.role}] ✅ stored → ${result.summary ?? msg.content}`);
-        } else if (result.action === "duplicate") {
-          duplicated++;
-          resultLines.push(`[${msg.role}] 🔁 dedup(${result.reason ?? "similar"}) → ${msg.content}`);
-        } else if (result.action === "merged") {
-          merged++;
-          resultLines.push(`[${msg.role}] 🔀 merged → ${msg.content}`);
+        while (this.queue.length > 0) {
+          const msg = this.queue.shift()!;
+          inputLines.push(`[${msg.role}] ${msg.content}`);
+          try {
+            const result = await this.ingestMessage(msg);
+            lastSessionKey = msg.sessionKey;
+            lastOwner = msg.owner ?? "agent:main";
+            lastTimestamp = Math.max(lastTimestamp, msg.timestamp);
+            if (result === "skipped") {
+              skipped++;
+              resultLines.push(`[${msg.role}] ⏭ exact-dup → ${msg.content}`);
+            } else if (result.action === "stored") {
+              stored++;
+              resultLines.push(`[${msg.role}] ✅ stored → ${result.summary ?? msg.content}`);
+            } else if (result.action === "duplicate") {
+              duplicated++;
+              resultLines.push(`[${msg.role}] 🔁 dedup(${result.reason ?? "similar"}) → ${msg.content}`);
+            } else if (result.action === "merged") {
+              merged++;
+              resultLines.push(`[${msg.role}] 🔀 merged → ${msg.content}`);
+            }
+          } catch (err) {
+            errors++;
+            resultLines.push(`[${msg.role}] ❌ error → ${msg.content}`);
+            this.ctx.log.error(`Failed to ingest message turn=${msg.turnId}: ${err}`);
+          }
         }
-      } catch (err) {
-        errors++;
-        resultLines.push(`[${msg.role}] ❌ error → ${msg.content}`);
-        this.ctx.log.error(`Failed to ingest message turn=${msg.turnId}: ${err}`);
+
+        const dur = performance.now() - t0;
+
+        if (stored + merged > 0 || skipped > 0 || duplicated > 0) {
+          this.store.recordToolCall("memory_add", dur, errors === 0);
+          try {
+            const inputInfo = {
+              session: lastSessionKey,
+              messages: batchSize,
+              details: inputLines,
+            };
+            const stats = [`stored=${stored}`, skipped > 0 ? `skipped=${skipped}` : null, duplicated > 0 ? `dedup=${duplicated}` : null, merged > 0 ? `merged=${merged}` : null, errors > 0 ? `errors=${errors}` : null].filter(Boolean).join(", ");
+            this.store.recordApiLog("memory_add", inputInfo, `${stats}\n${resultLines.join("\n")}`, dur, errors === 0);
+          } catch (_) { /* best-effort */ }
+        }
+
+        if (lastSessionKey) {
+          this.ctx.log.debug(`Calling TaskProcessor.onChunksIngested session=${lastSessionKey} ts=${lastTimestamp} owner=${lastOwner}`);
+          try {
+            await this.taskProcessor.onChunksIngested(lastSessionKey, lastTimestamp, lastOwner);
+          } catch (err) {
+            this.ctx.log.error(`TaskProcessor post-ingest error: ${err}`);
+          }
+        }
       }
+    } finally {
+      this.processing = false;
+      for (const resolve of this.flushResolvers) resolve();
+      this.flushResolvers = [];
     }
-
-    const dur = performance.now() - t0;
-
-    if (stored + merged > 0 || skipped > 0 || duplicated > 0) {
-      this.store.recordToolCall("memory_add", dur, errors === 0);
-      try {
-        const inputInfo = {
-          session: lastSessionKey,
-          messages: totalMessages,
-          details: inputLines,
-        };
-        const stats = [`stored=${stored}`, skipped > 0 ? `skipped=${skipped}` : null, duplicated > 0 ? `dedup=${duplicated}` : null, merged > 0 ? `merged=${merged}` : null, errors > 0 ? `errors=${errors}` : null].filter(Boolean).join(", ");
-        this.store.recordApiLog("memory_add", inputInfo, `${stats}\n${resultLines.join("\n")}`, dur, errors === 0);
-      } catch (_) { /* best-effort */ }
-    }
-
-    if (lastSessionKey) {
-      this.ctx.log.debug(`Calling TaskProcessor.onChunksIngested session=${lastSessionKey} ts=${lastTimestamp} owner=${lastOwner}`);
-      this.taskProcessor
-        .onChunksIngested(lastSessionKey, lastTimestamp, lastOwner)
-        .catch((err) => this.ctx.log.error(`TaskProcessor post-ingest error: ${err}`));
-    }
-
-    this.processing = false;
-    for (const resolve of this.flushResolvers) resolve();
-    this.flushResolvers = [];
   }
 
   private async ingestMessage(msg: ConversationMessage): Promise<

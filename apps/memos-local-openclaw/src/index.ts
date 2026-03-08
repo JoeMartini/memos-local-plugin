@@ -14,7 +14,7 @@ export interface MemosLocalPlugin {
   onConversationTurn: (messages: Array<{ role: string; content: string }>, sessionKey?: string, owner?: string) => void;
   /** Wait for all pending ingest operations to complete. */
   flush: () => Promise<void>;
-  shutdown: () => void;
+  shutdown: () => Promise<void>;
 }
 
 export interface PluginInitOptions {
@@ -91,8 +91,9 @@ export function initPlugin(opts: PluginInitOptions = {}): MemosLocalPlugin {
       await worker.flush();
     },
 
-    shutdown(): void {
+    async shutdown(): Promise<void> {
       ctx.log.info("Shutting down memos-local plugin...");
+      await worker.flush();
       store.close();
     },
   };

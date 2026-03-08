@@ -74,6 +74,32 @@ afterEach(() => {
 });
 
 describe("TaskProcessor", () => {
+  it("should drain queued onChunksIngested calls instead of dropping them while busy", async () => {
+    const calls: string[] = [];
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    const detectSpy = vi.spyOn(processor as any, "detectAndProcess").mockImplementation(async (sessionKey: string) => {
+      calls.push(sessionKey);
+      if (calls.length === 1) {
+        await firstGate;
+      }
+    });
+
+    const first = processor.onChunksIngested("s1", 1, "agent:main");
+    await Promise.resolve();
+    const second = processor.onChunksIngested("s2", 2, "agent:main");
+
+    expect(detectSpy).toHaveBeenCalledTimes(1);
+
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(calls).toEqual(["s1", "s2"]);
+  });
+
   it("should create a new task when none exists", async () => {
     const now = Date.now();
     insertTestChunk({ id: "c1", sessionKey: "s1", createdAt: now });

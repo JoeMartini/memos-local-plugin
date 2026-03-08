@@ -515,8 +515,9 @@ const memosLocalPlugin = {
           api.logger.info(`memos-local: started (embedding: ${embedder.provider})`);
         }
       },
-      stop: () => {
+      stop: async () => {
         viewer.stop();
+        await worker.flush();
         store.close();
         api.logger.info("memos-local: stopped");
       },
