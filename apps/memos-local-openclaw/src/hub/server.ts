@@ -44,11 +44,13 @@ export class HubServer {
     this.server = http.createServer(async (req, res) => {
       try {
         await this.handle(req, res);
-      } catch (err) {
+      } catch (err: any) {
+        const code = err?.statusCode ?? 500;
+        const message = code === 413 ? "request_body_too_large" : "internal_error";
         this.opts.log.warn(`hub server error: ${String(err)}`);
-        res.statusCode = 500;
+        res.statusCode = code;
         res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify({ error: "internal_error" }));
+        res.end(JSON.stringify({ error: message }));
       }
     });
 
@@ -340,9 +342,20 @@ export class HubServer {
     };
   }
 
+  private static readonly MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
+
   private async readJson(req: http.IncomingMessage): Promise<any> {
     const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    let totalBytes = 0;
+    for await (const chunk of req) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buf.length;
+      if (totalBytes > HubServer.MAX_BODY_BYTES) {
+        req.destroy();
+        throw Object.assign(new Error("request body too large"), { statusCode: 413 });
+      }
+      chunks.push(buf);
+    }
     const raw = Buffer.concat(chunks).toString("utf8");
     return raw ? JSON.parse(raw) : {};
   }
