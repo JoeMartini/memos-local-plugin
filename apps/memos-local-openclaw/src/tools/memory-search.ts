@@ -50,11 +50,11 @@ export function createMemorySearchTool(engine: RecallEngine): ToolDefinition {
         },
         hubAddress: {
           type: "string",
-          description: "Optional hub address override for client/hub integration tests or manual routing.",
+          description: "Optional hub address override for group/all search, integration tests, or manual routing.",
         },
         userToken: {
           type: "string",
-          description: "Optional hub bearer token override for client/hub integration tests.",
+          description: "Optional hub bearer token override for group/all search or integration tests.",
         },
       },
     },

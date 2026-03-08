@@ -166,11 +166,11 @@ async function setupFederatedMemorySearchHarness() {
   clientPlugin.onConversationTurn([
     {
       role: "user",
-      content: "Keep a local rollout checklist for the client deploy: verify migrations, confirm local smoke tests, and post status.",
+      content: "Keep a local shared rollout checklist for the client deploy: verify migrations, confirm local smoke tests, and post status.",
     },
     {
       role: "assistant",
-      content: "Local rollout checklist captured with client-only smoke test details.",
+      content: "Local shared rollout checklist captured with client-only smoke test details.",
     },
   ], "session-federated-rollout");
 
