@@ -5,15 +5,20 @@ import * as os from "os";
 import memosLocalPlugin from "../index";
 import { initPlugin, type MemosLocalPlugin } from "../src/index";
 import { buildContext, resolveConfig } from "../src/config";
+import { Embedder } from "../src/embedding";
 import { HubServer } from "../src/hub/server";
+import { Summarizer } from "../src/ingest/providers";
 import { SqliteStore } from "../src/storage/sqlite";
+import { ViewerServer } from "../src/viewer/server";
 
-const noopLog = {
+const testLog = {
   debug: () => {},
   info: () => {},
   warn: () => {},
   error: () => {},
 };
+
+const noopLog = testLog;
 
 function makePluginApi(stateDir: string, pluginConfig: Record<string, unknown> = {}) {
   const tools = new Map<string, any>();
@@ -286,6 +291,12 @@ describe("Integration: v4 types and config foundation", () => {
         stateDir,
         process.cwd(),
         {
+          summarizer: {
+            provider: "openclaw",
+          },
+          embedding: {
+            provider: "openclaw",
+          },
           sharing: {
             enabled: true,
             role: "hub",
@@ -312,6 +323,8 @@ describe("Integration: v4 types and config foundation", () => {
       expect(ctx.config.sharing.client.userToken).toBe("user-secret");
       expect(ctx.config.sharing.capabilities.hostEmbedding).toBe(true);
       expect(ctx.config.sharing.capabilities.hostCompletion).toBe(true);
+      expect(ctx.config.embedding?.capabilities?.hostEmbedding).toBe(true);
+      expect(ctx.config.summarizer?.capabilities?.hostCompletion).toBe(true);
     } finally {
       if (prevTeamToken === undefined) delete process.env.MEMOS_TEAM_TOKEN;
       else process.env.MEMOS_TEAM_TOKEN = prevTeamToken;
@@ -320,6 +333,89 @@ describe("Integration: v4 types and config foundation", () => {
       else process.env.MEMOS_USER_TOKEN = prevUserToken;
 
       fs.rmSync(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it("should fall back safely when openclaw provider is configured without host capability flags", async () => {
+    const embedder = new Embedder({ provider: "openclaw" } as any, testLog as any);
+    const summarizer = new Summarizer({ provider: "openclaw" } as any, testLog as any);
+    const input = "OpenClaw fallback summary line stays local and safe.";
+
+    expect(embedder.provider).toBe("local");
+    expect(embedder.dimensions).toBe(384);
+    await expect(summarizer.summarize(input)).resolves.toBe(input);
+    await expect(summarizer.summarizeTask(input)).resolves.toBe(input);
+    await expect(summarizer.judgeNewTopic("current topic", "new message")).resolves.toBeNull();
+  });
+
+  it("should apply the same capability-aware resolution in viewer config consumers", () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-viewer-home-"));
+    const stateDir = path.join(homeDir, ".openclaw");
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-viewer-data-"));
+    const cfgPath = path.join(stateDir, "openclaw.json");
+    const prevHome = process.env.HOME;
+    const prevUserProfile = process.env.USERPROFILE;
+
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(cfgPath, JSON.stringify({
+      plugins: {
+        entries: {
+          "memos-local-openclaw-plugin": {
+            enabled: true,
+            config: {
+              embedding: { provider: "openclaw" },
+              summarizer: { provider: "openclaw" },
+              sharing: {
+                capabilities: {
+                  hostEmbedding: false,
+                  hostCompletion: false,
+                },
+              },
+            },
+          },
+        },
+      },
+    }), "utf-8");
+
+    process.env.HOME = homeDir;
+    if (prevUserProfile !== undefined) delete process.env.USERPROFILE;
+
+    try {
+      const viewer = new ViewerServer({
+        store: {} as any,
+        embedder: { provider: "local" } as any,
+        port: 0,
+        log: testLog as any,
+        dataDir,
+        ctx: buildContext(stateDir, process.cwd(), undefined, testLog as any),
+      });
+
+      const unavailable = (viewer as any).getResolvedViewerConfig(JSON.parse(fs.readFileSync(cfgPath, "utf-8")));
+      expect((viewer as any).hasUsableEmbeddingProvider(unavailable)).toBe(false);
+      expect((viewer as any).hasUsableSummarizerProvider(unavailable)).toBe(false);
+
+      const available = resolveConfig({
+        embedding: { provider: "openclaw" },
+        summarizer: { provider: "openclaw" },
+        sharing: {
+          capabilities: {
+            hostEmbedding: true,
+            hostCompletion: true,
+          },
+        },
+      } as any, stateDir);
+
+      expect((viewer as any).hasUsableEmbeddingProvider(available)).toBe(false);
+      expect((viewer as any).hasUsableSummarizerProvider(available)).toBe(false);
+      expect(available.summarizer?.capabilities?.hostCompletion).toBe(true);
+    } finally {
+      if (prevHome === undefined) delete process.env.HOME;
+      else process.env.HOME = prevHome;
+
+      if (prevUserProfile !== undefined) process.env.USERPROFILE = prevUserProfile;
+
+      fs.rmSync(homeDir, { recursive: true, force: true });
+      fs.rmSync(dataDir, { recursive: true, force: true });
     }
   });
 });

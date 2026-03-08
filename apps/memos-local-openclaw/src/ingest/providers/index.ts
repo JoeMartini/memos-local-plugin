@@ -12,8 +12,18 @@ export class Summarizer {
     private log: Logger,
   ) {}
 
-  async summarize(text: string): Promise<string> {
+  private get provider(): SummarizerConfig["provider"] | undefined {
     if (!this.cfg) {
+      return undefined;
+    }
+    if (this.cfg.provider === "openclaw" && this.cfg.capabilities?.hostCompletion !== true) {
+      return undefined;
+    }
+    return this.cfg.provider;
+  }
+
+  async summarize(text: string): Promise<string> {
+    if (!this.provider) {
       return ruleFallback(text);
     }
 
@@ -26,7 +36,7 @@ export class Summarizer {
   }
 
   async summarizeTask(text: string): Promise<string> {
-    if (!this.cfg) {
+    if (!this.provider) {
       return taskFallback(text);
     }
 
@@ -40,7 +50,7 @@ export class Summarizer {
 
   private async callProvider(text: string): Promise<string> {
     const cfg = this.cfg!;
-    switch (cfg.provider) {
+    switch (this.provider) {
       case "openai":
       case "openai_compatible":
         return summarizeOpenAI(text, cfg, this.log);
@@ -52,6 +62,8 @@ export class Summarizer {
         return summarizeOpenAI(text, cfg, this.log);
       case "bedrock":
         return summarizeBedrock(text, cfg, this.log);
+      case "openclaw":
+        throw new Error("OpenClaw host completion is not available in this sidecar build");
       default:
         throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
     }
@@ -63,7 +75,7 @@ export class Summarizer {
    * Returns null if no summarizer is configured (caller should fall back to heuristic).
    */
   async judgeNewTopic(currentContext: string, newMessage: string): Promise<boolean | null> {
-    if (!this.cfg) return null;
+    if (!this.provider) return null;
 
     try {
       return await this.callTopicJudge(currentContext, newMessage);
@@ -75,7 +87,7 @@ export class Summarizer {
 
   private async callTopicJudge(currentContext: string, newMessage: string): Promise<boolean> {
     const cfg = this.cfg!;
-    switch (cfg.provider) {
+    switch (this.provider) {
       case "openai":
       case "openai_compatible":
       case "azure_openai":
@@ -86,6 +98,8 @@ export class Summarizer {
         return judgeNewTopicGemini(currentContext, newMessage, cfg, this.log);
       case "bedrock":
         return judgeNewTopicBedrock(currentContext, newMessage, cfg, this.log);
+      case "openclaw":
+        throw new Error("OpenClaw host completion is not available in this sidecar build");
       default:
         throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
     }
@@ -99,7 +113,7 @@ export class Summarizer {
     query: string,
     candidates: Array<{ index: number; summary: string; role: string }>,
   ): Promise<FilterResult | null> {
-    if (!this.cfg) return null;
+    if (!this.provider) return null;
     if (candidates.length === 0) return { relevant: [], sufficient: true };
 
     try {
@@ -115,7 +129,7 @@ export class Summarizer {
     candidates: Array<{ index: number; summary: string; role: string }>,
   ): Promise<FilterResult> {
     const cfg = this.cfg!;
-    switch (cfg.provider) {
+    switch (this.provider) {
       case "openai":
       case "openai_compatible":
       case "azure_openai":
@@ -126,6 +140,8 @@ export class Summarizer {
         return filterRelevantGemini(query, candidates, cfg, this.log);
       case "bedrock":
         return filterRelevantBedrock(query, candidates, cfg, this.log);
+      case "openclaw":
+        throw new Error("OpenClaw host completion is not available in this sidecar build");
       default:
         throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
     }
@@ -139,7 +155,7 @@ export class Summarizer {
     newSummary: string,
     candidates: Array<{ index: number; summary: string; chunkId: string }>,
   ): Promise<DedupResult | null> {
-    if (!this.cfg) return null;
+    if (!this.provider) return null;
     if (candidates.length === 0) return null;
 
     try {
@@ -155,7 +171,7 @@ export class Summarizer {
     candidates: Array<{ index: number; summary: string; chunkId: string }>,
   ): Promise<DedupResult> {
     const cfg = this.cfg!;
-    switch (cfg.provider) {
+    switch (this.provider) {
       case "openai":
       case "openai_compatible":
       case "azure_openai":
@@ -166,6 +182,8 @@ export class Summarizer {
         return judgeDedupGemini(newSummary, candidates, cfg, this.log);
       case "bedrock":
         return judgeDedupBedrock(newSummary, candidates, cfg, this.log);
+      case "openclaw":
+        throw new Error("OpenClaw host completion is not available in this sidecar build");
       default:
         throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
     }
@@ -173,7 +191,7 @@ export class Summarizer {
 
   private async callTaskProvider(text: string): Promise<string> {
     const cfg = this.cfg!;
-    switch (cfg.provider) {
+    switch (this.provider) {
       case "openai":
       case "openai_compatible":
       case "azure_openai":
@@ -184,6 +202,8 @@ export class Summarizer {
         return summarizeTaskGemini(text, cfg, this.log);
       case "bedrock":
         return summarizeTaskBedrock(text, cfg, this.log);
+      case "openclaw":
+        throw new Error("OpenClaw host completion is not available in this sidecar build");
       default:
         throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
     }

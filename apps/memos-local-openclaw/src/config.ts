@@ -27,6 +27,10 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
   const telemetryEnabled =
     cfg.telemetry?.enabled ??
     (telemetryEnvVar === "false" || telemetryEnvVar === "0" ? false : true);
+  const sharingCapabilities = {
+    hostEmbedding: cfg.sharing?.capabilities?.hostEmbedding ?? false,
+    hostCompletion: cfg.sharing?.capabilities?.hostCompletion ?? false,
+  };
 
   return {
     ...cfg,
@@ -54,6 +58,18 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
       posthogApiKey: cfg.telemetry?.posthogApiKey ?? process.env.POSTHOG_API_KEY ?? "",
       posthogHost: cfg.telemetry?.posthogHost ?? process.env.POSTHOG_HOST ?? "",
     },
+    summarizer: cfg.summarizer
+      ? {
+          ...cfg.summarizer,
+          capabilities: sharingCapabilities,
+        }
+      : undefined,
+    embedding: cfg.embedding
+      ? {
+          ...cfg.embedding,
+          capabilities: sharingCapabilities,
+        }
+      : undefined,
     sharing: {
       enabled: cfg.sharing?.enabled ?? false,
       role: cfg.sharing?.role ?? "client",
@@ -66,10 +82,7 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
         hubAddress: cfg.sharing?.client?.hubAddress ?? "",
         userToken: cfg.sharing?.client?.userToken ?? "",
       },
-      capabilities: {
-        hostEmbedding: cfg.sharing?.capabilities?.hostEmbedding ?? false,
-        hostCompletion: cfg.sharing?.capabilities?.hostCompletion ?? false,
-      },
+      capabilities: sharingCapabilities,
     },
   };
 }

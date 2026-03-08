@@ -151,7 +151,8 @@ export type SummaryProvider =
   | "anthropic"
   | "gemini"
   | "azure_openai"
-  | "bedrock";
+  | "bedrock"
+  | "openclaw";
 
 export type EmbeddingProvider =
   | "openai"
@@ -161,7 +162,8 @@ export type EmbeddingProvider =
   | "cohere"
   | "mistral"
   | "voyage"
-  | "local";
+  | "local"
+  | "openclaw";
 
 export interface ProviderConfig {
   provider: string;
@@ -171,6 +173,7 @@ export interface ProviderConfig {
   headers?: Record<string, string>;
   timeoutMs?: number;
   temperature?: number;
+  capabilities?: SharingCapabilities;
 }
 
 export interface SummarizerConfig extends ProviderConfig {
