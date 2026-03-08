@@ -54,6 +54,23 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
       posthogApiKey: cfg.telemetry?.posthogApiKey ?? process.env.POSTHOG_API_KEY ?? "",
       posthogHost: cfg.telemetry?.posthogHost ?? process.env.POSTHOG_HOST ?? "",
     },
+    sharing: {
+      enabled: cfg.sharing?.enabled ?? false,
+      role: cfg.sharing?.role ?? "client",
+      hub: {
+        port: cfg.sharing?.hub?.port ?? 18800,
+        teamName: cfg.sharing?.hub?.teamName ?? "",
+        teamToken: cfg.sharing?.hub?.teamToken ?? "",
+      },
+      client: {
+        hubAddress: cfg.sharing?.client?.hubAddress ?? "",
+        userToken: cfg.sharing?.client?.userToken ?? "",
+      },
+      capabilities: {
+        hostEmbedding: cfg.sharing?.capabilities?.hostEmbedding ?? false,
+        hostCompletion: cfg.sharing?.capabilities?.hostCompletion ?? false,
+      },
+    },
   };
 }
 

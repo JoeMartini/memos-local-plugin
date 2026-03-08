@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { initPlugin, type MemosLocalPlugin } from "../src/index";
+import { buildContext, resolveConfig } from "../src/config";
 
 let plugin: MemosLocalPlugin;
 let tmpDir: string;
@@ -63,6 +64,76 @@ I think the path alias is wrong in the tsconfig configuration.` },
 afterAll(() => {
   plugin.shutdown();
   fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe("Integration: v4 types and config foundation", () => {
+  it("should keep local-only config backward compatible while adding sharing defaults", () => {
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-config-"));
+
+    const resolved = resolveConfig(undefined, stateDir) as any;
+
+    expect(resolved.storage.dbPath).toContain("memos-local");
+    expect(resolved.recall.maxResultsDefault).toBe(6);
+    expect(resolved.sharing).toBeDefined();
+    expect(resolved.sharing.enabled).toBe(false);
+    expect(resolved.sharing.role).toBe("client");
+    expect(resolved.sharing.hub.port).toBe(18800);
+    expect(resolved.sharing.client.hubAddress).toBe("");
+    expect(resolved.sharing.capabilities.hostEmbedding).toBe(false);
+    expect(resolved.sharing.capabilities.hostCompletion).toBe(false);
+
+    fs.rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it("should resolve sharing env vars and expose hub/client config via buildContext", () => {
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-context-"));
+    const prevTeamToken = process.env.MEMOS_TEAM_TOKEN;
+    const prevUserToken = process.env.MEMOS_USER_TOKEN;
+
+    process.env.MEMOS_TEAM_TOKEN = "team-secret";
+    process.env.MEMOS_USER_TOKEN = "user-secret";
+
+    try {
+      const ctx = buildContext(
+        stateDir,
+        process.cwd(),
+        {
+          sharing: {
+            enabled: true,
+            role: "hub",
+            hub: {
+              port: 19001,
+              teamName: "Core Team",
+              teamToken: "${MEMOS_TEAM_TOKEN}",
+            },
+            client: {
+              hubAddress: "10.0.0.8:18800",
+              userToken: "${MEMOS_USER_TOKEN}",
+            },
+            capabilities: {
+              hostEmbedding: true,
+              hostCompletion: true,
+            },
+          },
+        } as any,
+      ) as any;
+
+      expect(ctx.config.sharing.enabled).toBe(true);
+      expect(ctx.config.sharing.role).toBe("hub");
+      expect(ctx.config.sharing.hub.teamToken).toBe("team-secret");
+      expect(ctx.config.sharing.client.userToken).toBe("user-secret");
+      expect(ctx.config.sharing.capabilities.hostEmbedding).toBe(true);
+      expect(ctx.config.sharing.capabilities.hostCompletion).toBe(true);
+    } finally {
+      if (prevTeamToken === undefined) delete process.env.MEMOS_TEAM_TOKEN;
+      else process.env.MEMOS_TEAM_TOKEN = prevTeamToken;
+
+      if (prevUserToken === undefined) delete process.env.MEMOS_USER_TOKEN;
+      else process.env.MEMOS_USER_TOKEN = prevUserToken;
+
+      fs.rmSync(stateDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("Integration: memory_search", () => {

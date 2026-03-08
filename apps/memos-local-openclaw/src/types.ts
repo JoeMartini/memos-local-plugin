@@ -255,6 +255,32 @@ export interface TelemetryConfig {
   posthogHost?: string;
 }
 
+export type SharingRole = "hub" | "client";
+
+export interface SharingCapabilities {
+  hostEmbedding?: boolean;
+  hostCompletion?: boolean;
+}
+
+export interface HubModeConfig {
+  port?: number;
+  teamName?: string;
+  teamToken?: string;
+}
+
+export interface ClientModeConfig {
+  hubAddress?: string;
+  userToken?: string;
+}
+
+export interface SharingConfig {
+  enabled?: boolean;
+  role?: SharingRole;
+  hub?: HubModeConfig;
+  client?: ClientModeConfig;
+  capabilities?: SharingCapabilities;
+}
+
 export interface MemosLocalConfig {
   summarizer?: SummarizerConfig;
   embedding?: EmbeddingConfig;
@@ -280,6 +306,7 @@ export interface MemosLocalConfig {
   };
   skillEvolution?: SkillEvolutionConfig;
   telemetry?: TelemetryConfig;
+  sharing?: SharingConfig;
 }
 
 // ─── Defaults ───
