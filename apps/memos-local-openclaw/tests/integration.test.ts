@@ -708,6 +708,119 @@ describe("Integration: owner isolation for initPlugin tools", () => {
   });
 });
 
+describe("Integration: root plugin memory_search network scope", () => {
+  async function setupRootMemorySearchHarness() {
+    const clientDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-root-search-client-"));
+    const hubDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-root-search-hub-"));
+    const port = 19600 + Math.floor(Math.random() * 1000);
+    const hubStore = new SqliteStore(path.join(hubDir, "hub.db"), noopLog as any);
+    const hubServer = new HubServer({
+      store: hubStore,
+      log: noopLog as any,
+      config: {
+        sharing: {
+          enabled: true,
+          role: "hub",
+          hub: {
+            port,
+            teamName: "Root Search Test",
+            teamToken: "root-search-secret",
+          },
+        },
+      } as any,
+      dataDir: hubDir,
+    } as any);
+
+    await hubServer.start();
+    const authState = JSON.parse(fs.readFileSync(path.join(hubDir, "hub-auth.json"), "utf8"));
+    const userToken = authState.bootstrapAdminToken as string;
+    const userId = authState.bootstrapAdminUserId as string;
+
+    hubStore.upsertHubTask({
+      id: "hub-task-root-search-1",
+      sourceTaskId: "task-root-search-1",
+      sourceUserId: userId,
+      title: "Hub rollout",
+      summary: "Hub rollout checklist",
+      groupId: null,
+      visibility: "public",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    hubStore.upsertHubChunk({
+      id: "hub-chunk-root-search-1",
+      hubTaskId: "hub-task-root-search-1",
+      sourceTaskId: "task-root-search-1",
+      sourceChunkId: "chunk-root-search-1",
+      sourceUserId: userId,
+      role: "assistant",
+      content: "Public rollout checklist from hub with nginx canary validation.",
+      summary: "Hub rollout checklist",
+      kind: "paragraph",
+      createdAt: 2,
+    });
+
+    const { tools, service } = makePluginApi(clientDir, {
+      sharing: {
+        enabled: true,
+        role: "client",
+        client: {
+          hubAddress: `127.0.0.1:${port}`,
+          userToken,
+        },
+      },
+      telemetry: { enabled: false },
+    });
+
+    const clientStore = new SqliteStore(path.join(clientDir, "memos-local", "memos.db"), noopLog as any);
+    clientStore.insertTask({
+      id: "task-root-local-1",
+      sessionKey: "session-root-local",
+      title: "Local rollout",
+      summary: "Local rollout checklist",
+      status: "completed",
+      owner: "agent:main",
+      startedAt: 1,
+      endedAt: 2,
+      updatedAt: 2,
+    });
+    clientStore.insertChunk(makeTaskChunk({
+      id: "chunk-root-local-1",
+      sessionKey: "session-root-local",
+      turnId: "turn-root-local",
+      content: "Local rollout checklist with smoke tests and deploy validation.",
+      summary: "Local rollout checklist",
+      taskId: "task-root-local-1",
+    }));
+
+    return { clientDir, hubDir, tools, service, clientStore, hubStore, hubServer };
+  }
+
+  async function teardownRootMemorySearchHarness(harness: Awaited<ReturnType<typeof setupRootMemorySearchHarness>>) {
+    await harness.service?.stop?.();
+    harness.clientStore.close();
+    await harness.hubServer.stop();
+    harness.hubStore.close();
+    fs.rmSync(harness.clientDir, { recursive: true, force: true });
+    fs.rmSync(harness.hubDir, { recursive: true, force: true });
+  }
+
+  it("root memory_search should return split local and hub results for scope=all", async () => {
+    const harness = await setupRootMemorySearchHarness();
+    try {
+      const searchTool = harness.tools.get("memory_search");
+      expect(searchTool).toBeDefined();
+
+      const result = await searchTool.execute("call-root-search", { query: "rollout checklist", scope: "all", maxResults: 5 }, { agentId: "main" });
+      expect(result.details.local.hits.length).toBeGreaterThan(0);
+      expect(result.details.hub.hits.length).toBeGreaterThan(0);
+      expect(result.details.hub.hits[0].remoteHitId).toBeTruthy();
+    } finally {
+      await teardownRootMemorySearchHarness(harness);
+    }
+  });
+});
+
 describe("Integration: task sharing MVP", () => {
   async function setupTaskSharingHarness(opts: {
     usePersistedConnection?: boolean;

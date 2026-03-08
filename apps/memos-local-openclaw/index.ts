@@ -18,7 +18,7 @@ import { captureMessages, stripInboundMetadata } from "./src/capture";
 import { DEFAULTS } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
 import { HubServer } from "./src/hub/server";
-import { hubGetMemoryDetail, hubRequestJson, hubSearchSkills, resolveHubClient } from "./src/client/hub";
+import { hubGetMemoryDetail, hubRequestJson, hubSearchMemories, hubSearchSkills, resolveHubClient } from "./src/client/hub";
 import { getHubStatus } from "./src/client/connector";
 import { fetchHubSkillBundle, publishSkillBundleToHub, restoreSkillBundleFromHub } from "./src/client/skill-sync";
 import { SkillEvolver } from "./src/skill/evolver";
@@ -254,51 +254,105 @@ const memosLocalPlugin = {
           maxResults: Type.Optional(Type.Number({ description: "Max results (default 20, max 20)" })),
           minScore: Type.Optional(Type.Number({ description: "Min score 0-1 (default 0.45, floor 0.35)" })),
           role: Type.Optional(Type.String({ description: "Filter by role: 'user', 'assistant', or 'tool'. Use 'user' to find what the user said." })),
+          scope: Type.Optional(Type.String({ description: "Search scope: 'local' (default), 'group', or 'all'. Group/all return split local and hub results." })),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for tests or manual routing" })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for tests" })),
         }),
         execute: trackTool("memory_search", async (_toolCallId: any, params: any) => {
-          const { query, minScore, role } = params as {
+          const { query, maxResults, minScore, role, scope, hubAddress, userToken } = params as {
             query: string;
             maxResults?: number;
             minScore?: number;
             role?: string;
+            scope?: string;
+            hubAddress?: string;
+            userToken?: string;
           };
 
+          const searchScope = scope === "group" || scope === "all" ? scope : "local";
+          const searchLimit = Math.min(maxResults ?? 20, 20);
           const agentId = (params as any).agentId ?? "main";
           const ownerFilter = [`agent:${agentId}`, "public"];
-          ctx.log.debug(`memory_search query="${query}" minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId}`);
-          const result = await engine.search({ query, maxResults: 20, minScore, role, ownerFilter });
+          ctx.log.debug(`memory_search query="${query}" minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId} scope=${searchScope}`);
+          const result = await engine.search({ query, maxResults: searchLimit, minScore, role, ownerFilter });
           ctx.log.debug(`memory_search raw candidates: ${result.hits.length}`);
 
-          if (result.hits.length === 0) {
+          if (result.hits.length === 0 && searchScope === "local") {
             return {
               content: [{ type: "text", text: result.meta.note ?? "No relevant memories found." }],
               details: { meta: result.meta },
             };
           }
 
-          // LLM relevance + sufficiency filtering
           let filteredHits = result.hits;
           let sufficient = false;
 
-          const candidates = result.hits.map((h, i) => ({
-            index: i + 1,
-            summary: h.summary,
-            role: h.source.role,
-          }));
+          if (result.hits.length > 0) {
+            const candidates = result.hits.map((h, i) => ({
+              index: i + 1,
+              summary: h.summary,
+              role: h.source.role,
+            }));
 
-          const filterResult = await summarizer.filterRelevant(query, candidates);
-          if (filterResult !== null) {
-            sufficient = filterResult.sufficient;
-            if (filterResult.relevant.length > 0) {
-              const indexSet = new Set(filterResult.relevant);
-              filteredHits = result.hits.filter((_, i) => indexSet.has(i + 1));
-              ctx.log.debug(`memory_search LLM filter: ${result.hits.length} → ${filteredHits.length} hits, sufficient=${sufficient}`);
-            } else {
-              return {
-                content: [{ type: "text", text: "No relevant memories found for this query." }],
-                details: { meta: result.meta },
-              };
+            const filterResult = await summarizer.filterRelevant(query, candidates);
+            if (filterResult !== null) {
+              sufficient = filterResult.sufficient;
+              if (filterResult.relevant.length > 0) {
+                const indexSet = new Set(filterResult.relevant);
+                filteredHits = result.hits.filter((_, i) => indexSet.has(i + 1));
+                ctx.log.debug(`memory_search LLM filter: ${result.hits.length} → ${filteredHits.length} hits, sufficient=${sufficient}`);
+              } else if (searchScope === "local") {
+                return {
+                  content: [{ type: "text", text: "No relevant memories found for this query." }],
+                  details: { meta: result.meta },
+                };
+              } else {
+                filteredHits = [];
+              }
             }
+          }
+
+          const beforeDedup = filteredHits.length;
+          filteredHits = deduplicateHits(filteredHits);
+          ctx.log.debug(`memory_search dedup: ${beforeDedup} → ${filteredHits.length}`);
+
+          const localDetailsHits = filteredHits.map((h) => {
+            let effectiveTaskId = h.taskId;
+            if (effectiveTaskId) {
+              const t = store.getTask(effectiveTaskId);
+              if (t && t.status === "skipped") effectiveTaskId = null;
+            }
+            return {
+              chunkId: h.ref.chunkId,
+              taskId: effectiveTaskId,
+              skillId: h.skillId,
+              role: h.source.role,
+              score: h.score,
+            };
+          });
+
+          if (searchScope !== "local") {
+            const hub = await hubSearchMemories(store, ctx, { query, maxResults: searchLimit, scope: searchScope as any, hubAddress, userToken }).catch(() => ({ hits: [], meta: { totalCandidates: 0, searchedGroups: [], includedPublic: searchScope === "all" } }));
+            const localText = filteredHits.length > 0
+              ? filteredHits.map((h, i) => {
+                  const excerpt = h.original_excerpt.length > 220 ? h.original_excerpt.slice(0, 217) + "..." : h.original_excerpt;
+                  return `${i + 1}. [${h.source.role}] ${excerpt}`;
+                }).join("\n")
+              : "(none)";
+            const hubText = hub.hits.length > 0
+              ? hub.hits.map((h, i) => `${i + 1}. [${h.ownerName}] ${h.summary}${h.groupName ? ` (${h.groupName})` : ""}`).join("\n")
+              : "(none)";
+
+            return {
+              content: [{
+                type: "text",
+                text: `Local results:\n${localText}\n\nHub results:\n${hubText}`,
+              }],
+              details: {
+                local: { hits: localDetailsHits, meta: result.meta },
+                hub,
+              },
+            };
           }
 
           if (filteredHits.length === 0) {
@@ -307,10 +361,6 @@ const memosLocalPlugin = {
               details: { meta: result.meta },
             };
           }
-
-          const beforeDedup = filteredHits.length;
-          filteredHits = deduplicateHits(filteredHits);
-          ctx.log.debug(`memory_search dedup: ${beforeDedup} → ${filteredHits.length}`);
 
           const lines = filteredHits.map((h, i) => {
             const excerpt = h.original_excerpt.length > 300
@@ -356,20 +406,7 @@ const memosLocalPlugin = {
               },
             ],
             details: {
-              hits: filteredHits.map((h) => {
-                let effectiveTaskId = h.taskId;
-                if (effectiveTaskId) {
-                  const t = store.getTask(effectiveTaskId);
-                  if (t && t.status === "skipped") effectiveTaskId = null;
-                }
-                return {
-                  chunkId: h.ref.chunkId,
-                  taskId: effectiveTaskId,
-                  skillId: h.skillId,
-                  role: h.source.role,
-                  score: h.score,
-                };
-              }),
+              hits: localDetailsHits,
               meta: result.meta,
             },
           };

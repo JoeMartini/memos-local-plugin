@@ -128,6 +128,31 @@ describe("plugin-impl hub service skeleton", () => {
   });
 });
 
+describe("plugin-impl v4 tool registration", () => {
+  it("should register the required v4 sharing tools", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "memos-plugin-impl-tools-"));
+    const { tools, service } = makeApi(tmpDir, {
+      sharing: {
+        enabled: true,
+        role: "client",
+        client: {
+          hubAddress: "127.0.0.1:19999",
+          userToken: "test-token",
+        },
+      },
+    });
+
+    expect(service).toBeDefined();
+    expect(tools.has("task_share")).toBe(true);
+    expect(tools.has("task_unshare")).toBe(true);
+    expect(tools.has("network_memory_detail")).toBe(true);
+    expect(tools.has("network_team_info")).toBe(true);
+    expect(tools.has("network_skill_pull")).toBe(true);
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
 describe("plugin-impl owner isolation", () => {
   let tmpDir: string;
   let tools: Map<string, any>;
