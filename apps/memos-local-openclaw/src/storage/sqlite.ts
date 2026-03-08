@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type { Chunk, ChunkRef, DedupStatus, Task, TaskStatus, Skill, SkillStatus, SkillVisibility, SkillVersion, TaskSkillLink, TaskSkillRelation, Logger } from "../types";
+import type { GroupInfo, SharedVisibility, UserInfo, UserRole, UserStatus } from "../sharing/types";
 
 export class SqliteStore {
   private db: Database.Database;
@@ -109,6 +110,7 @@ export class SqliteStore {
     this.migrateOwnerFields();
     this.migrateSkillVisibility();
     this.migrateSkillEmbeddingsAndFts();
+    this.migrateHubTables();
     this.log.debug("Database schema initialized");
   }
 
@@ -582,6 +584,160 @@ export class SqliteStore {
         todayViewerCalls,
       },
     };
+  }
+
+
+  private migrateHubTables(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS client_hub_connection (
+        id           INTEGER PRIMARY KEY CHECK (id = 1),
+        hub_url      TEXT NOT NULL,
+        user_id      TEXT NOT NULL,
+        username     TEXT NOT NULL,
+        user_token   TEXT NOT NULL,
+        role         TEXT NOT NULL,
+        connected_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS hub_users (
+        id          TEXT PRIMARY KEY,
+        username    TEXT NOT NULL UNIQUE,
+        device_name TEXT NOT NULL DEFAULT '',
+        role        TEXT NOT NULL,
+        status      TEXT NOT NULL,
+        token_hash  TEXT NOT NULL DEFAULT '',
+        created_at  INTEGER NOT NULL,
+        approved_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_hub_users_status ON hub_users(status);
+      CREATE INDEX IF NOT EXISTS idx_hub_users_role ON hub_users(role);
+
+      CREATE TABLE IF NOT EXISTS hub_groups (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL UNIQUE,
+        description TEXT NOT NULL DEFAULT '',
+        created_at  INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS hub_group_members (
+        group_id    TEXT NOT NULL REFERENCES hub_groups(id) ON DELETE CASCADE,
+        user_id     TEXT NOT NULL REFERENCES hub_users(id) ON DELETE CASCADE,
+        joined_at   INTEGER NOT NULL,
+        PRIMARY KEY (group_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_hub_group_members_user ON hub_group_members(user_id);
+
+      CREATE TABLE IF NOT EXISTS hub_tasks (
+        id             TEXT PRIMARY KEY,
+        source_task_id TEXT NOT NULL,
+        source_user_id TEXT NOT NULL,
+        title          TEXT NOT NULL,
+        summary        TEXT NOT NULL DEFAULT '',
+        group_id       TEXT,
+        visibility     TEXT NOT NULL,
+        created_at     INTEGER NOT NULL,
+        updated_at     INTEGER NOT NULL,
+        UNIQUE(source_user_id, source_task_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_hub_tasks_visibility ON hub_tasks(visibility);
+      CREATE INDEX IF NOT EXISTS idx_hub_tasks_group ON hub_tasks(group_id);
+
+      CREATE TABLE IF NOT EXISTS hub_chunks (
+        id              TEXT PRIMARY KEY,
+        hub_task_id     TEXT NOT NULL REFERENCES hub_tasks(id) ON DELETE CASCADE,
+        source_chunk_id TEXT NOT NULL,
+        source_user_id  TEXT NOT NULL,
+        role            TEXT NOT NULL,
+        content         TEXT NOT NULL,
+        summary         TEXT NOT NULL DEFAULT '',
+        kind            TEXT NOT NULL DEFAULT 'paragraph',
+        created_at      INTEGER NOT NULL,
+        UNIQUE(source_user_id, source_chunk_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_hub_chunks_task ON hub_chunks(hub_task_id);
+
+      CREATE TABLE IF NOT EXISTS hub_embeddings (
+        chunk_id    TEXT PRIMARY KEY REFERENCES hub_chunks(id) ON DELETE CASCADE,
+        vector      BLOB NOT NULL,
+        dimensions  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL
+      );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS hub_chunks_fts USING fts5(
+        summary,
+        content,
+        content='hub_chunks',
+        content_rowid='rowid',
+        tokenize='porter unicode61'
+      );
+
+      CREATE TRIGGER IF NOT EXISTS hub_chunks_ai AFTER INSERT ON hub_chunks BEGIN
+        INSERT INTO hub_chunks_fts(rowid, summary, content)
+        VALUES (new.rowid, new.summary, new.content);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS hub_chunks_ad AFTER DELETE ON hub_chunks BEGIN
+        INSERT INTO hub_chunks_fts(hub_chunks_fts, rowid, summary, content)
+        VALUES ('delete', old.rowid, old.summary, old.content);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS hub_chunks_au AFTER UPDATE ON hub_chunks BEGIN
+        INSERT INTO hub_chunks_fts(hub_chunks_fts, rowid, summary, content)
+        VALUES ('delete', old.rowid, old.summary, old.content);
+        INSERT INTO hub_chunks_fts(rowid, summary, content)
+        VALUES (new.rowid, new.summary, new.content);
+      END;
+
+      CREATE TABLE IF NOT EXISTS hub_skills (
+        id              TEXT PRIMARY KEY,
+        source_skill_id TEXT NOT NULL,
+        source_user_id  TEXT NOT NULL,
+        name            TEXT NOT NULL,
+        description     TEXT NOT NULL DEFAULT '',
+        version         INTEGER NOT NULL,
+        group_id        TEXT,
+        visibility      TEXT NOT NULL,
+        bundle          TEXT NOT NULL,
+        quality_score   REAL,
+        created_at      INTEGER NOT NULL,
+        updated_at      INTEGER NOT NULL,
+        UNIQUE(source_user_id, source_skill_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_hub_skills_visibility ON hub_skills(visibility);
+      CREATE INDEX IF NOT EXISTS idx_hub_skills_group ON hub_skills(group_id);
+
+      CREATE TABLE IF NOT EXISTS hub_skill_embeddings (
+        skill_id     TEXT PRIMARY KEY REFERENCES hub_skills(id) ON DELETE CASCADE,
+        vector       BLOB NOT NULL,
+        dimensions   INTEGER NOT NULL,
+        updated_at   INTEGER NOT NULL
+      );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS hub_skills_fts USING fts5(
+        name,
+        description,
+        content='hub_skills',
+        content_rowid='rowid',
+        tokenize='porter unicode61'
+      );
+
+      CREATE TRIGGER IF NOT EXISTS hub_skills_ai AFTER INSERT ON hub_skills BEGIN
+        INSERT INTO hub_skills_fts(rowid, name, description)
+        VALUES (new.rowid, new.name, new.description);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS hub_skills_ad AFTER DELETE ON hub_skills BEGIN
+        INSERT INTO hub_skills_fts(hub_skills_fts, rowid, name, description)
+        VALUES ('delete', old.rowid, old.name, old.description);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS hub_skills_au AFTER UPDATE ON hub_skills BEGIN
+        INSERT INTO hub_skills_fts(hub_skills_fts, rowid, name, description)
+        VALUES ('delete', old.rowid, old.name, old.description);
+        INSERT INTO hub_skills_fts(rowid, name, description)
+        VALUES (new.rowid, new.name, new.description);
+      END;
+    `);
   }
 
   // ─── Write ───
@@ -1232,6 +1388,222 @@ export class SqliteStore {
       .map(r => r.session_key);
   }
 
+  // ─── Hub / Client connection ───
+
+  setClientHubConnection(conn: ClientHubConnection): void {
+    this.db.prepare(`
+      INSERT INTO client_hub_connection (id, hub_url, user_id, username, user_token, role, connected_at)
+      VALUES (1, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        hub_url = excluded.hub_url,
+        user_id = excluded.user_id,
+        username = excluded.username,
+        user_token = excluded.user_token,
+        role = excluded.role,
+        connected_at = excluded.connected_at
+    `).run(conn.hubUrl, conn.userId, conn.username, conn.userToken, conn.role, conn.connectedAt);
+  }
+
+  getClientHubConnection(): ClientHubConnection | null {
+    const row = this.db.prepare('SELECT * FROM client_hub_connection WHERE id = 1').get() as ClientHubConnectionRow | undefined;
+    return row ? rowToClientHubConnection(row) : null;
+  }
+
+  clearClientHubConnection(): void {
+    this.db.prepare('DELETE FROM client_hub_connection WHERE id = 1').run();
+  }
+
+  // ─── Hub Users / Groups ───
+
+  upsertHubUser(user: HubUserRecord): void {
+    this.db.prepare(`
+      INSERT INTO hub_users (id, username, device_name, role, status, token_hash, created_at, approved_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        username = excluded.username,
+        device_name = excluded.device_name,
+        role = excluded.role,
+        status = excluded.status,
+        token_hash = excluded.token_hash,
+        created_at = excluded.created_at,
+        approved_at = excluded.approved_at
+    `).run(user.id, user.username, user.deviceName ?? "", user.role, user.status, user.tokenHash, user.createdAt, user.approvedAt);
+  }
+
+  getHubUser(userId: string): HubUserRecord | null {
+    const row = this.db.prepare('SELECT * FROM hub_users WHERE id = ?').get(userId) as HubUserRow | undefined;
+    if (!row) return null;
+    return this.attachGroupsToHubUser(rowToHubUser(row));
+  }
+
+  listHubUsers(status?: UserStatus): HubUserRecord[] {
+    const rows = status
+      ? this.db.prepare('SELECT * FROM hub_users WHERE status = ? ORDER BY created_at').all(status) as HubUserRow[]
+      : this.db.prepare('SELECT * FROM hub_users ORDER BY created_at').all() as HubUserRow[];
+    return rows.map((row) => this.attachGroupsToHubUser(rowToHubUser(row)));
+  }
+
+  upsertHubGroup(group: HubGroupRecord): void {
+    this.db.prepare(`
+      INSERT INTO hub_groups (id, name, description, created_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        description = excluded.description,
+        created_at = excluded.created_at
+    `).run(group.id, group.name, group.description, group.createdAt);
+  }
+
+  listHubGroups(): HubGroupRecord[] {
+    const rows = this.db.prepare('SELECT * FROM hub_groups ORDER BY name').all() as HubGroupRow[];
+    return rows.map(rowToHubGroup);
+  }
+
+  addHubGroupMember(groupId: string, userId: string, joinedAt = Date.now()): void {
+    this.db.prepare(`
+      INSERT INTO hub_group_members (group_id, user_id, joined_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(group_id, user_id) DO UPDATE SET joined_at = excluded.joined_at
+    `).run(groupId, userId, joinedAt);
+  }
+
+  removeHubGroupMember(groupId: string, userId: string): void {
+    this.db.prepare('DELETE FROM hub_group_members WHERE group_id = ? AND user_id = ?').run(groupId, userId);
+  }
+
+  getGroupsForHubUser(userId: string): GroupInfo[] {
+    const rows = this.db.prepare(`
+      SELECT g.*
+      FROM hub_group_members gm
+      JOIN hub_groups g ON g.id = gm.group_id
+      WHERE gm.user_id = ?
+      ORDER BY g.name
+    `).all(userId) as HubGroupRow[];
+    return rows.map((row) => ({ id: row.id, name: row.name, description: row.description || undefined }));
+  }
+
+  // ─── Hub Shared Data ───
+
+  upsertHubTask(task: HubTaskRecord): void {
+    this.db.prepare(`
+      INSERT INTO hub_tasks (id, source_task_id, source_user_id, title, summary, group_id, visibility, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source_user_id, source_task_id) DO UPDATE SET
+        title = excluded.title,
+        summary = excluded.summary,
+        group_id = excluded.group_id,
+        visibility = excluded.visibility,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
+    `).run(task.id, task.sourceTaskId, task.sourceUserId, task.title, task.summary, task.groupId, task.visibility, task.createdAt, task.updatedAt);
+  }
+
+  getHubTaskBySource(sourceUserId: string, sourceTaskId: string): HubTaskRecord | null {
+    const row = this.db.prepare('SELECT * FROM hub_tasks WHERE source_user_id = ? AND source_task_id = ?').get(sourceUserId, sourceTaskId) as HubTaskRow | undefined;
+    return row ? rowToHubTask(row) : null;
+  }
+
+  upsertHubChunk(chunk: HubChunkUpsertInput): void {
+    if (!chunk.sourceTaskId) throw new Error("sourceTaskId is required for hub chunk upserts");
+    const taskId = this.resolveCanonicalHubTaskId(chunk.hubTaskId, chunk.sourceUserId, chunk.sourceTaskId);
+    this.db.prepare(`
+      INSERT INTO hub_chunks (id, hub_task_id, source_chunk_id, source_user_id, role, content, summary, kind, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source_user_id, source_chunk_id) DO UPDATE SET
+        hub_task_id = excluded.hub_task_id,
+        role = excluded.role,
+        content = excluded.content,
+        summary = excluded.summary,
+        kind = excluded.kind,
+        created_at = excluded.created_at
+    `).run(chunk.id, taskId, chunk.sourceChunkId, chunk.sourceUserId, chunk.role, chunk.content, chunk.summary, chunk.kind, chunk.createdAt);
+  }
+
+  getHubChunkBySource(sourceUserId: string, sourceChunkId: string): HubChunkRecord | null {
+    const row = this.db.prepare('SELECT * FROM hub_chunks WHERE source_user_id = ? AND source_chunk_id = ?').get(sourceUserId, sourceChunkId) as HubChunkRow | undefined;
+    return row ? rowToHubChunk(row) : null;
+  }
+
+  deleteHubTaskBySource(sourceUserId: string, sourceTaskId: string): void {
+    this.db.prepare('DELETE FROM hub_tasks WHERE source_user_id = ? AND source_task_id = ?').run(sourceUserId, sourceTaskId);
+  }
+
+  upsertHubSkill(skill: HubSkillRecord): void {
+    this.db.prepare(`
+      INSERT INTO hub_skills (id, source_skill_id, source_user_id, name, description, version, group_id, visibility, bundle, quality_score, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source_user_id, source_skill_id) DO UPDATE SET
+        name = excluded.name,
+        description = excluded.description,
+        version = excluded.version,
+        group_id = excluded.group_id,
+        visibility = excluded.visibility,
+        bundle = excluded.bundle,
+        quality_score = excluded.quality_score,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
+    `).run(skill.id, skill.sourceSkillId, skill.sourceUserId, skill.name, skill.description, skill.version, skill.groupId, skill.visibility, skill.bundle, skill.qualityScore, skill.createdAt, skill.updatedAt);
+  }
+
+  getHubSkillBySource(sourceUserId: string, sourceSkillId: string): HubSkillRecord | null {
+    const row = this.db.prepare('SELECT * FROM hub_skills WHERE source_user_id = ? AND source_skill_id = ?').get(sourceUserId, sourceSkillId) as HubSkillRow | undefined;
+    return row ? rowToHubSkill(row) : null;
+  }
+
+  upsertHubSkillEmbedding(skillId: string, vector: number[], sourceUserId: string, sourceSkillId: string): void {
+    if (!sourceUserId || !sourceSkillId) throw new Error("sourceUserId and sourceSkillId are required for hub skill embedding upserts");
+    const canonicalSkillId = this.resolveCanonicalHubSkillId(skillId, sourceUserId, sourceSkillId);
+    const buf = Buffer.allocUnsafe(vector.length * 4);
+    for (let i = 0; i < vector.length; i++) buf.writeFloatLE(vector[i], i * 4);
+    this.db.prepare(`
+      INSERT INTO hub_skill_embeddings (skill_id, vector, dimensions, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(skill_id) DO UPDATE SET
+        vector = excluded.vector,
+        dimensions = excluded.dimensions,
+        updated_at = excluded.updated_at
+    `).run(canonicalSkillId, buf, vector.length, Date.now());
+  }
+
+  getHubSkillEmbedding(skillId: string): number[] | null {
+    const row = this.db.prepare('SELECT vector, dimensions FROM hub_skill_embeddings WHERE skill_id = ?').get(skillId) as { vector: Buffer; dimensions: number } | undefined;
+    if (!row) return null;
+    const out: number[] = [];
+    for (let i = 0; i < row.dimensions; i++) out.push(row.vector.readFloatLE(i * 4));
+    return out;
+  }
+
+  deleteHubSkillBySource(sourceUserId: string, sourceSkillId: string): void {
+    this.db.prepare('DELETE FROM hub_skills WHERE source_user_id = ? AND source_skill_id = ?').run(sourceUserId, sourceSkillId);
+  }
+
+  private resolveCanonicalHubTaskId(taskId: string, sourceUserId: string, sourceTaskId?: string): string {
+    if (sourceTaskId) {
+      const bySource = this.db.prepare('SELECT id FROM hub_tasks WHERE source_user_id = ? AND source_task_id = ?').get(sourceUserId, sourceTaskId) as { id: string } | undefined;
+      if (!bySource) throw new Error(`source task not found for user=${sourceUserId} sourceTaskId=${sourceTaskId}`);
+      if (bySource.id != taskId) throw new Error(`mismatch between source task and hubTaskId: expected ${bySource.id}, got ${taskId}`);
+      return bySource.id;
+    }
+    throw new Error(`source task not found for user=${sourceUserId} taskId=${taskId}`);
+  }
+
+  private resolveCanonicalHubSkillId(skillId: string, sourceUserId?: string, sourceSkillId?: string): string {
+    if (sourceUserId && sourceSkillId) {
+      const bySource = this.db.prepare('SELECT id FROM hub_skills WHERE source_user_id = ? AND source_skill_id = ?').get(sourceUserId, sourceSkillId) as { id: string } | undefined;
+      if (!bySource) throw new Error(`source skill not found for user=${sourceUserId} sourceSkillId=${sourceSkillId}`);
+      if (bySource.id != skillId) throw new Error(`mismatch between source skill and skillId: expected ${bySource.id}, got ${skillId}`);
+      return bySource.id;
+    }
+    throw new Error(`source skill not found for skillId=${skillId}`);
+  }
+
+  private attachGroupsToHubUser(user: HubUserRecord): HubUserRecord {
+    return {
+      ...user,
+      groups: this.getGroupsForHubUser(user.id),
+    };
+  }
+
   close(): void {
     this.db.close();
   }
@@ -1397,6 +1769,227 @@ function rowToSkillVersion(row: SkillVersionRow): SkillVersion {
     createdAt: row.created_at,
   };
 }
+
+
+interface ClientHubConnection {
+  hubUrl: string;
+  userId: string;
+  username: string;
+  userToken: string;
+  role: UserRole;
+  connectedAt: number;
+}
+
+interface ClientHubConnectionRow {
+  hub_url: string;
+  user_id: string;
+  username: string;
+  user_token: string;
+  role: string;
+  connected_at: number;
+}
+
+function rowToClientHubConnection(row: ClientHubConnectionRow): ClientHubConnection {
+  return {
+    hubUrl: row.hub_url,
+    userId: row.user_id,
+    username: row.username,
+    userToken: row.user_token,
+    role: row.role as UserRole,
+    connectedAt: row.connected_at,
+  };
+}
+
+interface HubUserRecord extends UserInfo {
+  tokenHash: string;
+  createdAt: number;
+  approvedAt: number | null;
+}
+
+interface HubUserRow {
+  id: string;
+  username: string;
+  device_name: string;
+  role: string;
+  status: string;
+  token_hash: string;
+  created_at: number;
+  approved_at: number | null;
+}
+
+function rowToHubUser(row: HubUserRow): HubUserRecord {
+  return {
+    id: row.id,
+    username: row.username,
+    deviceName: row.device_name || undefined,
+    role: row.role as UserRole,
+    status: row.status as UserStatus,
+    groups: [],
+    tokenHash: row.token_hash,
+    createdAt: row.created_at,
+    approvedAt: row.approved_at,
+  };
+}
+
+interface HubGroupRecord {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: number;
+}
+
+interface HubGroupRow {
+  id: string;
+  name: string;
+  description: string;
+  created_at: number;
+}
+
+function rowToHubGroup(row: HubGroupRow): HubGroupRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    createdAt: row.created_at,
+  };
+}
+
+interface HubTaskRecord {
+  id: string;
+  sourceTaskId: string;
+  sourceUserId: string;
+  title: string;
+  summary: string;
+  groupId: string | null;
+  visibility: SharedVisibility;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface HubTaskRow {
+  id: string;
+  source_task_id: string;
+  source_user_id: string;
+  title: string;
+  summary: string;
+  group_id: string | null;
+  visibility: string;
+  created_at: number;
+  updated_at: number;
+}
+
+function rowToHubTask(row: HubTaskRow): HubTaskRecord {
+  return {
+    id: row.id,
+    sourceTaskId: row.source_task_id,
+    sourceUserId: row.source_user_id,
+    title: row.title,
+    summary: row.summary,
+    groupId: row.group_id,
+    visibility: row.visibility as SharedVisibility,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+interface HubChunkUpsertInput {
+  id: string;
+  hubTaskId: string;
+  sourceTaskId: string;
+  sourceChunkId: string;
+  sourceUserId: string;
+  role: Chunk["role"];
+  content: string;
+  summary: string;
+  kind: Chunk["kind"];
+  createdAt: number;
+}
+
+interface HubChunkRecord {
+  id: string;
+  hubTaskId: string;
+  sourceChunkId: string;
+  sourceUserId: string;
+  role: Chunk["role"];
+  content: string;
+  summary: string;
+  kind: Chunk["kind"];
+  createdAt: number;
+}
+
+interface HubChunkRow {
+  id: string;
+  hub_task_id: string;
+  source_chunk_id: string;
+  source_user_id: string;
+  role: string;
+  content: string;
+  summary: string;
+  kind: string;
+  created_at: number;
+}
+
+function rowToHubChunk(row: HubChunkRow): HubChunkRecord {
+  return {
+    id: row.id,
+    hubTaskId: row.hub_task_id,
+    sourceChunkId: row.source_chunk_id,
+    sourceUserId: row.source_user_id,
+    role: row.role as Chunk["role"],
+    content: row.content,
+    summary: row.summary,
+    kind: row.kind as Chunk["kind"],
+    createdAt: row.created_at,
+  };
+}
+
+interface HubSkillRecord {
+  id: string;
+  sourceSkillId: string;
+  sourceUserId: string;
+  name: string;
+  description: string;
+  version: number;
+  groupId: string | null;
+  visibility: SharedVisibility;
+  bundle: string;
+  qualityScore: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface HubSkillRow {
+  id: string;
+  source_skill_id: string;
+  source_user_id: string;
+  name: string;
+  description: string;
+  version: number;
+  group_id: string | null;
+  visibility: string;
+  bundle: string;
+  quality_score: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+function rowToHubSkill(row: HubSkillRow): HubSkillRecord {
+  return {
+    id: row.id,
+    sourceSkillId: row.source_skill_id,
+    sourceUserId: row.source_user_id,
+    name: row.name,
+    description: row.description,
+    version: row.version,
+    groupId: row.group_id,
+    visibility: row.visibility as SharedVisibility,
+    bundle: row.bundle,
+    qualityScore: row.quality_score,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 
 function contentHash(content: string): string {
   return createHash("sha256").update(content).digest("hex").slice(0, 16);
