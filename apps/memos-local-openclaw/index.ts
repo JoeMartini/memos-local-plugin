@@ -1534,6 +1534,7 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
       },
       stop: async () => {
         await telemetry.shutdown();
+        await worker.flush();
         await hubServer?.stop();
         viewer.stop();
         store.close();

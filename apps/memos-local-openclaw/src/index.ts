@@ -60,7 +60,7 @@ export function initPlugin(opts: PluginInitOptions = {}): MemosLocalPlugin {
   const engine = new RecallEngine(store, embedder, ctx);
 
   const tools: ToolDefinition[] = [
-    createMemorySearchTool(engine),
+    createMemorySearchTool(engine, store, ctx),
     createMemoryTimelineTool(store),
     createMemoryGetTool(store),
     createNetworkMemoryDetailTool(store, ctx),

@@ -1,7 +1,8 @@
 import { hubSearchMemories } from "../client/hub";
 import type { HubScope, HubSearchResult } from "../sharing/types";
 import type { RecallEngine } from "../recall/engine";
-import type { ToolDefinition } from "../types";
+import type { PluginContext, ToolDefinition } from "../types";
+import type { SqliteStore } from "../storage/sqlite";
 
 function resolveOwnerFilter(owner: unknown): string[] {
   const resolvedOwner = typeof owner === "string" && owner.trim().length > 0 ? owner : "agent:main";
@@ -23,7 +24,7 @@ function emptyHubResult(scope: HubScope): HubSearchResult {
   };
 }
 
-export function createMemorySearchTool(engine: RecallEngine): ToolDefinition {
+export function createMemorySearchTool(engine: RecallEngine, store?: SqliteStore, ctx?: PluginContext): ToolDefinition {
   return {
     name: "memory_search",
     description:
@@ -72,16 +73,14 @@ export function createMemorySearchTool(engine: RecallEngine): ToolDefinition {
         ownerFilter,
       });
 
-      if (scope === "local") {
+      if (scope === "local" || !store || !ctx) {
         return localSearch;
       }
 
-      const store = (engine as any).store;
-      const ctx = (engine as any).ctx;
       const [local, hub] = await Promise.all([
         localSearch,
         hubSearchMemories(store, ctx, { query, maxResults, scope, hubAddress: input.hubAddress as string | undefined, userToken: input.userToken as string | undefined }).catch((err) => {
-          ctx?.log?.warn?.(`Hub search failed, using local-only results: ${err}`);
+          ctx.log.warn(`Hub search failed, using local-only results: ${err}`);
           return emptyHubResult(scope);
         }),
       ]);
