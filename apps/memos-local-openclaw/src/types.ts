@@ -265,6 +265,7 @@ export type SharingRole = "hub" | "client";
 export interface SharingCapabilities {
   hostEmbedding?: boolean;
   hostCompletion?: boolean;
+  hostSkill?: boolean;
 }
 
 export interface HubModeConfig {

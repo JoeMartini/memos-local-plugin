@@ -49,6 +49,7 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
   const sharingCapabilities = {
     hostEmbedding: cfg.sharing?.capabilities?.hostEmbedding ?? false,
     hostCompletion: cfg.sharing?.capabilities?.hostCompletion ?? false,
+    hostSkill: cfg.sharing?.capabilities?.hostSkill ?? false,
   };
 
   return {
@@ -103,6 +104,19 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
           }
         : undefined;
     })(),
+    skillEvolution: cfg.skillEvolution ? {
+      ...cfg.skillEvolution,
+      summarizer: (() => {
+        const skSumCfg = resolveProviderFallback<SummarizerConfig>(
+          cfg.skillEvolution!.summarizer as SummarizerConfig | undefined,
+          "openclaw",
+          sharingCapabilities.hostSkill,
+        );
+        return skSumCfg
+          ? { ...skSumCfg, capabilities: sharingCapabilities }
+          : undefined;
+      })(),
+    } : undefined,
     sharing: {
       enabled: cfg.sharing?.enabled ?? false,
       role: cfg.sharing?.role ?? "client",
@@ -140,7 +154,7 @@ export function buildContext(
   const config = resolveConfig(rawConfig, stateDir);
 
   // Create OpenClawAPI instance if host capabilities are enabled
-  const openclawAPI = (config.sharing?.capabilities?.hostEmbedding || config.sharing?.capabilities?.hostCompletion)
+  const openclawAPI = (config.sharing?.capabilities?.hostEmbedding || config.sharing?.capabilities?.hostCompletion || config.sharing?.capabilities?.hostSkill)
     ? new OpenClawAPIClient(logger, hostModels)
     : undefined;
 
