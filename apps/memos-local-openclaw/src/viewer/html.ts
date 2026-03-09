@@ -1168,6 +1168,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
                 <option value="gemini">Gemini</option>
                 <option value="azure_openai">Azure OpenAI</option>
                 <option value="bedrock">Bedrock</option>
+                <option value="openclaw">OpenClaw Host</option>
               </select>
             </div>
             <div class="settings-field">
@@ -3842,7 +3843,8 @@ function syncHostToggles(){
   const he=document.getElementById('cfgHostEmbedding').checked;
   const sumSel=document.getElementById('cfgSumProvider');
   const embSel=document.getElementById('cfgEmbProvider');
-  if(hc){sumSel.value='openclaw';sumSel.disabled=true;}else{sumSel.disabled=false;}
+  const skillSel=document.getElementById('cfgSkillProvider');
+  if(hc){sumSel.value='openclaw';sumSel.disabled=true;skillSel.value='';skillSel.disabled=true;}else{sumSel.disabled=false;skillSel.disabled=false;}
   if(he){embSel.value='openclaw';embSel.disabled=true;}else{embSel.disabled=false;}
 }
 function onProviderChange(){

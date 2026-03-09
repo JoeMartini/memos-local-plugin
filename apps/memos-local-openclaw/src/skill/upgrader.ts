@@ -189,6 +189,37 @@ export class SkillUpgrader {
       .replace("{TASK_ID}", task.id)
       + langInstruction;
 
+    // Use openclawAPI when provider is "openclaw"
+    if (cfg.provider === "openclaw") {
+      const api = this.ctx.openclawAPI;
+      if (!api) {
+        throw new Error("OpenClaw API not available. Ensure sharing.capabilities.hostCompletion is enabled.");
+      }
+      const response = await api.complete({
+        prompt,
+        maxTokens: 6000,
+        temperature: cfg.temperature ?? 0.2,
+        model: cfg.model,
+      });
+      const raw = response.text.trim();
+
+      const changelogSep = raw.indexOf("---CHANGELOG---");
+      if (changelogSep !== -1) {
+        const newContent = raw.slice(0, changelogSep).trim();
+        const afterChangelog = raw.slice(changelogSep + "---CHANGELOG---".length).trim();
+
+        const summarySep = afterChangelog.indexOf("---CHANGE_SUMMARY---");
+        if (summarySep !== -1) {
+          const changelog = afterChangelog.slice(0, summarySep).trim();
+          const changeSummary = afterChangelog.slice(summarySep + "---CHANGE_SUMMARY---".length).trim();
+          return { newContent, changelog, changeSummary };
+        }
+        return { newContent, changelog: afterChangelog, changeSummary: "" };
+      }
+
+      return { newContent: raw, changelog: "", changeSummary: "" };
+    }
+
     const endpoint = this.normalizeEndpoint(cfg.endpoint ?? "https://api.openai.com/v1/chat/completions");
     const model = cfg.model ?? "gpt-4o-mini";
     const headers: Record<string, string> = {

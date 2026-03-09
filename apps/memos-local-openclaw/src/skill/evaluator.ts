@@ -170,6 +170,21 @@ export class SkillEvaluator {
   }
 
   private async callLLM(cfg: SummarizerConfig, userContent: string): Promise<string> {
+    // Use openclawAPI when provider is "openclaw"
+    if (cfg.provider === "openclaw") {
+      const api = this.ctx.openclawAPI;
+      if (!api) {
+        throw new Error("OpenClaw API not available. Ensure sharing.capabilities.hostCompletion is enabled.");
+      }
+      const response = await api.complete({
+        prompt: userContent,
+        maxTokens: 1024,
+        temperature: cfg.temperature ?? 0.1,
+        model: cfg.model,
+      });
+      return response.text.trim();
+    }
+
     const endpoint = this.normalizeEndpoint(cfg.endpoint ?? "https://api.openai.com/v1/chat/completions");
     const model = cfg.model ?? "gpt-4o-mini";
     const headers: Record<string, string> = {

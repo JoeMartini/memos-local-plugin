@@ -140,32 +140,50 @@ export class SkillValidator {
     const content = fs.readFileSync(skillMdPath, "utf-8");
 
     const prompt = QUALITY_PROMPT.replace("{SKILL_CONTENT}", content.slice(0, 6000));
-    const endpoint = this.normalizeEndpoint(cfg.endpoint ?? "https://api.openai.com/v1/chat/completions");
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${cfg.apiKey}`,
-      ...cfg.headers,
-    };
 
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model: cfg.model ?? "gpt-4o-mini",
+    let raw: string;
+
+    // Use openclawAPI when provider is "openclaw"
+    if (cfg.provider === "openclaw") {
+      const api = this.ctx.openclawAPI;
+      if (!api) {
+        throw new Error("OpenClaw API not available. Ensure sharing.capabilities.hostCompletion is enabled.");
+      }
+      const response = await api.complete({
+        prompt,
+        maxTokens: 1024,
         temperature: cfg.temperature ?? 0.1,
-        max_tokens: 1024,
-        messages: [{ role: "user", content: prompt }],
-      }),
-      signal: AbortSignal.timeout(cfg.timeoutMs ?? 30_000),
-    });
+        model: cfg.model,
+      });
+      raw = response.text.trim();
+    } else {
+      const endpoint = this.normalizeEndpoint(cfg.endpoint ?? "https://api.openai.com/v1/chat/completions");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${cfg.apiKey}`,
+        ...cfg.headers,
+      };
 
-    if (!resp.ok) {
-      const body = await resp.text();
-      throw new Error(`Quality LLM failed (${resp.status}): ${body}`);
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: cfg.model ?? "gpt-4o-mini",
+          temperature: cfg.temperature ?? 0.1,
+          max_tokens: 1024,
+          messages: [{ role: "user", content: prompt }],
+        }),
+        signal: AbortSignal.timeout(cfg.timeoutMs ?? 30_000),
+      });
+
+      if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error(`Quality LLM failed (${resp.status}): ${body}`);
+      }
+
+      const json = (await resp.json()) as { choices: Array<{ message: { content: string } }> };
+      raw = json.choices[0]?.message?.content?.trim() ?? "";
     }
-
-    const json = (await resp.json()) as { choices: Array<{ message: { content: string } }> };
-    const raw = json.choices[0]?.message?.content?.trim() ?? "";
 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return;

@@ -471,6 +471,21 @@ export class SkillGenerator {
     prompt: string,
     opts: { maxTokens: number; temperature: number },
   ): Promise<string> {
+    // Use openclawAPI when provider is "openclaw"
+    if (cfg.provider === "openclaw") {
+      const api = this.ctx.openclawAPI;
+      if (!api) {
+        throw new Error("OpenClaw API not available. Ensure sharing.capabilities.hostCompletion is enabled.");
+      }
+      const response = await api.complete({
+        prompt,
+        maxTokens: opts.maxTokens,
+        temperature: opts.temperature,
+        model: cfg.model,
+      });
+      return response.text.trim();
+    }
+
     const endpoint = this.normalizeEndpoint(cfg.endpoint ?? "https://api.openai.com/v1/chat/completions");
     const model = cfg.model ?? "gpt-4o-mini";
     const headers: Record<string, string> = {
