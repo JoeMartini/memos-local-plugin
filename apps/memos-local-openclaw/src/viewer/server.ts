@@ -895,14 +895,18 @@ export class ViewerServer {
   private hasUsableEmbeddingProvider(cfg: MemosLocalConfig): boolean {
     const embedding = cfg.embedding;
     if (!embedding?.provider) return false;
-    if (embedding.provider === "openclaw") return false;
+    if (embedding.provider === "openclaw") {
+      return embedding.capabilities?.hostEmbedding === true;
+    }
     return true;
   }
 
   private hasUsableSummarizerProvider(cfg: MemosLocalConfig): boolean {
     const summarizer = cfg.summarizer;
     if (!summarizer?.provider) return false;
-    if (summarizer.provider === "openclaw") return false;
+    if (summarizer.provider === "openclaw") {
+      return summarizer.capabilities?.hostCompletion === true;
+    }
     return true;
   }
 
