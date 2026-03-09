@@ -1048,11 +1048,31 @@ input,textarea,select{font-family:inherit;font-size:inherit}
       <div class="settings-group" id="settingsModelConfig">
         <h2 class="settings-group-title"><span data-i18n="settings.modelconfig">Model Configuration</span></h2>
       <div class="settings-section">
+        <h3><span class="icon">\u{1F916}</span> <span data-i18n="settings.hostproxy">Host Model Proxy</span></h3>
+        <div class="field-hint" style="margin-bottom:8px" data-i18n="settings.hostproxy.hint">Use the LLM configured in OpenClaw host for embedding and summarization. No extra API key needed.</div>
+        <div class="settings-grid">
+          <div class="settings-toggle">
+            <label class="toggle-switch">
+              <input type="checkbox" id="cfgHostCompletion" onchange="syncHostToggles()">
+              <span class="toggle-slider"></span>
+            </label>
+            <label data-i18n="settings.hostproxy.completion">Host Completion (Summarizer)</label>
+          </div>
+          <div class="settings-toggle">
+            <label class="toggle-switch">
+              <input type="checkbox" id="cfgHostEmbedding" onchange="syncHostToggles()">
+              <span class="toggle-slider"></span>
+            </label>
+            <label data-i18n="settings.hostproxy.embedding">Host Embedding</label>
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
         <h3><span class="icon">\u{1F4E1}</span> <span data-i18n="settings.embedding">Embedding Model</span></h3>
         <div class="settings-grid">
           <div class="settings-field">
             <label data-i18n="settings.provider">Provider</label>
-            <select id="cfgEmbProvider">
+            <select id="cfgEmbProvider" onchange="onProviderChange()"
               <option value="openai_compatible">OpenAI Compatible</option>
               <option value="openai">OpenAI</option>
               <option value="gemini">Gemini</option>
@@ -1061,6 +1081,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
               <option value="mistral">Mistral</option>
               <option value="voyage">Voyage</option>
               <option value="local">Local</option>
+              <option value="openclaw">OpenClaw Host</option>
             </select>
           </div>
           <div class="settings-field">
@@ -1083,13 +1104,14 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <div class="settings-grid">
           <div class="settings-field">
             <label data-i18n="settings.provider">Provider</label>
-            <select id="cfgSumProvider">
+            <select id="cfgSumProvider" onchange="onProviderChange()"
               <option value="openai_compatible">OpenAI Compatible</option>
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
               <option value="gemini">Gemini</option>
               <option value="azure_openai">Azure OpenAI</option>
               <option value="bedrock">Bedrock</option>
+              <option value="openclaw">OpenClaw Host</option>
             </select>
           </div>
           <div class="settings-field">
@@ -1566,6 +1588,10 @@ const I18N={
     'tab.import':'\u{1F4E5} Import',
     'tab.settings':'\u2699 Settings',
     'settings.modelconfig':'Model Configuration',
+    'settings.hostproxy':'Host Model Proxy',
+    'settings.hostproxy.hint':'Use the LLM configured in OpenClaw host for embedding and summarization. No extra API key needed.',
+    'settings.hostproxy.completion':'Host Completion (Summarizer)',
+    'settings.hostproxy.embedding':'Host Embedding',
     'settings.embedding':'Embedding Model',
     'settings.summarizer':'Summarizer Model',
     'settings.skill':'Skill Evolution',
@@ -1976,6 +2002,10 @@ const I18N={
     'tab.import':'\u{1F4E5} 导入',
     'tab.settings':'\u2699 设置',
     'settings.modelconfig':'模型配置',
+    'settings.hostproxy':'宿主模型代理',
+    'settings.hostproxy.hint':'使用 OpenClaw 宿主已配置的 LLM 进行嵌入和摘要，无需额外 API Key。',
+    'settings.hostproxy.completion':'宿主补全（摘要）',
+    'settings.hostproxy.embedding':'宿主嵌入',
     'settings.embedding':'嵌入模型',
     'settings.summarizer':'摘要模型',
     'settings.skill':'技能进化',
@@ -3807,6 +3837,25 @@ async function toggleSkillVisibility(){
 }
 
 /* ─── Settings / Config ─── */
+function syncHostToggles(){
+  const hc=document.getElementById('cfgHostCompletion').checked;
+  const he=document.getElementById('cfgHostEmbedding').checked;
+  const sumSel=document.getElementById('cfgSumProvider');
+  const embSel=document.getElementById('cfgEmbProvider');
+  if(hc){sumSel.value='openclaw';sumSel.disabled=true;}else{sumSel.disabled=false;}
+  if(he){embSel.value='openclaw';embSel.disabled=true;}else{embSel.disabled=false;}
+}
+function onProviderChange(){
+  const sumSel=document.getElementById('cfgSumProvider');
+  const embSel=document.getElementById('cfgEmbProvider');
+  const hcEl=document.getElementById('cfgHostCompletion');
+  const heEl=document.getElementById('cfgHostEmbedding');
+  if(sumSel.value==='openclaw'&&!hcEl.checked){hcEl.checked=true;sumSel.disabled=true;}
+  if(sumSel.value!=='openclaw'&&hcEl.checked){hcEl.checked=false;}
+  if(embSel.value==='openclaw'&&!heEl.checked){heEl.checked=true;embSel.disabled=true;}
+  if(embSel.value!=='openclaw'&&heEl.checked){heEl.checked=false;}
+}
+
 async function loadConfig(){
   try{
     const r=await fetch('/api/config');
@@ -3841,6 +3890,15 @@ async function loadConfig(){
 
     const tel=cfg.telemetry||{};
     document.getElementById('cfgTelemetryEnabled').checked=tel.enabled!==false;
+
+    const sharing=cfg.sharing||{};
+    const caps=sharing.capabilities||{};
+    // Also infer toggle state from provider selection (e.g. config file edited manually)
+    const embProv=(cfg.embedding||{}).provider;
+    const sumProv=(cfg.summarizer||{}).provider;
+    document.getElementById('cfgHostCompletion').checked=!!caps.hostCompletion||sumProv==='openclaw';
+    document.getElementById('cfgHostEmbedding').checked=!!caps.hostEmbedding||embProv==='openclaw';
+    syncHostToggles();
   }catch(e){
     console.error('loadConfig error',e);
   }
@@ -3884,6 +3942,10 @@ async function saveConfig(){
   cfg.telemetry={
     enabled:document.getElementById('cfgTelemetryEnabled').checked
   };
+
+  const hostCompletion=document.getElementById('cfgHostCompletion').checked;
+  const hostEmbedding=document.getElementById('cfgHostEmbedding').checked;
+  cfg.sharing={capabilities:{hostCompletion,hostEmbedding}};
 
   try{
     const r=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});

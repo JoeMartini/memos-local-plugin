@@ -10,6 +10,7 @@ import { Type } from "@sinclair/typebox";
 import * as fs from "fs";
 import * as path from "path";
 import { buildContext } from "./src/config";
+import type { HostModelsConfig } from "./src/openclaw-api";
 import { SqliteStore } from "./src/storage/sqlite";
 import { Embedder } from "./src/embedding";
 import { IngestWorker } from "./src/ingest/worker";
@@ -175,12 +176,17 @@ const memosLocalPlugin = {
       }
     }
 
+    // Extract host model providers so OpenClawAPIClient can proxy completion/embedding
+    const hostModels: HostModelsConfig | undefined = api.config.models?.providers
+      ? { providers: api.config.models.providers as Record<string, import("./src/openclaw-api").HostModelProvider> }
+      : undefined;
+
     const ctx = buildContext(stateDir, process.cwd(), pluginCfg as any, {
       debug: (msg: string) => api.logger.info(`[debug] ${msg}`),
       info: (msg: string) => api.logger.info(msg),
       warn: (msg: string) => api.logger.warn(msg),
       error: (msg: string) => api.logger.warn(`[error] ${msg}`),
-    });
+    }, hostModels);
 
     const store = new SqliteStore(ctx.config.storage!.dbPath!, ctx.log);
     const embedder = new Embedder(ctx.config.embedding, ctx.log, ctx.openclawAPI);

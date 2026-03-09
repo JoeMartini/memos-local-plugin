@@ -1551,6 +1551,15 @@ export class ViewerServer {
         if (newCfg.skillEvolution) config.skillEvolution = newCfg.skillEvolution;
         if (newCfg.viewerPort) config.viewerPort = newCfg.viewerPort;
         if (newCfg.telemetry !== undefined) config.telemetry = newCfg.telemetry;
+        if (newCfg.sharing !== undefined) {
+          const existing = (config.sharing as Record<string, unknown>) || {};
+          const merged = { ...existing, ...newCfg.sharing };
+          // Deep-merge capabilities so new keys don't wipe existing ones
+          if (newCfg.sharing.capabilities && existing.capabilities) {
+            merged.capabilities = { ...(existing.capabilities as Record<string, unknown>), ...newCfg.sharing.capabilities };
+          }
+          config.sharing = merged;
+        }
 
         fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
         fs.writeFileSync(cfgPath, JSON.stringify(raw, null, 2), "utf-8");

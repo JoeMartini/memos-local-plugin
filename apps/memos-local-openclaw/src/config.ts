@@ -1,6 +1,6 @@
 import * as path from "path";
 import { DEFAULTS, type MemosLocalConfig, type PluginContext, type Logger, type EmbeddingConfig, type SummarizerConfig } from "./types";
-import { OpenClawAPIClient } from "./openclaw-api";
+import { OpenClawAPIClient, type HostModelsConfig } from "./openclaw-api";
 
 const ENV_RE = /\$\{([A-Z_][A-Z0-9_]*)\}/g;
 
@@ -127,6 +127,7 @@ export function buildContext(
   workspaceDir: string,
   rawConfig: Partial<MemosLocalConfig> | undefined,
   log?: Logger,
+  hostModels?: HostModelsConfig,
 ): PluginContext {
   const defaultLog: Logger = {
     debug: (...args) => console.debug("[memos-local]", ...args),
@@ -140,7 +141,7 @@ export function buildContext(
 
   // Create OpenClawAPI instance if host capabilities are enabled
   const openclawAPI = (config.sharing?.capabilities?.hostEmbedding || config.sharing?.capabilities?.hostCompletion)
-    ? new OpenClawAPIClient(logger)
+    ? new OpenClawAPIClient(logger, hostModels)
     : undefined;
 
   return {
