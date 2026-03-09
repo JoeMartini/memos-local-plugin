@@ -873,15 +873,25 @@ export class SqliteStore {
 
   deleteAll(): number {
     this.db.exec("PRAGMA foreign_keys = OFF");
-    this.db.prepare("DELETE FROM task_skills").run();
-    this.db.prepare("DELETE FROM skill_versions").run();
-    this.db.prepare("DELETE FROM skills").run();
-    this.db.prepare("DELETE FROM embeddings").run();
-    this.db.prepare("DELETE FROM chunks").run();
-    this.db.prepare("DELETE FROM tasks").run();
-    this.db.prepare("DELETE FROM viewer_events").run();
-    this.db.prepare("DELETE FROM api_logs").run();
-    this.db.prepare("DELETE FROM tool_calls").run();
+    const tables = [
+      "task_skills",
+      "skill_embeddings",
+      "skill_versions",
+      "skills",
+      "embeddings",
+      "chunks",
+      "tasks",
+      "viewer_events",
+      "api_logs",
+      "tool_calls",
+    ];
+    for (const table of tables) {
+      try {
+        this.db.prepare(`DELETE FROM ${table}`).run();
+      } catch (err) {
+        this.log.warn(`deleteAll: failed to clear ${table}: ${err}`);
+      }
+    }
     this.db.exec("PRAGMA foreign_keys = ON");
     const remaining = this.countChunks();
     return remaining === 0 ? 1 : 0;

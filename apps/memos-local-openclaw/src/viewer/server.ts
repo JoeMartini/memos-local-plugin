@@ -215,6 +215,8 @@ export class ViewerServer {
       else if (p === "/api/log-tools" && req.method === "GET") this.serveLogTools(res);
       else if (p === "/api/config" && req.method === "GET") this.serveConfig(res);
       else if (p === "/api/config" && req.method === "PUT") this.handleSaveConfig(req, res);
+      else if (p === "/api/test-model" && req.method === "POST") this.handleTestModel(req, res);
+      else if (p === "/api/fallback-model" && req.method === "GET") this.serveFallbackModel(res);
       else if (p === "/api/auth/logout" && req.method === "POST") this.handleLogout(req, res);
       else if (p === "/api/migrate/scan" && req.method === "GET") this.handleMigrateScan(res);
       else if (p === "/api/migrate/start" && req.method === "POST") this.handleMigrateStart(req, res);
@@ -545,7 +547,8 @@ export class ViewerServer {
       ftsResults = db.prepare(
         "SELECT c.* FROM chunks_fts f JOIN chunks c ON f.rowid = c.rowid WHERE chunks_fts MATCH ? ORDER BY rank LIMIT 100",
       ).all(q).filter(passesFilter);
-    } catch {
+    } catch { /* FTS syntax error, fall through */ }
+    if (ftsResults.length === 0) {
       ftsResults = db.prepare(
         "SELECT * FROM chunks WHERE content LIKE ? OR summary LIKE ? ORDER BY created_at DESC LIMIT 100",
       ).all(`%${q}%`, `%${q}%`).filter(passesFilter);
@@ -576,14 +579,10 @@ export class ViewerServer {
       if (!seenIds.has(r.id)) { seenIds.add(r.id); merged.push(r); }
     }
     for (const r of ftsResults) {
-      if (seenIds.has(r.id)) continue;
-      const vscore = scoreMap.get(r.id);
-      if (vscore !== undefined && vscore < SEMANTIC_THRESHOLD) continue;
-      seenIds.add(r.id); merged.push(r);
+      if (!seenIds.has(r.id)) { seenIds.add(r.id); merged.push(r); }
     }
 
-    const fallback = merged.length === 0 && ftsResults.length > 0;
-    const results = fallback ? ftsResults.slice(0, 20) : merged;
+    const results = merged.length > 0 ? merged : ftsResults.slice(0, 20);
 
     this.store.recordViewerEvent("search");
     this.jsonResponse(res, {
@@ -592,7 +591,6 @@ export class ViewerServer {
       vectorCount: vectorResults.length,
       ftsCount: ftsResults.length,
       total: results.length,
-      fallbackFts: fallback,
     });
   }
 
@@ -751,9 +749,10 @@ export class ViewerServer {
         this.store.setSkillVisibility(skillId, visibility);
         this.jsonResponse(res, { ok: true, skillId, visibility });
       } catch (err) {
-        this.log.error(`handleSkillVisibility error: skillId=${skillId}, body=${body}, err=${err}`);
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(err) }));
+        const errMsg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        this.log.error(`handleSkillVisibility error: skillId=${skillId}, body=${body}, err=${errMsg}`);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: errMsg }));
       }
     });
   }
@@ -930,19 +929,25 @@ export class ViewerServer {
   }
 
   private handleDeleteAll(res: http.ServerResponse): void {
-    const result = this.store.deleteAll();
-    // Clean up skills-store directory
-    const skillsStoreDir = path.join(this.dataDir, "skills-store");
     try {
-      if (fs.existsSync(skillsStoreDir)) {
-        fs.rmSync(skillsStoreDir, { recursive: true });
-        fs.mkdirSync(skillsStoreDir, { recursive: true });
-        this.log.info("Cleared skills-store directory");
+      const result = this.store.deleteAll();
+      const skillsStoreDir = path.join(this.dataDir, "skills-store");
+      try {
+        if (fs.existsSync(skillsStoreDir)) {
+          fs.rmSync(skillsStoreDir, { recursive: true });
+          fs.mkdirSync(skillsStoreDir, { recursive: true });
+          this.log.info("Cleared skills-store directory");
+        }
+      } catch (err) {
+        this.log.warn(`Failed to clear skills-store: ${err}`);
       }
+      this.jsonResponse(res, { ok: true, deleted: result });
     } catch (err) {
-      this.log.warn(`Failed to clear skills-store: ${err}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      this.log.error(`handleDeleteAll error: ${msg}`);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: msg }));
     }
-    this.jsonResponse(res, { ok: true, deleted: result });
   }
 
   // ─── Helpers ───
@@ -1021,6 +1026,158 @@ export class ViewerServer {
         res.end(JSON.stringify({ error: String(e) }));
       }
     });
+  }
+
+  private handleTestModel(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      try {
+        const { type, provider, model, endpoint, apiKey } = JSON.parse(body);
+        if (!provider) {
+          this.jsonResponse(res, { ok: false, error: "provider is required" });
+          return;
+        }
+        if (type === "embedding") {
+          await this.testEmbeddingModel(provider, model, endpoint, apiKey);
+          this.jsonResponse(res, { ok: true, detail: `${provider}/${model}` });
+        } else {
+          await this.testChatModel(provider, model, endpoint, apiKey);
+          this.jsonResponse(res, { ok: true, detail: `${provider}/${model}` });
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.log.warn(`test-model failed: ${msg}`);
+        this.jsonResponse(res, { ok: false, error: msg });
+      }
+    });
+  }
+
+  private serveFallbackModel(res: http.ServerResponse): void {
+    try {
+      const cfgPath = this.getOpenClawConfigPath();
+      if (!fs.existsSync(cfgPath)) {
+        this.jsonResponse(res, { available: false });
+        return;
+      }
+      const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
+      const agentModel: string | undefined = raw?.agents?.defaults?.model?.primary;
+      if (!agentModel) {
+        this.jsonResponse(res, { available: false });
+        return;
+      }
+      const [providerKey, modelId] = agentModel.includes("/")
+        ? agentModel.split("/", 2)
+        : [undefined, agentModel];
+      const providerCfg = providerKey
+        ? raw?.models?.providers?.[providerKey]
+        : Object.values(raw?.models?.providers ?? {})[0] as Record<string, unknown> | undefined;
+      if (!providerCfg || !providerCfg.baseUrl || !providerCfg.apiKey) {
+        this.jsonResponse(res, { available: false });
+        return;
+      }
+      this.jsonResponse(res, { available: true, model: modelId || agentModel, baseUrl: providerCfg.baseUrl });
+    } catch {
+      this.jsonResponse(res, { available: false });
+    }
+  }
+
+  private async testEmbeddingModel(provider: string, model: string, endpoint: string, apiKey: string): Promise<void> {
+    if (provider === "local") {
+      return;
+    }
+    const baseUrl = (endpoint || "https://api.openai.com/v1").replace(/\/+$/, "");
+    const embUrl = baseUrl.endsWith("/embeddings") ? baseUrl : `${baseUrl}/embeddings`;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    };
+    if (provider === "cohere") {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+      const resp = await fetch(baseUrl.replace(/\/v\d+.*/, "/v2/embed"), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ texts: ["test"], model: model || "embed-english-v3.0", input_type: "search_query", embedding_types: ["float"] }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Cohere embed ${resp.status}: ${txt}`);
+      }
+      return;
+    }
+    if (provider === "gemini") {
+      const url = `https://generativelanguage.googleapis.com/v1/models/${model || "text-embedding-004"}:embedContent?key=${apiKey}`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: { parts: [{ text: "test" }] } }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Gemini embed ${resp.status}: ${txt}`);
+      }
+      return;
+    }
+    const resp = await fetch(embUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ input: ["test"], model: model || "text-embedding-3-small" }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`${resp.status}: ${txt}`);
+    }
+  }
+
+  private async testChatModel(provider: string, model: string, endpoint: string, apiKey: string): Promise<void> {
+    const baseUrl = (endpoint || "https://api.openai.com/v1").replace(/\/+$/, "");
+    if (provider === "anthropic") {
+      const url = endpoint || "https://api.anthropic.com/v1/messages";
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({ model: model || "claude-3-haiku-20240307", max_tokens: 5, messages: [{ role: "user", content: "hi" }] }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Anthropic ${resp.status}: ${txt}`);
+      }
+      return;
+    }
+    if (provider === "gemini") {
+      const url = `https://generativelanguage.googleapis.com/v1/models/${model || "gemini-1.5-flash"}:generateContent?key=${apiKey}`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: "hi" }] }], generationConfig: { maxOutputTokens: 5 } }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Gemini ${resp.status}: ${txt}`);
+      }
+      return;
+    }
+    const chatUrl = baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl}/chat/completions`;
+    const resp = await fetch(chatUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ model: model || "gpt-4o-mini", max_tokens: 5, messages: [{ role: "user", content: "hi" }] }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`${resp.status}: ${txt}`);
+    }
   }
 
   private serveLogs(res: http.ServerResponse, url: URL): void {
