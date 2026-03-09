@@ -298,9 +298,6 @@ Full tutorial → [MemOS-Cloud-OpenClaw-Plugin](https://github.com/MemTensor/Mem
 - **MemOS Cloud OpenClaw Plugin**
   Official OpenClaw lifecycle plugin for MemOS Cloud. It automatically recalls context from MemOS before the agent starts and saves the conversation back to MemOS after the agent finishes.
 - **Get started** 👉 [MemTensor/MemOS-Cloud-OpenClaw-Plugin](https://github.com/MemTensor/MemOS-Cloud-OpenClaw-Plugin)
-- **MemOS Local OpenClaw Plugin**
-  100% on-device memory plugin for OpenClaw with persistent local SQLite storage, hybrid search (FTS5 + vector), task summarization & skill evolution, multi-agent collaboration, and a full-featured Memory Viewer web dashboard. Zero cloud dependency, complete privacy.
-- **Get started** 👉 [memos-local-openclaw](https://github.com/MemTensor/MemOS/tree/main/apps/memos-local-openclaw) · **Install:** `openclaw plugins install @memtensor/memos-local-openclaw-plugin`
 
 <br>
 
