@@ -161,6 +161,8 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .sharing-sidebar-card .info-grid .label{color:var(--text-muted);font-weight:500;white-space:nowrap}
 .sharing-sidebar-card .info-grid .value{color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sharing-sidebar-card .api-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;background:rgba(142,142,147,.12);color:var(--text-muted);letter-spacing:.02em}
+[data-theme="light"] .sharing-sidebar-card .role-badge.admin{background:rgba(5,150,105,.1);color:#059669}
+[data-theme="light"] .sharing-sidebar-card .role-badge.client{background:rgba(124,58,237,.1);color:#7c3aed}
 .result-section{margin-bottom:18px;border:1px solid var(--border);border-radius:14px;background:var(--bg-card);overflow:hidden}
 .result-section-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)}
 .result-section-title{font-size:14px;font-weight:700;color:var(--text)}
@@ -1786,7 +1788,13 @@ const I18N={
     'search.noHub':'No Hub results.',
     'search.viewDetail':'View Detail',
     'search.sharedMemory':'Shared Memory',
-    'search.loadFailed':'Failed to load shared memory'
+    'search.loadFailed':'Failed to load shared memory',
+    'toast.taskShared':'Task shared',
+    'toast.taskShareFail':'Task share failed',
+    'toast.taskUnshared':'Task unshared',
+    'toast.taskUnshareFail':'Task unshare failed',
+    'toast.skillPulled':'Skill pulled to local storage',
+    'toast.skillPullFail':'Skill pull failed'
   },
   zh:{
     'title':'OpenClaw 记忆',
@@ -2172,7 +2180,13 @@ const I18N={
     'search.noHub':'无 Hub 结果。',
     'search.viewDetail':'查看详情',
     'search.sharedMemory':'共享记忆',
-    'search.loadFailed':'加载共享记忆失败'
+    'search.loadFailed':'加载共享记忆失败',
+    'toast.taskShared':'任务已共享',
+    'toast.taskShareFail':'任务共享失败',
+    'toast.taskUnshared':'任务已取消共享',
+    'toast.taskUnshareFail':'取消共享失败',
+    'toast.skillPulled':'技能已拉取到本地',
+    'toast.skillPullFail':'技能拉取失败'
   }
 };
 const LANG_KEY='memos-viewer-lang';
@@ -2599,7 +2613,7 @@ async function addGroupMember(groupId){
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
     var d=await r.json();
-    if(d.ok){toast(t('toast.memberAdded'),'success');toggleGroupMembers(groupId);toggleGroupMembers(groupId);}else{toast(d.error||t('toast.addFail'),'error');}
+    if(d.ok){toast(t('toast.memberAdded'),'success');reloadGroupMembers(groupId);}else{toast(d.error||t('toast.addFail'),'error');}
   }catch(e){toast(t('toast.addFail')+': '+e.message,'error');}
 }
 async function removeGroupMember(groupId,userId){
@@ -2607,8 +2621,20 @@ async function removeGroupMember(groupId,userId){
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
     var d=await r.json();
-    if(d.ok){toast(t('toast.memberRemoved'),'success');toggleGroupMembers(groupId);toggleGroupMembers(groupId);}else{toast(d.error||t('toast.removeFail'),'error');}
+    if(d.ok){toast(t('toast.memberRemoved'),'success');reloadGroupMembers(groupId);}else{toast(d.error||t('toast.removeFail'),'error');}
   }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
+}
+async function reloadGroupMembers(groupId){
+  var el=document.getElementById('groupMembers_'+groupId);
+  if(!el) return;
+  el.style.display='block';
+  el.innerHTML=t('sharing.loading');
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members');
+    var d=await r.json();
+    var members=Array.isArray(d.members)?d.members:[];
+    renderGroupMembers(el,groupId,members);
+  }catch(e){el.innerHTML=t('admin.groupsFailed')+esc(String(e));}
 }
 
 /* ─── Hub Admin Panel ─── */
@@ -2965,8 +2991,8 @@ async function shareCurrentTask(){
   try{
     const r=await fetch('/api/sharing/tasks/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({taskId:currentTaskDetail.id,visibility:visibility})});
     const d=await r.json();
-    if(d.ok||d.shared){toast('Task shared','success');} else {toast(d.error||'Task share failed','error');}
-  }catch(e){toast('Task share failed: '+e.message,'error');}
+    if(d.ok||d.shared){toast(t('toast.taskShared'),'success');} else {toast(d.error||t('toast.taskShareFail'),'error');}
+  }catch(e){toast(t('toast.taskShareFail')+': '+e.message,'error');}
 }
 
 async function unshareCurrentTask(){
@@ -2974,8 +3000,8 @@ async function unshareCurrentTask(){
   try{
     const r=await fetch('/api/sharing/tasks/unshare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({taskId:currentTaskDetail.id})});
     const d=await r.json();
-    if(d.ok||d.unshared){toast('Task unshared','success');} else {toast(d.error||'Task unshare failed','error');}
-  }catch(e){toast('Task unshare failed: '+e.message,'error');}
+    if(d.ok||d.unshared){toast(t('toast.taskUnshared'),'success');} else {toast(d.error||t('toast.taskUnshareFail'),'error');}
+  }catch(e){toast(t('toast.taskUnshareFail')+': '+e.message,'error');}
 }
 
 function debounceSkillSearch(){
@@ -2987,8 +3013,8 @@ async function pullHubSkill(skillId){
   try{
     const r=await fetch('/api/sharing/skills/pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skillId:skillId})});
     const d=await r.json();
-    if(d.ok||d.pulled||d.details){toast('Skill pulled to local storage','success');loadSkills();} else {toast(d.error||'Skill pull failed','error');}
-  }catch(e){toast('Skill pull failed: '+e.message,'error');}
+    if(d.ok||d.pulled||d.details){toast(t('toast.skillPulled'),'success');loadSkills();} else {toast(d.error||t('toast.skillPullFail'),'error');}
+  }catch(e){toast(t('toast.skillPullFail')+': '+e.message,'error');}
 }
 
 // ─── Logs ───
@@ -3047,7 +3073,7 @@ function renderLogToolFilter(tools,current){
 
 function formatLogTime(ts){
   const d=new Date(ts);
-  const time=d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  const time=d.toLocaleTimeString(dateLoc(),{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
   const y=d.getFullYear();
   const m=String(d.getMonth()+1).padStart(2,'0');
   const day=String(d.getDate()).padStart(2,'0');
@@ -3189,6 +3215,7 @@ function setMetricsDays(d){
 }
 
 async function loadMetrics(){
+  try{
   const r=await fetch('/api/metrics?days='+metricsDays);
   const d=await r.json();
   document.getElementById('mTotal').textContent=formatNum(d.totals.memories);
@@ -3199,9 +3226,11 @@ async function loadMetrics(){
   renderBreakdown(d.roleBreakdown,'breakdownRole');
   renderBreakdown(d.kindBreakdown,'breakdownKind');
   loadToolMetrics();
+  }catch(e){console.error('loadMetrics',e)}
 }
 
 function formatNum(n){return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'k':String(n);}
+function dateLoc(){return curLang==='zh'?'zh-CN':'en-US';}
 
 /* ─── Tasks View Logic ─── */
 let tasksStatusFilter='';
@@ -3222,24 +3251,16 @@ async function loadTasks(){
   try{
     const params=new URLSearchParams({limit:String(TASKS_PER_PAGE),offset:String(tasksPage*TASKS_PER_PAGE)});
     if(tasksStatusFilter) params.set('status',tasksStatusFilter);
-    const r=await fetch('/api/tasks?'+params);
-    const data=await r.json();
-
-    // stats
-    const allR=await fetch('/api/tasks?limit=1&offset=0');
-    const allD=await allR.json();
+    const [data,allD,activeD,compD,skipD]=await Promise.all([
+      fetch('/api/tasks?'+params).then(r=>r.json()),
+      fetch('/api/tasks?limit=1&offset=0').then(r=>r.json()),
+      fetch('/api/tasks?status=active&limit=1&offset=0').then(r=>r.json()),
+      fetch('/api/tasks?status=completed&limit=1&offset=0').then(r=>r.json()),
+      fetch('/api/tasks?status=skipped&limit=1&offset=0').then(r=>r.json())
+    ]);
     document.getElementById('tasksTotalCount').textContent=formatNum(allD.total);
-
-    const activeR=await fetch('/api/tasks?status=active&limit=1&offset=0');
-    const activeD=await activeR.json();
     document.getElementById('tasksActiveCount').textContent=formatNum(activeD.total);
-
-    const compR=await fetch('/api/tasks?status=completed&limit=1&offset=0');
-    const compD=await compR.json();
     document.getElementById('tasksCompletedCount').textContent=formatNum(compD.total);
-
-    const skipR=await fetch('/api/tasks?status=skipped&limit=1&offset=0');
-    const skipD=await skipR.json();
     document.getElementById('tasksSkippedCount').textContent=formatNum(skipD.total);
 
     if(!data.tasks||data.tasks.length===0){
@@ -3818,7 +3839,7 @@ function formatDuration(ms){
 
 function formatTime(ts){
   if(!ts) return '-';
-  return new Date(ts).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  return new Date(ts).toLocaleString(dateLoc(),{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
 
 function fillDays(rows,days){
@@ -4254,7 +4275,7 @@ function renderMemories(items){
   }
   items.forEach(m=>{memoryCache[m.id]=m});
   list.innerHTML=items.map(m=>{
-    const time=m.created_at?new Date(typeof m.created_at==='number'?m.created_at:m.created_at).toLocaleString('zh-CN'):'';
+    const time=m.created_at?new Date(typeof m.created_at==='number'?m.created_at:m.created_at).toLocaleString(dateLoc()):'';
     const role=m.role||'user';
     const kind=m.kind||'paragraph';
     const summary=esc(m.summary||m.content?.slice(0,120)||'');
@@ -4265,7 +4286,7 @@ function renderMemories(items){
     const sidShort=sid.length>18?sid.slice(0,6)+'..'+sid.slice(-6):sid;
     const mc=m.merge_count||0;
     const mergeBadge=mc>0?'<span class="merge-badge">\\u{1F504} '+t('card.evolved')+' '+mc+t('card.times')+'</span>':'';
-    const updatedAt=(m.updated_at&&m.updated_at>m.created_at)?'<span class="card-updated">'+t('card.updated')+' '+new Date(m.updated_at).toLocaleString('zh-CN')+'</span>':'';
+    const updatedAt=(m.updated_at&&m.updated_at>m.created_at)?'<span class="card-updated">'+t('card.updated')+' '+new Date(m.updated_at).toLocaleString(dateLoc())+'</span>':'';
     const ds=m.dedup_status||'active';
     const isInactive=ds==='duplicate'||ds==='merged';
     const dedupBadge=ds==='duplicate'?'<span class="dedup-badge duplicate">'+t('card.dedupDuplicate')+'</span>':ds==='merged'?'<span class="dedup-badge merged">'+t('card.dedupMerged')+'</span>':'';
@@ -4287,7 +4308,7 @@ function renderMemories(items){
         if(hist.length>0){
           historyHtml='<div class="merge-history" id="history-'+id+'" style="display:none"><div style="font-weight:600;margin-bottom:8px;font-size:12px">'+t('card.evolveHistory')+' ('+hist.length+')</div>';
           hist.forEach(function(h){
-            const ht=h.at?new Date(h.at).toLocaleString('zh-CN'):'';
+            const ht=h.at?new Date(h.at).toLocaleString(dateLoc()):'';
             historyHtml+='<div class="merge-history-item"><span class="merge-action '+h.action+'">'+h.action+'</span> <span style="color:var(--text-muted)">'+ht+'</span><br>'+esc(h.reason||'');
             if(h.from) historyHtml+='<br><span style="opacity:.6">'+t('card.oldSummary')+':</span> '+esc(h.from);
             if(h.to) historyHtml+='<br><span style="opacity:.6">'+t('card.newSummary')+':</span> '+esc(h.to);
@@ -4380,8 +4401,8 @@ async function showMemoryModal(chunkId){
     const roleCls=(m.role||'').toLowerCase();
     const kind=m.kind||'paragraph';
     const ds=m.dedup_status||'active';
-    const time=new Date(m.created_at).toLocaleString('zh-CN');
-    const updated=m.updated_at?new Date(m.updated_at).toLocaleString('zh-CN'):'';
+    const time=new Date(m.created_at).toLocaleString(dateLoc());
+    const updated=m.updated_at?new Date(m.updated_at).toLocaleString(dateLoc()):'';
     let html='<div class="modal-memory-card">';
     html+='<div class="modal-header-row"><span class="role-tag '+roleCls+'">'+role+'</span><span class="kind-tag">'+kind+'</span>';
     if(ds!=='active') html+='<span class="dedup-badge '+(ds==='duplicate'?'duplicate':'merged')+'">'+ds+'</span>';
