@@ -3126,18 +3126,14 @@ async function unshareCurrentTask(){
 }
 
 async function shareMemoryPrompt(chunkId){
-  const visibility=prompt(t('share.memoryVisibilityPrompt'),'public');
-  if(!visibility) return;
-  const v=(visibility==='group')?'group':'public';
   try{
-    const r=await fetch('/api/sharing/memories/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chunkId:chunkId,visibility:v})});
+    const r=await fetch('/api/sharing/memories/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chunkId:chunkId,visibility:'public'})});
     const d=await r.json();
     if(d.ok){toast(t('toast.memoryShared'),'success');loadMemories();} else {toast(d.error||t('toast.memoryShareFail'),'error');}
   }catch(e){toast(t('toast.memoryShareFail')+': '+e.message,'error');}
 }
 
 async function unshareMemory(chunkId){
-  if(!confirm(t('share.memoryUnshareConfirm'))) return;
   try{
     const r=await fetch('/api/sharing/memories/unshare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chunkId:chunkId})});
     const d=await r.json();
