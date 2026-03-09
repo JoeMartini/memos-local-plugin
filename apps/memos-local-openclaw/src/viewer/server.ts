@@ -905,6 +905,15 @@ export class ViewerServer {
       return;
     }
 
+    // Hub 模式下，本机就是管理者，直接赋予 admin 权限
+    if (sharing.role === "hub") {
+      base.admin.canManageUsers = true;
+      base.admin.rejectSupported = true;
+      base.connection.connected = true;
+      this.jsonResponse(res, base);
+      return;
+    }
+
     const hasClientConfig = Boolean(sharing.client?.hubAddress && sharing.client?.userToken);
     if (!hasClientConfig) {
       this.jsonResponse(res, base);
@@ -932,11 +941,9 @@ export class ViewerServer {
   private async serveSharingPendingUsers(res: http.ServerResponse): Promise<void> {
     if (!this.ctx) return this.jsonResponse(res, { users: [], error: "sharing_unavailable" });
     try {
-      const conn = this.store.getClientHubConnection();
-      const hubUrl = conn?.hubUrl || this.ctx.config.sharing?.client?.hubAddress || "";
-      const userToken = conn?.userToken || this.ctx.config.sharing?.client?.userToken || "";
-      if (!hubUrl || !userToken) return this.jsonResponse(res, { users: [], error: "not_configured" });
-      const data = await hubRequestJson(normalizeHubUrl(hubUrl), userToken, "/api/v1/hub/admin/pending-users", { method: "GET" }) as any;
+      const hub = this.resolveHubConnection();
+      if (!hub) return this.jsonResponse(res, { users: [], error: "not_configured" });
+      const data = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/admin/pending-users", { method: "GET" }) as any;
       this.jsonResponse(res, { users: Array.isArray(data?.users) ? data.users : [] });
     } catch (err) {
       this.jsonResponse(res, { users: [], error: String(err) });
@@ -948,10 +955,9 @@ export class ViewerServer {
       if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
       try {
         const parsed = JSON.parse(body || "{}");
-        const conn = this.store.getClientHubConnection();
-        const hubUrl = conn?.hubUrl || this.ctx.config.sharing?.client?.hubAddress || "";
-        const userToken = conn?.userToken || this.ctx.config.sharing?.client?.userToken || "";
-        const result = await hubRequestJson(normalizeHubUrl(hubUrl), userToken, "/api/v1/hub/admin/approve-user", {
+        const hub = this.resolveHubConnection();
+        if (!hub) return this.jsonResponse(res, { ok: false, error: "not_configured" });
+        const result = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/admin/approve-user", {
           method: "POST",
           body: JSON.stringify({ userId: parsed.userId, username: parsed.username }),
         });
@@ -967,10 +973,9 @@ export class ViewerServer {
       if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
       try {
         const parsed = JSON.parse(body || "{}");
-        const conn = this.store.getClientHubConnection();
-        const hubUrl = conn?.hubUrl || this.ctx.config.sharing?.client?.hubAddress || "";
-        const userToken = conn?.userToken || this.ctx.config.sharing?.client?.userToken || "";
-        const result = await hubRequestJson(normalizeHubUrl(hubUrl), userToken, "/api/v1/hub/admin/reject-user", {
+        const hub = this.resolveHubConnection();
+        if (!hub) return this.jsonResponse(res, { ok: false, error: "not_configured" });
+        const result = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/admin/reject-user", {
           method: "POST",
           body: JSON.stringify({ userId: parsed.userId }),
         });
@@ -1180,6 +1185,23 @@ export class ViewerServer {
 
   private resolveHubConnection(): { hubUrl: string; userToken: string } | null {
     if (!this.ctx) return null;
+
+    // Hub 模式：连接自己，用 bootstrap admin token
+    const sharing = this.ctx.config.sharing;
+    if (sharing?.role === "hub") {
+      const hubPort = sharing.hub?.port ?? 18800;
+      const hubUrl = `http://127.0.0.1:${hubPort}`;
+      try {
+        const authPath = path.join(this.dataDir, "hub-auth.json");
+        const authData = JSON.parse(fs.readFileSync(authPath, "utf8"));
+        const adminToken = authData?.bootstrapAdminToken;
+        if (adminToken) return { hubUrl, userToken: adminToken };
+      } catch {
+        // hub-auth.json 不存在或读取失败，fall through
+      }
+    }
+
+    // Client 模式：用配置的 hubAddress + userToken
     const conn = this.store.getClientHubConnection();
     const hubUrl = conn?.hubUrl || this.ctx.config.sharing?.client?.hubAddress || "";
     const userToken = conn?.userToken || this.ctx.config.sharing?.client?.userToken || "";

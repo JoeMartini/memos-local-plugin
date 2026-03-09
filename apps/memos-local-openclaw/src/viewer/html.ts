@@ -2385,6 +2385,8 @@ function renderSharingSidebar(data){
   }else if(data.role==='hub'){
     statusEl.innerHTML='<strong>'+t('sharing.hubMode')+'</strong><br>'+t('sharing.hubMode.status');
     hintEl.textContent=t('sharing.hubMode.hint');
+    var adminTab=document.querySelector('.tab[data-view="admin"]');
+    if(adminTab) adminTab.style.display=(data.admin&&data.admin.canManageUsers)?'':'none';
   }else if(data.clientConfigured){
     statusEl.innerHTML='<strong>'+t('sharing.clientConfigured')+'</strong><br>Hub: '+esc(data.hubUrl||'')+'<br>'+t('sharing.clientDisconnected');
     hintEl.textContent=t('sharing.clientDisconnected.hint');
