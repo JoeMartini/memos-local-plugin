@@ -891,11 +891,17 @@ export class ViewerServer {
 
   private async serveSharingStatus(res: http.ServerResponse): Promise<void> {
     const sharing = this.ctx?.config?.sharing;
+    const persisted = this.store.getClientHubConnection();
+    const resolvedHubUrl = sharing?.client?.hubAddress ? normalizeHubUrl(sharing.client.hubAddress) : persisted?.hubUrl ?? null;
+    const hasClientConfig = Boolean(
+      (sharing?.client?.hubAddress && sharing?.client?.userToken) ||
+      (persisted?.hubUrl && persisted?.userToken),
+    );
     const base = {
       enabled: Boolean(sharing?.enabled),
       role: sharing?.role ?? null,
-      clientConfigured: Boolean(sharing?.client?.hubAddress && sharing?.client?.userToken),
-      hubUrl: sharing?.client?.hubAddress ? normalizeHubUrl(sharing.client.hubAddress) : null,
+      clientConfigured: hasClientConfig,
+      hubUrl: resolvedHubUrl,
       connection: { connected: false, user: null as any, hubUrl: undefined as string | undefined, teamName: null as string | null, apiVersion: null as string | null },
       admin: { canManageUsers: false, rejectSupported: false },
     };
@@ -914,7 +920,6 @@ export class ViewerServer {
       return;
     }
 
-    const hasClientConfig = Boolean(sharing.client?.hubAddress && sharing.client?.userToken);
     if (!hasClientConfig) {
       this.jsonResponse(res, base);
       return;
