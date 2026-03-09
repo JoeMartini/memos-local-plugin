@@ -1178,17 +1178,17 @@ input,textarea,select{font-family:inherit;font-size:inherit}
       </div>
 
       <div class="settings-group" id="settingsSharingConfig">
-        <h2 class="settings-group-title">Hub & Team</h2>
+        <h2 class="settings-group-title" data-i18n="settings.hub">Hub & Team</h2>
         <div class="settings-section">
-          <h3><span class="icon">\u{1F517}</span> Hub Connection</h3>
+          <h3><span class="icon">\u{1F517}</span> <span data-i18n="settings.hub.connection">Hub Connection</span></h3>
           <div id="sharingStatusPanel" style="font-size:13px;color:var(--text-sec)">Loading...</div>
         </div>
         <div class="settings-section">
-          <h3><span class="icon">\u{1F465}</span> Team & Groups</h3>
+          <h3><span class="icon">\u{1F465}</span> <span data-i18n="settings.hub.team">Team & Groups</span></h3>
           <div id="sharingTeamPanel" style="font-size:13px;color:var(--text-sec)">Loading...</div>
         </div>
         <div class="settings-section">
-          <h3><span class="icon">\u{1F6E1}</span> Admin Pending Users</h3>
+          <h3><span class="icon">\u{1F6E1}</span> <span data-i18n="settings.hub.adminPending">Admin Pending Users</span></h3>
           <div id="sharingAdminPanel" style="font-size:13px;color:var(--text-sec)">Loading...</div>
         </div>
       </div>
@@ -1204,15 +1204,15 @@ input,textarea,select{font-family:inherit;font-size:inherit}
     <!-- ─── Admin Page ─── -->
     <div class="admin-view" id="adminView">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <h2 style="font-size:18px;font-weight:700;color:var(--text)"><span class="icon">\u{1F6E1}</span> Hub Admin Panel</h2>
-        <button class="btn btn-sm btn-ghost" onclick="loadAdminData()">\u21BB Refresh</button>
+        <h2 style="font-size:18px;font-weight:700;color:var(--text)"><span class="icon">\u{1F6E1}</span> <span data-i18n="admin.title">Hub Admin Panel</span></h2>
+        <button class="btn btn-sm btn-ghost" onclick="loadAdminData()" data-i18n="admin.refresh">\u21BB Refresh</button>
       </div>
       <div class="admin-stat-row" id="adminStats"></div>
       <div class="admin-tabs">
-        <button class="admin-tab active" onclick="switchAdminTab('users',this)">Users</button>
-        <button class="admin-tab" onclick="switchAdminTab('groups',this)">Groups</button>
-        <button class="admin-tab" onclick="switchAdminTab('memories',this)">Shared Memories</button>
-        <button class="admin-tab" onclick="switchAdminTab('skills',this)">Shared Skills</button>
+        <button class="admin-tab active" onclick="switchAdminTab('users',this)" data-i18n="admin.tab.users">Users</button>
+        <button class="admin-tab" onclick="switchAdminTab('groups',this)" data-i18n="admin.tab.groups">Groups</button>
+        <button class="admin-tab" onclick="switchAdminTab('memories',this)" data-i18n="admin.tab.memories">Shared Memories</button>
+        <button class="admin-tab" onclick="switchAdminTab('skills',this)" data-i18n="admin.tab.skills">Shared Skills</button>
       </div>
       <div class="admin-panel active" id="adminUsersPanel"></div>
       <div class="admin-panel" id="adminGroupsPanel"></div>
@@ -1662,7 +1662,122 @@ const I18N={
     'tasks.role.assistant':'Assistant',
     'tasks.error':'Error',
     'tasks.error.detail':'Failed to load task details',
-    'tasks.untitled.related':'Untitled'
+    'tasks.untitled.related':'Untitled',
+    'tab.admin':'\u{1F6E1} Admin',
+    'settings.hub':'Hub & Team',
+    'settings.hub.connection':'Hub Connection',
+    'settings.hub.team':'Team & Groups',
+    'settings.hub.adminPending':'Admin Pending Users',
+    'admin.title':'Hub Admin Panel',
+    'admin.refresh':'\u21BB Refresh',
+    'admin.tab.users':'Users',
+    'admin.tab.groups':'Groups',
+    'admin.tab.memories':'Shared Memories',
+    'admin.tab.skills':'Shared Skills',
+    'admin.stat.activeUsers':'Active Users',
+    'admin.stat.pending':'Pending',
+    'admin.stat.groups':'Groups',
+    'admin.stat.sharedTasks':'Shared Tasks',
+    'admin.stat.sharedSkills':'Shared Skills',
+    'admin.pendingApproval':'Pending Approval',
+    'admin.activeUsers':'Active Users',
+    'admin.noActiveUsers':'No active users.',
+    'admin.approve':'Approve',
+    'admin.reject':'Reject',
+    'admin.device':'Device: ',
+    'admin.groups':'Groups',
+    'admin.newGroup':'+ New Group',
+    'admin.groupName':'Group name',
+    'admin.groupDesc':'Description (optional)',
+    'admin.create':'Create',
+    'admin.cancel':'Cancel',
+    'admin.delete':'Delete',
+    'admin.members':'Members',
+    'admin.noGroups':'No groups created yet.',
+    'admin.noMembers':'No members.',
+    'admin.add':'Add',
+    'admin.remove':'Remove',
+    'admin.sharedTasks':'Shared Tasks',
+    'admin.noSharedTasks':'No shared tasks on Hub.',
+    'admin.owner':'Owner: ',
+    'admin.group':'Group: ',
+    'admin.chunks':'Chunks: ',
+    'admin.updated':'Updated: ',
+    'admin.sharedSkills':'Shared Skills',
+    'admin.noSharedSkills':'No shared skills on Hub.',
+    'admin.version':'v',
+    'admin.quality':'Quality: ',
+    'admin.membersCount':'Members ({n}):',
+    'admin.noMembersYet':'No members yet.',
+    'admin.loadFailed':'Failed to load admin data: ',
+    'admin.groupsFailed':'Failed to load groups: ',
+    'toast.userApproved':'User approved',
+    'toast.userRejected':'User rejected',
+    'toast.approveFail':'Approve failed',
+    'toast.rejectFail':'Reject failed',
+    'toast.groupCreated':'Group created',
+    'toast.groupDeleted':'Group deleted',
+    'toast.memberAdded':'Member added',
+    'toast.memberRemoved':'Member removed',
+    'toast.taskRemoved':'Task removed',
+    'toast.skillRemoved':'Skill removed',
+    'toast.createFail':'Create failed',
+    'toast.deleteFail':'Delete failed',
+    'toast.addFail':'Add failed',
+    'toast.removeFail':'Remove failed',
+    'toast.groupNameRequired':'Group name is required',
+    'confirm.rejectUser':'Reject this user?',
+    'confirm.removeGroupMember':'Remove this member from the group?',
+    'confirm.removeMember':'Remove this member?',
+    'confirm.deleteGroup':'Delete group "{name}"? Members will be removed.',
+    'confirm.deleteGroupShort':'Delete group "{name}"?',
+    'confirm.removeTask':'Remove shared task "{name}" from Hub? This cannot be undone.',
+    'confirm.removeSkill':'Remove shared skill "{name}" from Hub? This cannot be undone.',
+    'sharing.disabled':'Sharing disabled',
+    'sharing.disabled.hint':'Enable sharing in plugin config to connect a Hub.',
+    'sharing.hubAdmin':'Hub Admin',
+    'sharing.client':'Client',
+    'sharing.hubMode':'Hub mode',
+    'sharing.hubMode.status':'Status: not connected to self',
+    'sharing.hubMode.hint':'Configure sharing.client with hubAddress and userToken pointing to this Hub to enable admin UI.',
+    'sharing.clientConfigured':'Client configured',
+    'sharing.clientDisconnected':'Status: disconnected',
+    'sharing.clientDisconnected.hint':'Viewer will keep showing local data; Hub actions may fail until the connection is restored.',
+    'sharing.clientNotConfigured':'Client not configured',
+    'sharing.clientNotConfigured.hint':'Set hubAddress and userToken in sharing.client to enable team features.',
+    'sharing.settingsDisabled':'Sharing is disabled.',
+    'sharing.settingsDisabled.hint':'Enable sharing in config to use Hub memory and skill collaboration.',
+    'sharing.noTeam':'No team connection.',
+    'sharing.adminUnavailable':'Admin tools unavailable.',
+    'sharing.adminEnabled':'Admin controls enabled',
+    'sharing.adminPendingHint':'Pending users will appear below.',
+    'sharing.notAdmin':'Current user is not an admin.',
+    'sharing.pendingLoadFail':'Failed to load pending users: ',
+    'sharing.noPending':'No pending users.',
+    'sharing.manageGroups':'Manage Groups',
+    'sharing.openAdmin':'Open Admin Panel',
+    'sharing.hubNotConfigured':'Hub is running but client connection is not configured.',
+    'sharing.hubNotConfigured.hint':'Add sharing.client.hubAddress and sharing.client.userToken pointing to this Hub to enable the admin interface.',
+    'sharing.notConnected':'Not connected to Hub.',
+    'sharing.role':'Role:',
+    'sharing.clientConfiguredLabel':'Client configured:',
+    'sharing.configuredHub':'Configured Hub:',
+    'sharing.connected':'Connected:',
+    'sharing.yes':'yes',
+    'sharing.no':'no',
+    'sharing.user':'User:',
+    'sharing.team':'Team:',
+    'sharing.groups':'Groups:',
+    'sharing.loading':'Loading...',
+    'sharing.loadingGroups':'Loading groups...',
+    'sharing.noGroupsYet':'No groups yet.',
+    'search.localResults':'Local Results',
+    'search.hubResults':'Hub Results',
+    'search.noLocal':'No local results.',
+    'search.noHub':'No Hub results.',
+    'search.viewDetail':'View Detail',
+    'search.sharedMemory':'Shared Memory',
+    'search.loadFailed':'Failed to load shared memory'
   },
   zh:{
     'title':'OpenClaw 记忆',
@@ -1933,7 +2048,122 @@ const I18N={
     'tasks.role.assistant':'助手',
     'tasks.error':'出错了',
     'tasks.error.detail':'加载任务详情失败',
-    'tasks.untitled.related':'未命名'
+    'tasks.untitled.related':'未命名',
+    'tab.admin':'\u{1F6E1} 管理',
+    'settings.hub':'Hub 与团队',
+    'settings.hub.connection':'Hub 连接',
+    'settings.hub.team':'团队与分组',
+    'settings.hub.adminPending':'管理员待审用户',
+    'admin.title':'Hub 管理面板',
+    'admin.refresh':'\u21BB 刷新',
+    'admin.tab.users':'用户',
+    'admin.tab.groups':'分组',
+    'admin.tab.memories':'共享记忆',
+    'admin.tab.skills':'共享技能',
+    'admin.stat.activeUsers':'活跃用户',
+    'admin.stat.pending':'待审核',
+    'admin.stat.groups':'分组',
+    'admin.stat.sharedTasks':'共享任务',
+    'admin.stat.sharedSkills':'共享技能',
+    'admin.pendingApproval':'待审批',
+    'admin.activeUsers':'活跃用户',
+    'admin.noActiveUsers':'暂无活跃用户。',
+    'admin.approve':'批准',
+    'admin.reject':'拒绝',
+    'admin.device':'设备：',
+    'admin.groups':'分组',
+    'admin.newGroup':'+ 新建分组',
+    'admin.groupName':'分组名称',
+    'admin.groupDesc':'描述（可选）',
+    'admin.create':'创建',
+    'admin.cancel':'取消',
+    'admin.delete':'删除',
+    'admin.members':'成员',
+    'admin.noGroups':'暂无分组。',
+    'admin.noMembers':'暂无成员。',
+    'admin.add':'添加',
+    'admin.remove':'移除',
+    'admin.sharedTasks':'共享任务',
+    'admin.noSharedTasks':'Hub 上暂无共享任务。',
+    'admin.owner':'归属：',
+    'admin.group':'分组：',
+    'admin.chunks':'记忆片段：',
+    'admin.updated':'更新于：',
+    'admin.sharedSkills':'共享技能',
+    'admin.noSharedSkills':'Hub 上暂无共享技能。',
+    'admin.version':'v',
+    'admin.quality':'质量：',
+    'admin.membersCount':'成员（{n}）：',
+    'admin.noMembersYet':'暂无成员。',
+    'admin.loadFailed':'加载管理数据失败：',
+    'admin.groupsFailed':'加载分组失败：',
+    'toast.userApproved':'用户已批准',
+    'toast.userRejected':'用户已拒绝',
+    'toast.approveFail':'批准失败',
+    'toast.rejectFail':'拒绝失败',
+    'toast.groupCreated':'分组已创建',
+    'toast.groupDeleted':'分组已删除',
+    'toast.memberAdded':'成员已添加',
+    'toast.memberRemoved':'成员已移除',
+    'toast.taskRemoved':'任务已移除',
+    'toast.skillRemoved':'技能已移除',
+    'toast.createFail':'创建失败',
+    'toast.deleteFail':'删除失败',
+    'toast.addFail':'添加失败',
+    'toast.removeFail':'移除失败',
+    'toast.groupNameRequired':'请输入分组名称',
+    'confirm.rejectUser':'确定要拒绝此用户吗？',
+    'confirm.removeGroupMember':'确定要将此成员移出分组吗？',
+    'confirm.removeMember':'确定要移除此成员吗？',
+    'confirm.deleteGroup':'确定要删除分组「{name}」吗？成员将被移除。',
+    'confirm.deleteGroupShort':'确定要删除分组「{name}」吗？',
+    'confirm.removeTask':'确定要从 Hub 移除共享任务「{name}」吗？此操作不可撤销。',
+    'confirm.removeSkill':'确定要从 Hub 移除共享技能「{name}」吗？此操作不可撤销。',
+    'sharing.disabled':'共享已禁用',
+    'sharing.disabled.hint':'在插件配置中启用共享以连接 Hub。',
+    'sharing.hubAdmin':'Hub 管理员',
+    'sharing.client':'客户端',
+    'sharing.hubMode':'Hub 模式',
+    'sharing.hubMode.status':'状态：未连接到自身',
+    'sharing.hubMode.hint':'配置 sharing.client 的 hubAddress 和 userToken 指向此 Hub 以启用管理界面。',
+    'sharing.clientConfigured':'客户端已配置',
+    'sharing.clientDisconnected':'状态：已断开',
+    'sharing.clientDisconnected.hint':'查看器将继续显示本地数据；Hub 操作可能在连接恢复前失败。',
+    'sharing.clientNotConfigured':'客户端未配置',
+    'sharing.clientNotConfigured.hint':'设置 sharing.client 中的 hubAddress 和 userToken 以启用团队功能。',
+    'sharing.settingsDisabled':'共享已禁用。',
+    'sharing.settingsDisabled.hint':'在配置中启用共享以使用 Hub 记忆和技能协作。',
+    'sharing.noTeam':'无团队连接。',
+    'sharing.adminUnavailable':'管理工具不可用。',
+    'sharing.adminEnabled':'管理控制已启用',
+    'sharing.adminPendingHint':'待审用户将显示在下方。',
+    'sharing.notAdmin':'当前用户不是管理员。',
+    'sharing.pendingLoadFail':'加载待审用户失败：',
+    'sharing.noPending':'暂无待审用户。',
+    'sharing.manageGroups':'管理分组',
+    'sharing.openAdmin':'打开管理面板',
+    'sharing.hubNotConfigured':'Hub 正在运行，但客户端连接未配置。',
+    'sharing.hubNotConfigured.hint':'添加 sharing.client.hubAddress 和 sharing.client.userToken 指向此 Hub 以启用管理界面。',
+    'sharing.notConnected':'未连接到 Hub。',
+    'sharing.role':'角色：',
+    'sharing.clientConfiguredLabel':'客户端已配置：',
+    'sharing.configuredHub':'配置的 Hub：',
+    'sharing.connected':'已连接：',
+    'sharing.yes':'是',
+    'sharing.no':'否',
+    'sharing.user':'用户：',
+    'sharing.team':'团队：',
+    'sharing.groups':'分组：',
+    'sharing.loading':'加载中...',
+    'sharing.loadingGroups':'正在加载分组...',
+    'sharing.noGroupsYet':'暂无分组。',
+    'search.localResults':'本地结果',
+    'search.hubResults':'Hub 结果',
+    'search.noLocal':'无本地结果。',
+    'search.noHub':'无 Hub 结果。',
+    'search.viewDetail':'查看详情',
+    'search.sharedMemory':'共享记忆',
+    'search.loadFailed':'加载共享记忆失败'
   }
 };
 const LANG_KEY='memos-viewer-lang';
@@ -2116,27 +2346,27 @@ function renderSharingSidebar(data){
   var hintEl=document.getElementById('sharingSidebarHint');
   if(!statusEl||!hintEl) return;
   if(!data||!data.enabled){
-    statusEl.innerHTML='<strong>Sharing disabled</strong>';
-    hintEl.textContent='Enable sharing in plugin config to connect a Hub.';
+    statusEl.innerHTML='<strong>'+t('sharing.disabled')+'</strong>';
+    hintEl.textContent=t('sharing.disabled.hint');
     return;
   }
   var conn=data.connection||{};
   if(conn.connected&&conn.user){
     var groups=(conn.user.groups||[]).map(function(g){return g.name;}).join(', ')||'(none)';
-    var roleLabel=data.role==='hub'?'Hub Admin':'Client';
-    statusEl.innerHTML='<strong>'+esc(conn.user.username)+'</strong> · '+esc(conn.user.role)+' ('+roleLabel+')<br>Team: '+esc(conn.teamName||'Unknown')+'<br>Hub: '+esc(conn.hubUrl||data.hubUrl||'')+'<br>Groups: '+esc(groups);
+    var roleLabel=data.role==='hub'?t('sharing.hubAdmin'):t('sharing.client');
+    statusEl.innerHTML='<strong>'+esc(conn.user.username)+'</strong> · '+esc(conn.user.role)+' ('+roleLabel+')<br>'+t('sharing.team')+' '+esc(conn.teamName||'Unknown')+'<br>Hub: '+esc(conn.hubUrl||data.hubUrl||'')+'<br>'+t('sharing.groups')+' '+esc(groups);
     hintEl.textContent=conn.apiVersion?'API '+conn.apiVersion:'';
     var adminTab=document.querySelector('.tab[data-view="admin"]');
     if(adminTab) adminTab.style.display=(conn.user.role==='admin')?'':'none';
   }else if(data.role==='hub'){
-    statusEl.innerHTML='<strong>Hub mode</strong><br>Status: not connected to self';
-    hintEl.textContent='Configure sharing.client with hubAddress and userToken pointing to this Hub to enable admin UI.';
+    statusEl.innerHTML='<strong>'+t('sharing.hubMode')+'</strong><br>'+t('sharing.hubMode.status');
+    hintEl.textContent=t('sharing.hubMode.hint');
   }else if(data.clientConfigured){
-    statusEl.innerHTML='<strong>Client configured</strong><br>Hub: '+esc(data.hubUrl||'')+'<br>Status: disconnected';
-    hintEl.textContent='Viewer will keep showing local data; Hub actions may fail until the connection is restored.';
+    statusEl.innerHTML='<strong>'+t('sharing.clientConfigured')+'</strong><br>Hub: '+esc(data.hubUrl||'')+'<br>'+t('sharing.clientDisconnected');
+    hintEl.textContent=t('sharing.clientDisconnected.hint');
   }else{
-    statusEl.innerHTML='<strong>Client not configured</strong>';
-    hintEl.textContent='Set hubAddress and userToken in sharing.client to enable team features.';
+    statusEl.innerHTML='<strong>'+t('sharing.clientNotConfigured')+'</strong>';
+    hintEl.textContent=t('sharing.clientNotConfigured.hint');
   }
 }
 
@@ -2146,58 +2376,58 @@ function renderSharingSettings(data){
   var adminEl=document.getElementById('sharingAdminPanel');
   if(!statusEl||!teamEl||!adminEl) return;
   if(!data||!data.enabled){
-    statusEl.innerHTML='<div class="line"><strong>Sharing is disabled.</strong></div><div class="line">Enable sharing in config to use Hub memory and skill collaboration.</div>';
-    teamEl.innerHTML='<div class="line">No team connection.</div>';
-    adminEl.innerHTML='<div class="line">Admin tools unavailable.</div>';
+    statusEl.innerHTML='<div class="line"><strong>'+t('sharing.settingsDisabled')+'</strong></div><div class="line">'+t('sharing.settingsDisabled.hint')+'</div>';
+    teamEl.innerHTML='<div class="line">'+t('sharing.noTeam')+'</div>';
+    adminEl.innerHTML='<div class="line">'+t('sharing.adminUnavailable')+'</div>';
     return;
   }
   var conn=data.connection||{};
   var user=conn.user||{};
   var groups=(user.groups||[]).map(function(g){return g.name;}).join(', ')||'(none)';
   var statusLines=[];
-  statusLines.push('<div class="line"><strong>Role:</strong> '+esc(data.role||'unknown')+'</div>');
-  statusLines.push('<div class="line"><strong>Client configured:</strong> '+(data.clientConfigured?'yes':'no')+'</div>');
-  if(data.hubUrl) statusLines.push('<div class="line"><strong>Configured Hub:</strong> '+esc(data.hubUrl)+'</div>');
-  statusLines.push('<div class="line"><strong>Connected:</strong> '+(conn.connected?'yes':'no')+'</div>');
+  statusLines.push('<div class="line"><strong>'+t('sharing.role')+'</strong> '+esc(data.role||'unknown')+'</div>');
+  statusLines.push('<div class="line"><strong>'+t('sharing.clientConfiguredLabel')+'</strong> '+(data.clientConfigured?t('sharing.yes'):t('sharing.no'))+'</div>');
+  if(data.hubUrl) statusLines.push('<div class="line"><strong>'+t('sharing.configuredHub')+'</strong> '+esc(data.hubUrl)+'</div>');
+  statusLines.push('<div class="line"><strong>'+t('sharing.connected')+'</strong> '+(conn.connected?t('sharing.yes'):t('sharing.no'))+'</div>');
   if(conn.apiVersion) statusLines.push('<div class="line"><strong>API:</strong> '+esc(conn.apiVersion)+'</div>');
   statusEl.innerHTML=statusLines.join('');
 
   var teamLines=[];
   if(conn.connected&&conn.user){
-    teamLines.push('<div class="line"><strong>User:</strong> '+esc(user.username)+' ('+esc(user.role)+')</div>');
-    teamLines.push('<div class="line"><strong>Team:</strong> '+esc(conn.teamName||'Unknown')+'</div>');
-    teamLines.push('<div class="line"><strong>Groups:</strong> '+esc(groups)+'</div>');
+    teamLines.push('<div class="line"><strong>'+t('sharing.user')+'</strong> '+esc(user.username)+' ('+esc(user.role)+')</div>');
+    teamLines.push('<div class="line"><strong>'+t('sharing.team')+'</strong> '+esc(conn.teamName||'Unknown')+'</div>');
+    teamLines.push('<div class="line"><strong>'+t('sharing.groups')+'</strong> '+esc(groups)+'</div>');
     if(user.role==='admin'){
       teamLines.push('<div style="margin-top:12px;display:flex;gap:8px">');
-      teamLines.push('<button class="btn btn-sm" onclick="loadGroupManager()">Manage Groups</button>');
-      teamLines.push('<button class="btn btn-sm btn-primary" onclick="switchView(\\'admin\\')">Open Admin Panel</button>');
+      teamLines.push('<button class="btn btn-sm" onclick="loadGroupManager()">'+t('sharing.manageGroups')+'</button>');
+      teamLines.push('<button class="btn btn-sm btn-primary" onclick="switchView(\\'admin\\')">'+t('sharing.openAdmin')+'</button>');
       teamLines.push('</div>');
     }
     teamLines.push('<div id="groupManagerPanel" style="margin-top:12px;display:none"></div>');
   }else if(data.role==='hub'&&!data.clientConfigured){
-    teamLines.push('<div class="line">Hub is running but client connection is not configured.</div>');
-    teamLines.push('<div class="line" style="color:var(--amber)">Add <code>sharing.client.hubAddress</code> and <code>sharing.client.userToken</code> pointing to this Hub to enable the admin interface.</div>');
+    teamLines.push('<div class="line">'+t('sharing.hubNotConfigured')+'</div>');
+    teamLines.push('<div class="line" style="color:var(--amber)">'+t('sharing.hubNotConfigured.hint')+'</div>');
   }else{
-    teamLines.push('<div class="line">Not connected to Hub.</div>');
+    teamLines.push('<div class="line">'+t('sharing.notConnected')+'</div>');
   }
   teamEl.innerHTML=teamLines.join('');
 
   adminEl.innerHTML=(data.admin&&data.admin.canManageUsers)
-    ? '<div class="line"><span class="hub-source-badge">Admin controls enabled</span></div><div class="line">Pending users will appear below.</div>'
-    : '<div class="line">Current user is not an admin.</div>';
+    ? '<div class="line"><span class="hub-source-badge">'+t('sharing.adminEnabled')+'</span></div><div class="line">'+t('sharing.adminPendingHint')+'</div>'
+    : '<div class="line">'+t('sharing.notAdmin')+'</div>';
 }
 
 async function loadSharingPendingUsers(){
   var el=document.getElementById('sharingAdminPanel');
   if(!el) return;
-  el.innerHTML='Loading...';
+  el.innerHTML=t('sharing.loading');
   try{
     const r=await fetch('/api/sharing/pending-users');
     const d=await r.json();
     const users=Array.isArray(d.users)?d.users:[];
     renderSharingPendingUsers(users, d.error, sharingStatusCache&&sharingStatusCache.admin?sharingStatusCache.admin.rejectSupported:false);
   }catch(e){
-    el.innerHTML='<div class="line">Failed to load pending users: '+esc(String(e))+'</div>';
+    el.innerHTML='<div class="line">'+t('sharing.pendingLoadFail')+esc(String(e))+'</div>';
   }
 }
 
@@ -2209,16 +2439,16 @@ function renderSharingPendingUsers(users, error, rejectSupported){
     return;
   }
   if(!users||users.length===0){
-    el.innerHTML='<div class="line">No pending users.</div>';
+    el.innerHTML='<div class="line">'+t('sharing.noPending')+'</div>';
     return;
   }
   el.innerHTML='<div class="pending-user-list">'+users.map(function(user){
     return '<div class="pending-user-card">'+
-      '<div class="pending-user-name">'+esc(user.username||user.id||'Pending User')+'</div>'+
-      '<div class="pending-user-meta">Device: '+esc(user.deviceName||'unknown')+'</div>'+
+      '<div class="pending-user-name">'+esc(user.username||user.id||'')+'</div>'+
+      '<div class="pending-user-meta">'+t('admin.device')+esc(user.deviceName||'unknown')+'</div>'+
       '<div class="pending-user-actions">'+
-        '<button class="btn btn-sm" onclick="approveSharingUser(&quot;'+escAttr(user.id)+'&quot;,&quot;'+escAttr(user.username||'')+'&quot;)">Approve</button>'+
-        (rejectSupported?'<button class="btn btn-sm btn-ghost" onclick="rejectSharingUser(&quot;'+escAttr(user.id)+'&quot;,&quot;'+escAttr(user.username||'')+'&quot;)">Reject</button>':'')+
+        '<button class="btn btn-sm" onclick="approveSharingUser(&quot;'+escAttr(user.id)+'&quot;,&quot;'+escAttr(user.username||'')+'&quot;)">'+t('admin.approve')+'</button>'+
+        (rejectSupported?'<button class="btn btn-sm btn-ghost" onclick="rejectSharingUser(&quot;'+escAttr(user.id)+'&quot;,&quot;'+escAttr(user.username||'')+'&quot;)">'+t('admin.reject')+'</button>':'')+
       '</div>'+
     '</div>';
   }).join('')+'</div>';
@@ -2228,16 +2458,16 @@ async function approveSharingUser(userId,username){
   try{
     const r=await fetch('/api/sharing/approve-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
     const d=await r.json();
-    if(d.ok){toast('User approved','success');loadSharingPendingUsers();loadSharingStatus(true);} else {toast(d.error||'Approve failed','error');}
-  }catch(e){toast('Approve failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.userApproved'),'success');loadSharingPendingUsers();loadSharingStatus(true);} else {toast(d.error||t('toast.approveFail'),'error');}
+  }catch(e){toast(t('toast.approveFail')+': '+e.message,'error');}
 }
 
 async function rejectSharingUser(userId,username){
   try{
     const r=await fetch('/api/sharing/reject-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
     const d=await r.json();
-    if(d.ok){toast('User rejected','success');loadSharingPendingUsers();} else {toast(d.error||'Reject failed','error');}
-  }catch(e){toast('Reject failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.userRejected'),'success');loadSharingPendingUsers();} else {toast(d.error||t('toast.rejectFail'),'error');}
+  }catch(e){toast(t('toast.rejectFail')+': '+e.message,'error');}
 }
 
 /* ─── Group Manager ─── */
@@ -2246,7 +2476,7 @@ async function loadGroupManager(){
   var panel=document.getElementById('groupManagerPanel');
   if(!panel) return;
   panel.style.display='block';
-  panel.innerHTML='Loading groups...';
+  panel.innerHTML=t('sharing.loadingGroups');
   try{
     var [gr,ur]=await Promise.all([
       fetch('/api/sharing/groups').then(function(r){return r.json();}),
@@ -2255,21 +2485,21 @@ async function loadGroupManager(){
     var groups=Array.isArray(gr.groups)?gr.groups:[];
     groupManagerUsers=Array.isArray(ur.users)?ur.users:[];
     renderGroupManager(panel,groups);
-  }catch(e){panel.innerHTML='Failed to load groups: '+esc(String(e));}
+  }catch(e){panel.innerHTML=t('admin.groupsFailed')+esc(String(e));}
 }
 function renderGroupManager(panel,groups){
   var html='<div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">'+
-    '<strong>Groups ('+groups.length+')</strong>'+
-    '<button class="btn btn-sm" onclick="showCreateGroupForm()">+ New Group</button>'+
+    '<strong>'+t('admin.groups')+' ('+groups.length+')</strong>'+
+    '<button class="btn btn-sm" onclick="showCreateGroupForm()">'+t('admin.newGroup')+'</button>'+
   '</div>';
   html+='<div id="createGroupForm" style="display:none;margin-bottom:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px">'+
-    '<input id="newGroupName" type="text" placeholder="Group name" style="width:60%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-right:6px">'+
-    '<input id="newGroupDesc" type="text" placeholder="Description (optional)" style="width:60%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-right:6px;margin-top:6px">'+
-    '<div style="margin-top:8px"><button class="btn btn-sm btn-primary" onclick="createGroup()">Create</button> '+
-    '<button class="btn btn-sm btn-ghost" onclick="hideCreateGroupForm()">Cancel</button></div>'+
+    '<input id="newGroupName" type="text" placeholder="'+t('admin.groupName')+'" style="width:60%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-right:6px">'+
+    '<input id="newGroupDesc" type="text" placeholder="'+t('admin.groupDesc')+'" style="width:60%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-right:6px;margin-top:6px">'+
+    '<div style="margin-top:8px"><button class="btn btn-sm btn-primary" onclick="createGroup()">'+t('admin.create')+'</button> '+
+    '<button class="btn btn-sm btn-ghost" onclick="hideCreateGroupForm()">'+t('admin.cancel')+'</button></div>'+
   '</div>';
   if(groups.length===0){
-    html+='<div class="line">No groups yet.</div>';
+    html+='<div class="line">'+t('sharing.noGroupsYet')+'</div>';
   }else{
     html+='<div style="display:flex;flex-direction:column;gap:8px">';
     for(var i=0;i<groups.length;i++){
@@ -2278,8 +2508,8 @@ function renderGroupManager(panel,groups){
         '<div style="display:flex;justify-content:space-between;align-items:center">'+
           '<div><strong>'+esc(g.name)+'</strong>'+(g.description?' — <span style="color:var(--text-sec)">'+esc(g.description)+'</span>':'')+'</div>'+
           '<div style="display:flex;gap:6px">'+
-            '<button class="btn btn-sm" onclick="toggleGroupMembers(&quot;'+escAttr(g.id)+'&quot;)">Members</button>'+
-            '<button class="btn btn-sm btn-ghost" onclick="deleteGroup(&quot;'+escAttr(g.id)+'&quot;,&quot;'+escAttr(g.name)+'&quot;)" style="color:#ef4444">Delete</button>'+
+            '<button class="btn btn-sm" onclick="toggleGroupMembers(&quot;'+escAttr(g.id)+'&quot;)">'+t('admin.members')+'</button>'+
+            '<button class="btn btn-sm btn-ghost" onclick="deleteGroup(&quot;'+escAttr(g.id)+'&quot;,&quot;'+escAttr(g.name)+'&quot;)" style="color:#ef4444">'+t('admin.delete')+'</button>'+
           '</div>'+
         '</div>'+
         '<div id="groupMembers_'+escAttr(g.id)+'" style="display:none;margin-top:8px"></div>'+
@@ -2294,36 +2524,36 @@ function hideCreateGroupForm(){var f=document.getElementById('createGroupForm');
 async function createGroup(){
   var name=(document.getElementById('newGroupName')).value.trim();
   var desc=(document.getElementById('newGroupDesc')).value.trim();
-  if(!name){toast('Group name is required','error');return;}
+  if(!name){toast(t('toast.groupNameRequired'),'error');return;}
   try{
     var r=await fetch('/api/sharing/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:desc})});
     var d=await r.json();
-    if(d.ok){toast('Group created','success');hideCreateGroupForm();loadGroupManager();}else{toast(d.error||'Create failed','error');}
-  }catch(e){toast('Create failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.groupCreated'),'success');hideCreateGroupForm();loadGroupManager();}else{toast(d.error||t('toast.createFail'),'error');}
+  }catch(e){toast(t('toast.createFail')+': '+e.message,'error');}
 }
 async function deleteGroup(groupId,groupName){
-  if(!confirm('Delete group "'+groupName+'"? Members will be removed.')) return;
+  if(!confirm(t('confirm.deleteGroup').replace('{name}',groupName))) return;
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId),{method:'DELETE'});
     var d=await r.json();
-    if(d.ok){toast('Group deleted','success');loadGroupManager();}else{toast(d.error||'Delete failed','error');}
-  }catch(e){toast('Delete failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.groupDeleted'),'success');loadGroupManager();}else{toast(d.error||t('toast.deleteFail'),'error');}
+  }catch(e){toast(t('toast.deleteFail')+': '+e.message,'error');}
 }
 async function toggleGroupMembers(groupId){
   var el=document.getElementById('groupMembers_'+groupId);
   if(!el) return;
   if(el.style.display!=='none'){el.style.display='none';return;}
   el.style.display='block';
-  el.innerHTML='Loading...';
+  el.innerHTML=t('sharing.loading');
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members');
     var d=await r.json();
     var members=Array.isArray(d.members)?d.members:[];
     renderGroupMembers(el,groupId,members);
-  }catch(e){el.innerHTML='Failed: '+esc(String(e));}
+  }catch(e){el.innerHTML=t('admin.groupsFailed')+esc(String(e));}
 }
 function renderGroupMembers(el,groupId,members){
-  var html='<div style="font-size:12px;margin-bottom:6px;color:var(--text-sec)">Members ('+members.length+'):</div>';
+  var html='<div style="font-size:12px;margin-bottom:6px;color:var(--text-sec)">'+t('admin.membersCount').replace('{n}',members.length)+'</div>';
   if(members.length>0){
     html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
     for(var i=0;i<members.length;i++){
@@ -2335,7 +2565,7 @@ function renderGroupMembers(el,groupId,members){
     }
     html+='</div>';
   }else{
-    html+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">No members yet.</div>';
+    html+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">'+t('admin.noMembersYet')+'</div>';
   }
   var memberIds=new Set(members.map(function(m){return m.userId;}));
   var available=groupManagerUsers.filter(function(u){return !memberIds.has(u.id);});
@@ -2346,7 +2576,7 @@ function renderGroupMembers(el,groupId,members){
       html+='<option value="'+escAttr(available[j].id)+'">'+esc(available[j].username)+'</option>';
     }
     html+='</select>'+
-      '<button class="btn btn-sm" onclick="addGroupMember(&quot;'+escAttr(groupId)+'&quot;)">Add</button>'+
+      '<button class="btn btn-sm" onclick="addGroupMember(&quot;'+escAttr(groupId)+'&quot;)">'+t('admin.add')+'</button>'+
     '</div>';
   }
   el.innerHTML=html;
@@ -2359,16 +2589,16 @@ async function addGroupMember(groupId){
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
     var d=await r.json();
-    if(d.ok){toast('Member added','success');toggleGroupMembers(groupId);toggleGroupMembers(groupId);}else{toast(d.error||'Add failed','error');}
-  }catch(e){toast('Add failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.memberAdded'),'success');toggleGroupMembers(groupId);toggleGroupMembers(groupId);}else{toast(d.error||t('toast.addFail'),'error');}
+  }catch(e){toast(t('toast.addFail')+': '+e.message,'error');}
 }
 async function removeGroupMember(groupId,userId){
-  if(!confirm('Remove this member from the group?')) return;
+  if(!confirm(t('confirm.removeGroupMember'))) return;
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
     var d=await r.json();
-    if(d.ok){toast('Member removed','success');toggleGroupMembers(groupId);toggleGroupMembers(groupId);}else{toast(d.error||'Remove failed','error');}
-  }catch(e){toast('Remove failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.memberRemoved'),'success');toggleGroupMembers(groupId);toggleGroupMembers(groupId);}else{toast(d.error||t('toast.removeFail'),'error');}
+  }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
 }
 
 /* ─── Hub Admin Panel ─── */
@@ -2403,7 +2633,7 @@ async function loadAdminData(){
     renderAdminSkills(adminDataCache.skills);
   }catch(e){
     var statsEl=document.getElementById('adminStats');
-    if(statsEl) statsEl.innerHTML='<div class="admin-empty">Failed to load admin data: '+esc(String(e))+'</div>';
+    if(statsEl) statsEl.innerHTML='<div class="admin-empty">'+t('admin.loadFailed')+esc(String(e))+'</div>';
   }
 }
 
@@ -2411,11 +2641,11 @@ function renderAdminStats(pendingCount){
   var el=document.getElementById('adminStats');
   if(!el) return;
   el.innerHTML=
-    '<div class="admin-stat-box"><div class="val">'+adminDataCache.users.length+'</div><div class="lbl">Active Users</div></div>'+
-    '<div class="admin-stat-box"><div class="val">'+pendingCount+'</div><div class="lbl">Pending</div></div>'+
-    '<div class="admin-stat-box"><div class="val">'+adminDataCache.groups.length+'</div><div class="lbl">Groups</div></div>'+
-    '<div class="admin-stat-box"><div class="val">'+adminDataCache.tasks.length+'</div><div class="lbl">Shared Tasks</div></div>'+
-    '<div class="admin-stat-box"><div class="val">'+adminDataCache.skills.length+'</div><div class="lbl">Shared Skills</div></div>';
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.users.length+'</div><div class="lbl">'+t('admin.stat.activeUsers')+'</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+pendingCount+'</div><div class="lbl">'+t('admin.stat.pending')+'</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.groups.length+'</div><div class="lbl">'+t('admin.stat.groups')+'</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.tasks.length+'</div><div class="lbl">'+t('admin.stat.sharedTasks')+'</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.skills.length+'</div><div class="lbl">'+t('admin.stat.sharedSkills')+'</div></div>';
 }
 
 function renderAdminUsers(users,pending){
@@ -2423,21 +2653,21 @@ function renderAdminUsers(users,pending){
   if(!el) return;
   var html='';
   if(pending&&pending.length>0){
-    html+='<div style="margin-bottom:16px"><h3 style="font-size:14px;font-weight:600;color:var(--amber);margin-bottom:10px">Pending Approval ('+pending.length+')</h3>';
+    html+='<div style="margin-bottom:16px"><h3 style="font-size:14px;font-weight:600;color:var(--amber);margin-bottom:10px">'+t('admin.pendingApproval')+' ('+pending.length+')</h3>';
     for(var p=0;p<pending.length;p++){
       var pu=pending[p];
       html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(pu.username||pu.id||'Unknown')+'</div><span class="admin-badge pending">pending</span></div>'+
-        '<div class="admin-card-meta">Device: '+esc(pu.deviceName||'unknown')+'</div>'+
+        '<div class="admin-card-meta">'+t('admin.device')+esc(pu.deviceName||'unknown')+'</div>'+
         '<div class="admin-card-actions">'+
-          '<button class="btn btn-sm btn-primary" onclick="adminApproveUser(&quot;'+escAttr(pu.id)+'&quot;,&quot;'+escAttr(pu.username||'')+'&quot;)">Approve</button>'+
-          '<button class="btn btn-sm btn-ghost" onclick="adminRejectUser(&quot;'+escAttr(pu.id)+'&quot;)" style="color:var(--rose)">Reject</button>'+
+          '<button class="btn btn-sm btn-primary" onclick="adminApproveUser(&quot;'+escAttr(pu.id)+'&quot;,&quot;'+escAttr(pu.username||'')+'&quot;)">'+t('admin.approve')+'</button>'+
+          '<button class="btn btn-sm btn-ghost" onclick="adminRejectUser(&quot;'+escAttr(pu.id)+'&quot;)" style="color:var(--rose)">'+t('admin.reject')+'</button>'+
         '</div></div>';
     }
     html+='</div>';
   }
-  html+='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Active Users ('+users.length+')</h3>';
+  html+='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.activeUsers')+' ('+users.length+')</h3>';
   if(users.length===0){
-    html+='<div class="admin-empty">No active users.</div>';
+    html+='<div class="admin-empty">'+t('admin.noActiveUsers')+'</div>';
   }else{
     for(var i=0;i<users.length;i++){
       var u=users[i];
@@ -2453,40 +2683,40 @@ async function adminApproveUser(userId,username){
   try{
     var r=await fetch('/api/sharing/approve-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
     var d=await r.json();
-    if(d.ok){toast('User approved','success');loadAdminData();}else{toast(d.error||'Approve failed','error');}
-  }catch(e){toast('Approve failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.userApproved'),'success');loadAdminData();}else{toast(d.error||t('toast.approveFail'),'error');}
+  }catch(e){toast(t('toast.approveFail')+': '+e.message,'error');}
 }
 async function adminRejectUser(userId){
-  if(!confirm('Reject this user?')) return;
+  if(!confirm(t('confirm.rejectUser'))) return;
   try{
     var r=await fetch('/api/sharing/reject-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
     var d=await r.json();
-    if(d.ok){toast('User rejected','success');loadAdminData();}else{toast(d.error||'Reject failed','error');}
-  }catch(e){toast('Reject failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.userRejected'),'success');loadAdminData();}else{toast(d.error||t('toast.rejectFail'),'error');}
+  }catch(e){toast(t('toast.rejectFail')+': '+e.message,'error');}
 }
 
 function renderAdminGroups(groups){
   var el=document.getElementById('adminGroupsPanel');
   if(!el) return;
   var html='<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'+
-    '<h3 style="font-size:14px;font-weight:600;color:var(--text)">Groups ('+groups.length+')</h3>'+
-    '<button class="btn btn-sm btn-primary" onclick="showAdminCreateGroup()">+ New Group</button></div>';
+    '<h3 style="font-size:14px;font-weight:600;color:var(--text)">'+t('admin.groups')+' ('+groups.length+')</h3>'+
+    '<button class="btn btn-sm btn-primary" onclick="showAdminCreateGroup()">'+t('admin.newGroup')+'</button></div>';
   html+='<div id="adminCreateGroupForm" style="display:none;margin-bottom:14px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px">'+
     '<div style="display:flex;flex-direction:column;gap:8px">'+
-    '<input id="adminNewGroupName" type="text" placeholder="Group name" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text)">'+
-    '<input id="adminNewGroupDesc" type="text" placeholder="Description (optional)" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text)">'+
-    '<div style="display:flex;gap:8px"><button class="btn btn-sm btn-primary" onclick="adminCreateGroup()">Create</button>'+
-    '<button class="btn btn-sm btn-ghost" onclick="hideAdminCreateGroup()">Cancel</button></div></div></div>';
+    '<input id="adminNewGroupName" type="text" placeholder="'+t('admin.groupName')+'" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text)">'+
+    '<input id="adminNewGroupDesc" type="text" placeholder="'+t('admin.groupDesc')+'" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text)">'+
+    '<div style="display:flex;gap:8px"><button class="btn btn-sm btn-primary" onclick="adminCreateGroup()">'+t('admin.create')+'</button>'+
+    '<button class="btn btn-sm btn-ghost" onclick="hideAdminCreateGroup()">'+t('admin.cancel')+'</button></div></div></div>';
   if(groups.length===0){
-    html+='<div class="admin-empty">No groups created yet.</div>';
+    html+='<div class="admin-empty">'+t('admin.noGroups')+'</div>';
   }else{
     for(var i=0;i<groups.length;i++){
       var g=groups[i];
       html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(g.name)+'</div>'+
-        '<button class="btn btn-sm btn-ghost" onclick="adminDeleteGroup(&quot;'+escAttr(g.id)+'&quot;,&quot;'+escAttr(g.name)+'&quot;)" style="color:var(--rose);font-size:11px">Delete</button></div>'+
+        '<button class="btn btn-sm btn-ghost" onclick="adminDeleteGroup(&quot;'+escAttr(g.id)+'&quot;,&quot;'+escAttr(g.name)+'&quot;)" style="color:var(--rose);font-size:11px">'+t('admin.delete')+'</button></div>'+
         (g.description?'<div class="admin-card-meta">'+esc(g.description)+'</div>':'')+
         '<div class="admin-card-actions">'+
-          '<button class="btn btn-sm" onclick="adminToggleGroupMembers(&quot;'+escAttr(g.id)+'&quot;)">Members</button>'+
+          '<button class="btn btn-sm" onclick="adminToggleGroupMembers(&quot;'+escAttr(g.id)+'&quot;)">'+t('admin.members')+'</button>'+
         '</div>'+
         '<div id="adminGroupMembers_'+escAttr(g.id)+'" style="display:none;margin-top:10px"></div>'+
       '</div>';
@@ -2499,32 +2729,32 @@ function hideAdminCreateGroup(){var f=document.getElementById('adminCreateGroupF
 async function adminCreateGroup(){
   var name=(document.getElementById('adminNewGroupName')).value.trim();
   var desc=(document.getElementById('adminNewGroupDesc')).value.trim();
-  if(!name){toast('Group name is required','error');return;}
+  if(!name){toast(t('toast.groupNameRequired'),'error');return;}
   try{
     var r=await fetch('/api/sharing/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:desc})});
     var d=await r.json();
-    if(d.ok||d.id){toast('Group created','success');hideAdminCreateGroup();loadAdminData();}else{toast(d.error||'Create failed','error');}
-  }catch(e){toast('Create failed: '+e.message,'error');}
+    if(d.ok||d.id){toast(t('toast.groupCreated'),'success');hideAdminCreateGroup();loadAdminData();}else{toast(d.error||t('toast.createFail'),'error');}
+  }catch(e){toast(t('toast.createFail')+': '+e.message,'error');}
 }
 async function adminDeleteGroup(groupId,groupName){
-  if(!confirm('Delete group "'+groupName+'"?')) return;
+  if(!confirm(t('confirm.deleteGroupShort').replace('{name}',groupName))) return;
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId),{method:'DELETE'});
     var d=await r.json();
-    if(d.ok){toast('Group deleted','success');loadAdminData();}else{toast(d.error||'Delete failed','error');}
-  }catch(e){toast('Delete failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.groupDeleted'),'success');loadAdminData();}else{toast(d.error||t('toast.deleteFail'),'error');}
+  }catch(e){toast(t('toast.deleteFail')+': '+e.message,'error');}
 }
 async function adminToggleGroupMembers(groupId){
   var el=document.getElementById('adminGroupMembers_'+groupId);
   if(!el) return;
   if(el.style.display!=='none'){el.style.display='none';return;}
   el.style.display='block';
-  el.innerHTML='Loading...';
+  el.innerHTML=t('sharing.loading');
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members');
     var d=await r.json();
     var members=Array.isArray(d.members)?d.members:[];
-    var html='<div style="font-size:12px;margin-bottom:6px;color:var(--text-sec)">Members ('+members.length+'):</div>';
+    var html='<div style="font-size:12px;margin-bottom:6px;color:var(--text-sec)">'+t('admin.membersCount').replace('{n}',members.length)+'</div>';
     if(members.length>0){
       html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
       for(var i=0;i<members.length;i++){
@@ -2535,7 +2765,7 @@ async function adminToggleGroupMembers(groupId){
       }
       html+='</div>';
     }else{
-      html+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">No members.</div>';
+      html+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">'+t('admin.noMembers')+'</div>';
     }
     var memberIds=new Set(members.map(function(m){return m.userId;}));
     var available=adminDataCache.users.filter(function(u){return !memberIds.has(u.id);});
@@ -2545,10 +2775,10 @@ async function adminToggleGroupMembers(groupId){
       for(var j=0;j<available.length;j++){
         html+='<option value="'+escAttr(available[j].id)+'">'+esc(available[j].username)+'</option>';
       }
-      html+='</select><button class="btn btn-sm" onclick="adminAddGroupMember(&quot;'+escAttr(groupId)+'&quot;)">Add</button></div>';
+      html+='</select><button class="btn btn-sm" onclick="adminAddGroupMember(&quot;'+escAttr(groupId)+'&quot;)">'+t('admin.add')+'</button></div>';
     }
     el.innerHTML=html;
-  }catch(e){el.innerHTML='Failed: '+esc(String(e));}
+  }catch(e){el.innerHTML=t('admin.groupsFailed')+esc(String(e));}
 }
 async function adminAddGroupMember(groupId){
   var sel=document.getElementById('adminAddMember_'+groupId);
@@ -2556,37 +2786,37 @@ async function adminAddGroupMember(groupId){
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:sel.value})});
     var d=await r.json();
-    if(d.ok){toast('Member added','success');adminToggleGroupMembers(groupId);adminToggleGroupMembers(groupId);}else{toast(d.error||'Add failed','error');}
-  }catch(e){toast('Add failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.memberAdded'),'success');adminToggleGroupMembers(groupId);adminToggleGroupMembers(groupId);}else{toast(d.error||t('toast.addFail'),'error');}
+  }catch(e){toast(t('toast.addFail')+': '+e.message,'error');}
 }
 async function adminRemoveGroupMember(groupId,userId){
-  if(!confirm('Remove this member?')) return;
+  if(!confirm(t('confirm.removeMember'))) return;
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
     var d=await r.json();
-    if(d.ok){toast('Member removed','success');adminToggleGroupMembers(groupId);adminToggleGroupMembers(groupId);}else{toast(d.error||'Remove failed','error');}
-  }catch(e){toast('Remove failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.memberRemoved'),'success');adminToggleGroupMembers(groupId);adminToggleGroupMembers(groupId);}else{toast(d.error||t('toast.removeFail'),'error');}
+  }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
 }
 
 function renderAdminMemories(tasks){
   var el=document.getElementById('adminMemoriesPanel');
   if(!el) return;
-  var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Shared Tasks ('+tasks.length+')</h3>';
+  var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.sharedTasks')+' ('+tasks.length+')</h3>';
   if(tasks.length===0){
-    html+='<div class="admin-empty">No shared tasks on Hub.</div>';
+    html+='<div class="admin-empty">'+t('admin.noSharedTasks')+'</div>';
   }else{
     for(var i=0;i<tasks.length;i++){
-      var t=tasks[i];
-      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(t.title||t.id)+'</div>'+
-        '<span class="admin-badge '+(t.visibility==='public'?'public':'group')+'">'+esc(t.visibility||'public')+'</span></div>'+
+      var tk=tasks[i];
+      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(tk.title||tk.id)+'</div>'+
+        '<span class="admin-badge '+(tk.visibility==='public'?'public':'group')+'">'+esc(tk.visibility||'public')+'</span></div>'+
         '<div class="admin-card-meta">'+
-          'Owner: '+esc(t.ownerName||t.sourceUserId||'unknown')+
-          (t.groupName?' \u00B7 Group: '+esc(t.groupName):'')+
-          (t.chunkCount!=null?' \u00B7 Chunks: '+t.chunkCount:'')+
-          ' \u00B7 Updated: '+new Date(t.updatedAt||t.createdAt).toLocaleDateString()+
+          t('admin.owner')+esc(tk.ownerName||tk.sourceUserId||'unknown')+
+          (tk.groupName?' \u00B7 '+t('admin.group')+esc(tk.groupName):'')+
+          (tk.chunkCount!=null?' \u00B7 '+t('admin.chunks')+tk.chunkCount:'')+
+          ' \u00B7 '+t('admin.updated')+new Date(tk.updatedAt||tk.createdAt).toLocaleDateString()+
         '</div>'+
         '<div class="admin-card-actions">'+
-          '<button class="btn btn-sm btn-ghost" onclick="adminDeleteTask(&quot;'+escAttr(t.id)+'&quot;,&quot;'+escAttr(t.title||t.id)+'&quot;)" style="color:var(--rose)">Remove</button>'+
+          '<button class="btn btn-sm btn-ghost" onclick="adminDeleteTask(&quot;'+escAttr(tk.id)+'&quot;,&quot;'+escAttr(tk.title||tk.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
         '</div></div>';
     }
   }
@@ -2594,20 +2824,20 @@ function renderAdminMemories(tasks){
 }
 
 async function adminDeleteTask(taskId,taskTitle){
-  if(!confirm('Remove shared task "'+taskTitle+'" from Hub? This cannot be undone.')) return;
+  if(!confirm(t('confirm.removeTask').replace('{name}',taskTitle))) return;
   try{
     var r=await fetch('/api/admin/shared-tasks/'+encodeURIComponent(taskId),{method:'DELETE'});
     var d=await r.json();
-    if(d.ok){toast('Task removed','success');loadAdminData();}else{toast(d.error||'Remove failed','error');}
-  }catch(e){toast('Remove failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.taskRemoved'),'success');loadAdminData();}else{toast(d.error||t('toast.removeFail'),'error');}
+  }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
 }
 
 function renderAdminSkills(skills){
   var el=document.getElementById('adminSkillsPanel');
   if(!el) return;
-  var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">Shared Skills ('+skills.length+')</h3>';
+  var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.sharedSkills')+' ('+skills.length+')</h3>';
   if(skills.length===0){
-    html+='<div class="admin-empty">No shared skills on Hub.</div>';
+    html+='<div class="admin-empty">'+t('admin.noSharedSkills')+'</div>';
   }else{
     for(var i=0;i<skills.length;i++){
       var s=skills[i];
@@ -2615,13 +2845,13 @@ function renderAdminSkills(skills){
         '<span class="admin-badge '+(s.visibility==='public'?'public':'group')+'">'+esc(s.visibility||'public')+'</span></div>'+
         '<div class="admin-card-meta">'+
           (s.description?esc(s.description)+'<br>':'')+
-          'Owner: '+esc(s.ownerName||s.sourceUserId||'unknown')+
-          (s.groupName?' \u00B7 Group: '+esc(s.groupName):'')+
-          (s.version!=null?' \u00B7 v'+s.version:'')+
-          (s.qualityScore!=null?' \u00B7 Quality: '+s.qualityScore:'')+
+          t('admin.owner')+esc(s.ownerName||s.sourceUserId||'unknown')+
+          (s.groupName?' \u00B7 '+t('admin.group')+esc(s.groupName):'')+
+          (s.version!=null?' \u00B7 '+t('admin.version')+s.version:'')+
+          (s.qualityScore!=null?' \u00B7 '+t('admin.quality')+s.qualityScore:'')+
         '</div>'+
         '<div class="admin-card-actions">'+
-          '<button class="btn btn-sm btn-ghost" onclick="adminDeleteSkill(&quot;'+escAttr(s.id)+'&quot;,&quot;'+escAttr(s.name||s.id)+'&quot;)" style="color:var(--rose)">Remove</button>'+
+          '<button class="btn btn-sm btn-ghost" onclick="adminDeleteSkill(&quot;'+escAttr(s.id)+'&quot;,&quot;'+escAttr(s.name||s.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
         '</div></div>';
     }
   }
@@ -2629,12 +2859,12 @@ function renderAdminSkills(skills){
 }
 
 async function adminDeleteSkill(skillId,skillName){
-  if(!confirm('Remove shared skill "'+skillName+'" from Hub? This cannot be undone.')) return;
+  if(!confirm(t('confirm.removeSkill').replace('{name}',skillName))) return;
   try{
     var r=await fetch('/api/admin/shared-skills/'+encodeURIComponent(skillId),{method:'DELETE'});
     var d=await r.json();
-    if(d.ok){toast('Skill removed','success');loadAdminData();}else{toast(d.error||'Remove failed','error');}
-  }catch(e){toast('Remove failed: '+e.message,'error');}
+    if(d.ok){toast(t('toast.skillRemoved'),'success');loadAdminData();}else{toast(d.error||t('toast.removeFail'),'error');}
+  }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
 }
 
 function renderSharingMemorySearchResults(data,query){
@@ -2646,7 +2876,7 @@ function renderSharingMemorySearchResults(data,query){
   document.getElementById('pagination').innerHTML='';
   list.innerHTML=''+
     '<div class="result-section">'+
-      '<div class="result-section-header"><div class="result-section-title">Local Results</div><div class="result-section-sub">'+localHits.length+' hit(s)</div></div>'+
+      '<div class="result-section-header"><div class="result-section-title">'+t('search.localResults')+'</div><div class="result-section-sub">'+localHits.length+' hit(s)</div></div>'+
       '<div class="search-hit-list">'+(localHits.length?localHits.map(function(hit,idx){
         return '<div class="search-hit-card">'+
           '<div class="summary">'+(idx+1)+'. '+esc(hit.summary||'(no summary)')+'</div>'+
@@ -2657,10 +2887,10 @@ function renderSharingMemorySearchResults(data,query){
             (hit.taskId?'<span class="meta-chip">task: '+esc(hit.taskId)+'</span>':'')+
           '</div>'+
         '</div>';
-      }).join(''):'<div class="search-hit-card"><div class="excerpt">No local results.</div></div>')+'</div>'+
+      }).join(''):'<div class="search-hit-card"><div class="excerpt">'+t('search.noLocal')+'</div></div>')+'</div>'+
     '</div>'+
     '<div class="result-section">'+
-      '<div class="result-section-header"><div class="result-section-title">Hub Results</div><div class="result-section-sub">'+hubHits.length+' hit(s)</div></div>'+
+      '<div class="result-section-header"><div class="result-section-title">'+t('search.hubResults')+'</div><div class="result-section-sub">'+hubHits.length+' hit(s)</div></div>'+
       '<div class="search-hit-list">'+(hubHits.length?hubHits.map(function(hit,idx){
         return '<div class="hub-hit-card">'+
           '<div class="summary">'+(idx+1)+'. '+esc(hit.summary||'(no summary)')+'</div>'+
@@ -2671,19 +2901,19 @@ function renderSharingMemorySearchResults(data,query){
             '<span class="meta-chip">visibility: '+esc(hit.visibility||'hub')+'</span>'+
           '</div>'+
           '<div class="hub-hit-actions">'+
-            '<button class="btn btn-sm" onclick="openSharedMemoryDetail(&quot;'+escAttr(hit.remoteHitId)+'&quot;,&quot;'+escAttr(hit.summary||'Shared Memory')+'&quot;,&quot;'+escAttr(hit.ownerName||'')+'&quot;,&quot;'+escAttr(hit.groupName||'')+'&quot;)">View Detail</button>'+
+            '<button class="btn btn-sm" onclick="openSharedMemoryDetail(&quot;'+escAttr(hit.remoteHitId)+'&quot;,&quot;'+escAttr(hit.summary||t('search.sharedMemory'))+'&quot;,&quot;'+escAttr(hit.ownerName||'')+'&quot;,&quot;'+escAttr(hit.groupName||'')+'&quot;)">'+t('search.viewDetail')+'</button>'+
           '</div>'+
         '</div>';
-      }).join(''):'<div class="hub-hit-card"><div class="excerpt">No Hub results.</div></div>')+'</div>'+
+      }).join(''):'<div class="hub-hit-card"><div class="excerpt">'+t('search.noHub')+'</div></div>')+'</div>'+
     '</div>';
 }
 
 async function openSharedMemoryDetail(remoteHitId,title,owner,groupName){
   currentSharedMemoryHitId=remoteHitId;
   document.getElementById('sharedMemoryOverlay').classList.add('show');
-  document.getElementById('sharedMemoryTitle').textContent=title||'Shared Memory';
-  document.getElementById('sharedMemoryMeta').innerHTML='<span class="meta-item">Hub</span>'+(owner?'<span class="meta-item">Owner: '+esc(owner)+'</span>':'')+(groupName?'<span class="meta-item">Group: '+esc(groupName)+'</span>':'');
-  document.getElementById('sharedMemorySummary').textContent='Loading...';
+  document.getElementById('sharedMemoryTitle').textContent=title||t('search.sharedMemory');
+  document.getElementById('sharedMemoryMeta').innerHTML='<span class="meta-item">Hub</span>'+(owner?'<span class="meta-item">'+t('admin.owner')+esc(owner)+'</span>':'')+(groupName?'<span class="meta-item">'+t('admin.group')+esc(groupName)+'</span>':'');
+  document.getElementById('sharedMemorySummary').textContent=t('sharing.loading');
   document.getElementById('sharedMemoryContent').textContent='';
   try{
     const r=await fetch('/api/sharing/memory-detail',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({remoteHitId:remoteHitId})});
@@ -2692,7 +2922,7 @@ async function openSharedMemoryDetail(remoteHitId,title,owner,groupName){
     document.getElementById('sharedMemorySummary').textContent=d.summary||'';
     document.getElementById('sharedMemoryContent').textContent=d.content||'';
   }catch(e){
-    document.getElementById('sharedMemorySummary').textContent='Failed to load shared memory';
+    document.getElementById('sharedMemorySummary').textContent=t('search.loadFailed');
     document.getElementById('sharedMemoryContent').textContent=String(e.message||e);
   }
 }
