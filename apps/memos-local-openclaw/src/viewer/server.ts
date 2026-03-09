@@ -933,6 +933,15 @@ export class ViewerServer {
       base.admin.canManageUsers = true;
       base.admin.rejectSupported = true;
       base.connection.connected = true;
+      base.connection.user = { username: "hub-admin", role: "admin", groups: [] };
+      base.connection.hubUrl = resolvedHubUrl ?? undefined;
+      // Fetch team info from own hub
+      try {
+        const selfUrl = resolvedHubUrl || `http://localhost:${sharing.hub?.port ?? 21816}`;
+        const info = await fetch(`${selfUrl}/api/v1/hub/info`).then(r => r.ok ? r.json() : null).catch(() => null) as any;
+        base.connection.teamName = info?.teamName ?? sharing.hub?.teamName ?? null;
+        base.connection.apiVersion = info?.apiVersion ?? null;
+      } catch { /* ignore */ }
       this.jsonResponse(res, base);
       return;
     }
