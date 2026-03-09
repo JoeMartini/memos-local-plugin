@@ -15,7 +15,7 @@ import { RecallEngine } from "../recall/engine";
 import { SkillEvolver } from "../skill/evolver";
 import { resolveConfig } from "../config";
 import { getHubStatus } from "../client/connector";
-import { hubGetMemoryDetail, hubListMemories, hubRequestJson, hubSearchMemories, hubSearchSkills, normalizeHubUrl, resolveHubClient } from "../client/hub";
+import { hubGetMemoryDetail, hubListMemories, hubListTasks, hubListSkills, hubRequestJson, hubSearchMemories, hubSearchSkills, normalizeHubUrl, resolveHubClient } from "../client/hub";
 import { fetchHubSkillBundle, restoreSkillBundleFromHub } from "../client/skill-sync";
 import type { Logger, Chunk, PluginContext, MemosLocalConfig } from "../types";
 import { viewerHTML } from "./html";
@@ -218,6 +218,8 @@ export class ViewerServer {
       else if (p === "/api/sharing/reject-user" && req.method === "POST") this.handleSharingRejectUser(req, res);
       else if (p === "/api/sharing/search/memories" && req.method === "POST") this.handleSharingMemorySearch(req, res);
       else if (p === "/api/sharing/memories/list" && req.method === "GET") this.serveSharingMemoryList(res, url);
+      else if (p === "/api/sharing/tasks/list" && req.method === "GET") this.serveSharingTaskList(res, url);
+      else if (p === "/api/sharing/skills/list" && req.method === "GET") this.serveSharingSkillList(res, url);
       else if (p === "/api/sharing/memory-detail" && req.method === "POST") this.handleSharingMemoryDetail(req, res);
       else if (p === "/api/sharing/search/skills" && req.method === "GET") this.serveSharingSkillSearch(res, url);
       else if (p === "/api/sharing/tasks/share" && req.method === "POST") this.handleSharingTaskShare(req, res);
@@ -1030,6 +1032,28 @@ export class ViewerServer {
       this.jsonResponse(res, { memories: Array.isArray(data?.memories) ? data.memories : [] });
     } catch (err) {
       this.jsonResponse(res, { memories: [], error: String(err) });
+    }
+  }
+
+  private async serveSharingTaskList(res: http.ServerResponse, url: URL): Promise<void> {
+    if (!this.ctx) return this.jsonResponse(res, { tasks: [], error: "sharing_unavailable" });
+    try {
+      const limit = Number(url.searchParams.get("limit") || 40);
+      const data = await hubListTasks(this.store, this.ctx, { limit });
+      this.jsonResponse(res, { tasks: Array.isArray(data?.tasks) ? data.tasks : [] });
+    } catch (err) {
+      this.jsonResponse(res, { tasks: [], error: String(err) });
+    }
+  }
+
+  private async serveSharingSkillList(res: http.ServerResponse, url: URL): Promise<void> {
+    if (!this.ctx) return this.jsonResponse(res, { skills: [], error: "sharing_unavailable" });
+    try {
+      const limit = Number(url.searchParams.get("limit") || 40);
+      const data = await hubListSkills(this.store, this.ctx, { limit });
+      this.jsonResponse(res, { skills: Array.isArray(data?.skills) ? data.skills : [] });
+    } catch (err) {
+      this.jsonResponse(res, { skills: [], error: String(err) });
     }
   }
 

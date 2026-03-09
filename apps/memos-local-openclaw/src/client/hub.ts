@@ -53,6 +53,32 @@ export async function hubListMemories(
   }) as Promise<{ memories: Array<any> }>;
 }
 
+export async function hubListTasks(
+  store: SqliteStore,
+  ctx: PluginContext,
+  input?: { limit?: number; hubAddress?: string; userToken?: string },
+): Promise<{ tasks: Array<any> }> {
+  const client = await resolveHubClient(store, ctx, { hubAddress: input?.hubAddress, userToken: input?.userToken });
+  const url = new URL(`${client.hubUrl}/api/v1/hub/tasks`);
+  if (input?.limit != null) url.searchParams.set("limit", String(input.limit));
+  return hubRequestJson(url.origin, client.userToken, `${url.pathname}${url.search}`, {
+    method: "GET",
+  }) as Promise<{ tasks: Array<any> }>;
+}
+
+export async function hubListSkills(
+  store: SqliteStore,
+  ctx: PluginContext,
+  input?: { limit?: number; hubAddress?: string; userToken?: string },
+): Promise<{ skills: Array<any> }> {
+  const client = await resolveHubClient(store, ctx, { hubAddress: input?.hubAddress, userToken: input?.userToken });
+  const url = new URL(`${client.hubUrl}/api/v1/hub/skills/list`);
+  if (input?.limit != null) url.searchParams.set("limit", String(input.limit));
+  return hubRequestJson(url.origin, client.userToken, `${url.pathname}${url.search}`, {
+    method: "GET",
+  }) as Promise<{ skills: Array<any> }>;
+}
+
 export async function hubSearchMemories(
   store: SqliteStore,
   ctx: PluginContext,

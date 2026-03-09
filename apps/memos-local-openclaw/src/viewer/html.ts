@@ -887,6 +887,11 @@ input,textarea,select{font-family:inherit;font-size:inherit}
           <button class="filter-chip" data-task-status="active" onclick="setTaskStatusFilter(this,'active')" data-i18n="tasks.status.active">Active</button>
           <button class="filter-chip" data-task-status="completed" onclick="setTaskStatusFilter(this,'completed')" data-i18n="tasks.status.completed">Completed</button>
           <button class="filter-chip" data-task-status="skipped" onclick="setTaskStatusFilter(this,'skipped')" data-i18n="tasks.status.skipped">Skipped</button>
+          <select id="taskSearchScope" class="scope-select" onchange="onTaskScopeChange()">
+            <option value="local">Local</option>
+            <option value="group">Group</option>
+            <option value="all">All</option>
+          </select>
           <button class="btn btn-sm btn-ghost" onclick="loadTasks()" style="margin-left:auto" data-i18n="refresh">\u21BB Refresh</button>
         </div>
       </div>
@@ -1252,15 +1257,15 @@ input,textarea,select{font-family:inherit;font-size:inherit}
       <div class="admin-tabs">
         <button class="admin-tab active" onclick="switchAdminTab('users',this)" data-i18n="admin.tab.users">Users</button>
         <button class="admin-tab" onclick="switchAdminTab('groups',this)" data-i18n="admin.tab.groups">Groups</button>
-        <button class="admin-tab" onclick="switchAdminTab('memories',this)" data-i18n="admin.tab.memories">Shared Memories</button>
+        <button class="admin-tab" onclick="switchAdminTab('sharedMemories',this)" data-i18n="admin.tab.sharedMemories">Shared Memories</button>
+        <button class="admin-tab" onclick="switchAdminTab('memories',this)" data-i18n="admin.tab.memories">Shared Tasks</button>
         <button class="admin-tab" onclick="switchAdminTab('skills',this)" data-i18n="admin.tab.skills">Shared Skills</button>
-        <button class="admin-tab" onclick="switchAdminTab('sharedMemories',this)" data-i18n="admin.tab.sharedMemories">Shared Memories (Hub)</button>
       </div>
       <div class="admin-panel active" id="adminUsersPanel"></div>
       <div class="admin-panel" id="adminGroupsPanel"></div>
+      <div class="admin-panel" id="adminSharedMemoriesPanel"></div>
       <div class="admin-panel" id="adminMemoriesPanel"></div>
       <div class="admin-panel" id="adminSkillsPanel"></div>
-      <div class="admin-panel" id="adminSharedMemoriesPanel"></div>
     </div>
 
     <!-- ─── Import Page ─── -->
@@ -1432,7 +1437,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 <div class="toast-container" id="toasts"></div>
 
 <script>
-let activeSession=null,activeRole='',editingId=null,searchTimer=null,skillSearchTimer=null,memoryCache={},currentPage=1,totalPages=1,totalCount=0,PAGE_SIZE=40,metricsDays=30,memorySearchScope='local',skillSearchScope='local',sharingStatusCache=null,currentTaskDetail=null,currentSharedMemoryHitId='';
+let activeSession=null,activeRole='',editingId=null,searchTimer=null,skillSearchTimer=null,memoryCache={},currentPage=1,totalPages=1,totalCount=0,PAGE_SIZE=40,metricsDays=30,memorySearchScope='local',skillSearchScope='local',taskSearchScope='local',sharingStatusCache=null,currentTaskDetail=null,currentSharedMemoryHitId='';
 
 /* ─── i18n ─── */
 const I18N={
@@ -1720,7 +1725,7 @@ const I18N={
     'admin.refresh':'\u21BB Refresh',
     'admin.tab.users':'Users',
     'admin.tab.groups':'Groups',
-    'admin.tab.memories':'Shared Memories',
+    'admin.tab.memories':'Shared Tasks',
     'admin.tab.skills':'Shared Skills',
     'admin.stat.activeUsers':'Active Users',
     'admin.stat.pending':'Pending',
@@ -1756,7 +1761,7 @@ const I18N={
     'admin.noSharedSkills':'No shared skills on Hub.',
     'admin.sharedMemories':'Shared Memories',
     'admin.noSharedMemories':'No shared memories on Hub.',
-    'admin.tab.sharedMemories':'Shared Memories (Hub)',
+    'admin.tab.sharedMemories':'Shared Memories',
     'admin.version':'v',
     'admin.quality':'Quality: ',
     'admin.membersCount':'Members ({n}):',
@@ -2135,7 +2140,7 @@ const I18N={
     'admin.refresh':'\u21BB 刷新',
     'admin.tab.users':'用户',
     'admin.tab.groups':'分组',
-    'admin.tab.memories':'共享记忆',
+    'admin.tab.memories':'共享任务',
     'admin.tab.skills':'共享技能',
     'admin.stat.activeUsers':'活跃用户',
     'admin.stat.pending':'待审核',
@@ -2171,7 +2176,7 @@ const I18N={
     'admin.noSharedSkills':'Hub 上暂无共享技能。',
     'admin.sharedMemories':'共享记忆',
     'admin.noSharedMemories':'Hub 上暂无共享记忆。',
-    'admin.tab.sharedMemories':'共享记忆（Hub）',
+    'admin.tab.sharedMemories':'共享记忆',
     'admin.version':'v',
     'admin.quality':'质量：',
     'admin.membersCount':'成员（{n}）：',
@@ -2427,6 +2432,12 @@ function onMemoryScopeChange(){
 function onSkillScopeChange(){
   skillSearchScope=document.getElementById('skillSearchScope')?.value||'local';
   loadSkills();
+}
+
+function onTaskScopeChange(){
+  taskSearchScope=document.getElementById('taskSearchScope')?.value||'local';
+  tasksPage=0;
+  loadTasks();
 }
 
 async function loadSharingStatus(forcePending){
@@ -3384,6 +3395,9 @@ function setTaskStatusFilter(btn,status){
 }
 
 async function loadTasks(){
+  const scope=document.getElementById('taskSearchScope')?document.getElementById('taskSearchScope').value:taskSearchScope;
+  taskSearchScope=scope||'local';
+  if(taskSearchScope!=='local'){ return loadHubTasks(); }
   const list=document.getElementById('tasksList');
   list.innerHTML='<div class="spinner"></div>';
   try{
@@ -3445,6 +3459,41 @@ function renderTasksPagination(total){
   html+='<button class="pg-btn'+(tasksPage>=pages-1?' disabled':'')+'" onclick="tasksPage=Math.min('+(pages-1)+',tasksPage+1);loadTasks()">\\u2192</button>';
   html+='<span class="pg-info">'+total+' '+t('pagination.total')+'</span>';
   el.innerHTML=html;
+}
+
+async function loadHubTasks(){
+  const list=document.getElementById('tasksList');
+  list.innerHTML='<div class="spinner"></div>';
+  document.getElementById('tasksPagination').innerHTML='';
+  document.getElementById('tasksTotalCount').textContent='-';
+  document.getElementById('tasksActiveCount').textContent='-';
+  document.getElementById('tasksCompletedCount').textContent='-';
+  document.getElementById('tasksSkippedCount').textContent='-';
+  try{
+    const r=await fetch('/api/sharing/tasks/list?limit=40');
+    const d=await r.json();
+    const tasks=Array.isArray(d.tasks)?d.tasks:[];
+    document.getElementById('tasksTotalCount').textContent=formatNum(tasks.length);
+    if(!tasks.length){
+      list.innerHTML='<div class="empty"><div class="icon">\\u{1F310}</div><p>No shared tasks on Hub.</p></div>';
+      return;
+    }
+    list.innerHTML=tasks.map(function(task,idx){
+      return '<div class="hub-hit-card">'+
+        '<div class="summary">'+(idx+1)+'. '+esc(task.title||'(no title)')+'</div>'+
+        (task.summary?'<div class="excerpt">'+esc(task.summary)+'</div>':'')+
+        '<div class="hub-hit-meta">'+
+          '<span class="meta-chip">owner: '+esc(task.ownerName||'unknown')+'</span>'+
+          (task.groupName?'<span class="meta-chip">group: '+esc(task.groupName)+'</span>':'')+
+          '<span class="meta-chip">visibility: '+esc(task.visibility||'hub')+'</span>'+
+          '<span class="meta-chip">'+esc(String(task.chunkCount||0))+' chunks</span>'+
+          '<span class="meta-chip">'+new Date((task.updatedAt||task.createdAt||0)*1000).toLocaleDateString()+'</span>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }catch(e){
+    list.innerHTML='<div class="empty"><div class="icon">\\u{26A0}</div><p>Failed to load hub tasks</p></div>';
+  }
 }
 
 async function openTaskDetail(taskId){
@@ -3644,10 +3693,8 @@ async function loadSkills(){
     }
 
     if(!query){
-      if(hubList){
-        hubList.innerHTML='<div style="color:var(--text-muted);padding:16px">Enter a query to search Hub skills.</div>';
-      }
-      document.getElementById('skillSearchMeta').textContent='Local '+localSkills.length+' · Hub 0';
+      if(hubList){ loadHubSkills(hubList); }
+      document.getElementById('skillSearchMeta').textContent='Local '+localSkills.length;
       document.getElementById('skillsTotalCount').textContent=formatNum(localSkills.length);
       document.getElementById('skillsActiveCount').textContent=formatNum(localSkills.filter(s=>s.status==='active').length);
       document.getElementById('skillsDraftCount').textContent=formatNum(localSkills.filter(s=>s.status==='draft').length);
@@ -3700,6 +3747,36 @@ async function loadSkills(){
     if(hubList){
       hubList.innerHTML='<div style="text-align:center;padding:24px;color:var(--rose)">Failed to load Hub skills: '+esc(String(e))+'</div>';
     }
+  }
+}
+
+async function loadHubSkills(hubList){
+  if(!hubList) hubList=document.getElementById('hubSkillsList');
+  if(!hubList) return;
+  hubList.innerHTML='<div class="spinner"></div>';
+  try{
+    const r=await fetch('/api/sharing/skills/list?limit=40');
+    const d=await r.json();
+    const skills=Array.isArray(d.skills)?d.skills:[];
+    if(!skills.length){
+      hubList.innerHTML='<div class="hub-skill-card"><div class="excerpt">No shared skills on Hub.</div></div>';
+      return;
+    }
+    hubList.innerHTML=skills.map(function(skill){
+      return '<div class="hub-skill-card">'+
+        '<div class="summary">'+esc(skill.name)+'</div>'+
+        '<div class="excerpt">'+esc(skill.description||'')+'</div>'+
+        '<div class="hub-skill-meta">'+
+          '<span class="meta-chip">owner: '+esc(skill.ownerName||'unknown')+'</span>'+
+          (skill.groupName?'<span class="meta-chip">group: '+esc(skill.groupName)+'</span>':'')+
+          '<span class="meta-chip">visibility: '+esc(skill.visibility||'hub')+'</span>'+
+          (skill.version!=null?'<span class="meta-chip">v'+skill.version+'</span>':'')+
+        '</div>'+
+        '<div class="hub-skill-actions"><button class="btn btn-sm" onclick="event.stopPropagation();pullHubSkill(&quot;'+escAttr(skill.sourceSkillId)+'&quot;)">Pull to Local</button></div>'+
+      '</div>';
+    }).join('');
+  }catch(e){
+    hubList.innerHTML='<div style="text-align:center;padding:24px;color:var(--rose)">Failed to load Hub skills</div>';
   }
 }
 

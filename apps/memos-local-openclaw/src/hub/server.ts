@@ -430,6 +430,18 @@ export class HubServer {
       return this.json(res, 200, { memories });
     }
 
+    if (req.method === "GET" && routePath === "/api/v1/hub/tasks") {
+      const limit = Number(url.searchParams.get("limit") || 40);
+      const tasks = this.opts.store.listVisibleHubTasks(auth.userId, limit);
+      return this.json(res, 200, { tasks });
+    }
+
+    if (req.method === "GET" && routePath === "/api/v1/hub/skills/list") {
+      const limit = Number(url.searchParams.get("limit") || 40);
+      const skills = this.opts.store.listVisibleHubSkills(auth.userId, limit);
+      return this.json(res, 200, { skills });
+    }
+
     if (req.method === "POST" && routePath === "/api/v1/hub/search") {
       const body = await this.readJson(req);
       const query = String(body.query || "");
