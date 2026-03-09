@@ -2420,6 +2420,7 @@ function switchView(view){
 function onMemoryScopeChange(){
   memorySearchScope=document.getElementById('memorySearchScope')?.value||'local';
   if(document.getElementById('searchInput').value.trim()) doSearch(document.getElementById('searchInput').value);
+  else if(memorySearchScope!=='local') { document.getElementById('sharingSearchMeta').textContent=''; loadHubMemories(); }
   else { document.getElementById('sharingSearchMeta').textContent=''; loadMemories(); }
 }
 
@@ -4383,9 +4384,41 @@ async function loadMemories(page){
   }
 }
 
+async function loadHubMemories(){
+  const list=document.getElementById('memoryList');
+  list.innerHTML='<div class="spinner"></div>';
+  document.getElementById('pagination').innerHTML='';
+  document.getElementById('searchMeta').textContent='';
+  try{
+    const r=await fetch('/api/sharing/memories/list?limit=40');
+    const d=await r.json();
+    const memories=Array.isArray(d.memories)?d.memories:[];
+    document.getElementById('sharingSearchMeta').textContent='Hub: '+memories.length+' memories';
+    if(!memories.length){
+      list.innerHTML='<div class="empty"><div class="icon">\\u{1F310}</div><p>'+t('search.noHub')+'</p></div>';
+      return;
+    }
+    list.innerHTML=memories.map(function(m,idx){
+      return '<div class="hub-hit-card">'+
+        '<div class="summary">'+(idx+1)+'. '+esc(m.summary||'(no summary)')+'</div>'+
+        '<div class="hub-hit-meta">'+
+          '<span class="meta-chip">owner: '+esc(m.ownerName||'unknown')+'</span>'+
+          (m.groupName?'<span class="meta-chip">group: '+esc(m.groupName)+'</span>':'')+
+          '<span class="meta-chip">visibility: '+esc(m.visibility||'hub')+'</span>'+
+          '<span class="meta-chip">role: '+esc(m.role||'unknown')+'</span>'+
+          '<span class="meta-chip">'+new Date((m.updatedAt||m.createdAt||0)*1000).toLocaleDateString()+'</span>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }catch(e){
+    list.innerHTML='<div class="empty"><div class="icon">\\u{26A0}</div><p>Failed to load hub memories</p></div>';
+    document.getElementById('sharingSearchMeta').textContent='';
+  }
+}
+
 async function doSearch(q){
   const scope=(document.getElementById('memorySearchScope')?.value)||memorySearchScope||'local';
-  if(!q.trim()){currentPage=1;loadMemories();return}
+  if(!q.trim()){currentPage=1;if(scope!=='local'){loadHubMemories();}else{loadMemories();}return}
   const list=document.getElementById('memoryList');
   list.innerHTML='<div class="spinner"></div>';
   document.getElementById('pagination').innerHTML='';

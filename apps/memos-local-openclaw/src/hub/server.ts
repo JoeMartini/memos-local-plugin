@@ -424,6 +424,12 @@ export class HubServer {
       return this.json(res, 200, { ok: true });
     }
 
+    if (req.method === "GET" && routePath === "/api/v1/hub/memories") {
+      const limit = Number(url.searchParams.get("limit") || 40);
+      const memories = this.opts.store.listVisibleHubMemories(auth.userId, limit);
+      return this.json(res, 200, { memories });
+    }
+
     if (req.method === "POST" && routePath === "/api/v1/hub/search") {
       const body = await this.readJson(req);
       const query = String(body.query || "");

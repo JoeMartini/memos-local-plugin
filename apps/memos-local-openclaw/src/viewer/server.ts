@@ -15,7 +15,7 @@ import { RecallEngine } from "../recall/engine";
 import { SkillEvolver } from "../skill/evolver";
 import { resolveConfig } from "../config";
 import { getHubStatus } from "../client/connector";
-import { hubGetMemoryDetail, hubRequestJson, hubSearchMemories, hubSearchSkills, normalizeHubUrl, resolveHubClient } from "../client/hub";
+import { hubGetMemoryDetail, hubListMemories, hubRequestJson, hubSearchMemories, hubSearchSkills, normalizeHubUrl, resolveHubClient } from "../client/hub";
 import { fetchHubSkillBundle, restoreSkillBundleFromHub } from "../client/skill-sync";
 import type { Logger, Chunk, PluginContext, MemosLocalConfig } from "../types";
 import { viewerHTML } from "./html";
@@ -217,6 +217,7 @@ export class ViewerServer {
       else if (p === "/api/sharing/approve-user" && req.method === "POST") this.handleSharingApproveUser(req, res);
       else if (p === "/api/sharing/reject-user" && req.method === "POST") this.handleSharingRejectUser(req, res);
       else if (p === "/api/sharing/search/memories" && req.method === "POST") this.handleSharingMemorySearch(req, res);
+      else if (p === "/api/sharing/memories/list" && req.method === "GET") this.serveSharingMemoryList(res, url);
       else if (p === "/api/sharing/memory-detail" && req.method === "POST") this.handleSharingMemoryDetail(req, res);
       else if (p === "/api/sharing/search/skills" && req.method === "GET") this.serveSharingSkillSearch(res, url);
       else if (p === "/api/sharing/tasks/share" && req.method === "POST") this.handleSharingTaskShare(req, res);
@@ -1019,6 +1020,17 @@ export class ViewerServer {
         this.jsonResponse(res, { ok: false, error: String(err) });
       }
     });
+  }
+
+  private async serveSharingMemoryList(res: http.ServerResponse, url: URL): Promise<void> {
+    if (!this.ctx) return this.jsonResponse(res, { memories: [], error: "sharing_unavailable" });
+    try {
+      const limit = Number(url.searchParams.get("limit") || 40);
+      const data = await hubListMemories(this.store, this.ctx, { limit });
+      this.jsonResponse(res, { memories: Array.isArray(data?.memories) ? data.memories : [] });
+    } catch (err) {
+      this.jsonResponse(res, { memories: [], error: String(err) });
+    }
   }
 
   private handleSharingMemorySearch(req: http.IncomingMessage, res: http.ServerResponse): void {

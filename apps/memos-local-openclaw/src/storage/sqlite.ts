@@ -1978,6 +1978,28 @@ export class SqliteStore {
     return row ?? null;
   }
 
+  listVisibleHubMemories(userId: string, limit = 40): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; createdAt: number; updatedAt: number }> {
+    const rows = this.db.prepare(`
+      SELECT m.*, u.username AS owner_name, g.name AS group_name
+      FROM hub_memories m
+      LEFT JOIN hub_users u ON u.id = m.source_user_id
+      LEFT JOIN hub_groups g ON g.id = m.group_id
+      WHERE m.visibility = 'public'
+         OR EXISTS (
+           SELECT 1 FROM hub_group_members gm
+           WHERE gm.group_id = m.group_id AND gm.user_id = ?
+         )
+      ORDER BY m.updated_at DESC
+      LIMIT ?
+    `).all(userId, limit) as any[];
+    return rows.map(r => ({
+      id: r.id, sourceChunkId: r.source_chunk_id, sourceUserId: r.source_user_id,
+      role: r.role, summary: r.summary, kind: r.kind,
+      groupId: r.group_id, groupName: r.group_name ?? null, visibility: r.visibility,
+      ownerName: r.owner_name ?? "unknown", createdAt: r.created_at, updatedAt: r.updated_at,
+    }));
+  }
+
   listAllHubMemories(): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
       SELECT m.*, u.username AS owner_name, g.name AS group_name

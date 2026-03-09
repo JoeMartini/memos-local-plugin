@@ -40,6 +40,19 @@ export async function resolveHubClient(store: SqliteStore, ctx: PluginContext, o
   };
 }
 
+export async function hubListMemories(
+  store: SqliteStore,
+  ctx: PluginContext,
+  input?: { limit?: number; hubAddress?: string; userToken?: string },
+): Promise<{ memories: Array<any> }> {
+  const client = await resolveHubClient(store, ctx, { hubAddress: input?.hubAddress, userToken: input?.userToken });
+  const url = new URL(`${client.hubUrl}/api/v1/hub/memories`);
+  if (input?.limit != null) url.searchParams.set("limit", String(input.limit));
+  return hubRequestJson(url.origin, client.userToken, `${url.pathname}${url.search}`, {
+    method: "GET",
+  }) as Promise<{ memories: Array<any> }>;
+}
+
 export async function hubSearchMemories(
   store: SqliteStore,
   ctx: PluginContext,
