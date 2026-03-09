@@ -19,7 +19,7 @@ import { DEFAULTS } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
 import { HubServer } from "./src/hub/server";
 import { hubGetMemoryDetail, hubRequestJson, hubSearchMemories, hubSearchSkills, resolveHubClient } from "./src/client/hub";
-import { getHubStatus } from "./src/client/connector";
+import { getHubStatus, connectToHub } from "./src/client/connector";
 import { fetchHubSkillBundle, publishSkillBundleToHub, restoreSkillBundleFromHub } from "./src/client/skill-sync";
 import { SkillEvolver } from "./src/skill/evolver";
 import { SkillInstaller } from "./src/skill/installer";
@@ -1607,6 +1607,17 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
           const hubUrl = await hubServer.start();
           api.logger.info(`memos-local: hub started at ${hubUrl}`);
         }
+
+        // Auto-connect to Hub in client mode (handles both existing token and auto-join via teamToken)
+        if (ctx.config.sharing?.enabled && ctx.config.sharing.role === "client") {
+          try {
+            const session = await connectToHub(store, ctx.config, ctx.log);
+            api.logger.info(`memos-local: connected to Hub as "${session.username}" (${session.userId})`);
+          } catch (err) {
+            api.logger.warn(`memos-local: Hub connection failed: ${err}`);
+          }
+        }
+
         try {
           const viewerUrl = await viewer.start();
           api.logger.info(`memos-local: started (embedding: ${embedder.provider})`);
