@@ -152,6 +152,15 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .sharing-sidebar-card .status{font-size:13px;color:var(--text-sec);line-height:1.5}
 .sharing-sidebar-card .status strong{color:var(--text)}
 .sharing-sidebar-card .hint{margin-top:8px;font-size:11px;color:var(--text-muted)}
+.sharing-sidebar-card .user-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sharing-sidebar-card .user-row .username{font-size:13px;font-weight:600;color:var(--text)}
+.sharing-sidebar-card .role-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;line-height:1.4;letter-spacing:.02em}
+.sharing-sidebar-card .role-badge.admin{background:rgba(52,199,89,.15);color:#34c759}
+.sharing-sidebar-card .role-badge.client{background:rgba(175,82,222,.15);color:#af52de}
+.sharing-sidebar-card .info-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:12px;margin-bottom:8px}
+.sharing-sidebar-card .info-grid .label{color:var(--text-muted);font-weight:500;white-space:nowrap}
+.sharing-sidebar-card .info-grid .value{color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sharing-sidebar-card .api-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;background:rgba(142,142,147,.12);color:var(--text-muted);letter-spacing:.02em}
 .result-section{margin-bottom:18px;border:1px solid var(--border);border-radius:14px;background:var(--bg-card);overflow:hidden}
 .result-section-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)}
 .result-section-title{font-size:14px;font-weight:700;color:var(--text)}
@@ -2354,8 +2363,9 @@ function renderSharingSidebar(data){
   if(conn.connected&&conn.user){
     var groups=(conn.user.groups||[]).map(function(g){return g.name;}).join(', ')||'(none)';
     var roleLabel=data.role==='hub'?t('sharing.hubAdmin'):t('sharing.client');
-    statusEl.innerHTML='<strong>'+esc(conn.user.username)+'</strong> · '+esc(conn.user.role)+' ('+roleLabel+')<br>'+t('sharing.team')+' '+esc(conn.teamName||'Unknown')+'<br>Hub: '+esc(conn.hubUrl||data.hubUrl||'')+'<br>'+t('sharing.groups')+' '+esc(groups);
-    hintEl.textContent=conn.apiVersion?'API '+conn.apiVersion:'';
+    var roleCls=conn.user.role==='admin'?'admin':'client';
+    statusEl.innerHTML='<div class="user-row"><span class="username">'+esc(conn.user.username)+'</span><span class="role-badge '+roleCls+'">'+esc(roleLabel)+'</span></div>'+'<div class="info-grid">'+'<span class="label">'+t('sharing.team')+'</span><span class="value">'+esc(conn.teamName||'Unknown')+'</span>'+'<span class="label">Hub</span><span class="value">'+esc(conn.hubUrl||data.hubUrl||'')+'</span>'+'<span class="label">'+t('sharing.groups')+'</span><span class="value">'+esc(groups)+'</span>'+'</div>';
+    hintEl.innerHTML=conn.apiVersion?'<span class="api-badge">API '+esc(conn.apiVersion)+'</span>':'';
     var adminTab=document.querySelector('.tab[data-view="admin"]');
     if(adminTab) adminTab.style.display=(conn.user.role==='admin')?'':'none';
   }else if(data.role==='hub'){
