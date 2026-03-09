@@ -9,7 +9,7 @@ Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/o
 
 **Full-write | Hybrid Search | Task Summarization & Skill Evolution | Multi-Agent Collaboration | Memory Viewer**
 
-> **Homepage:** [Website](https://memtensor.github.io/MemOS/apps/memos-local-openclaw/www/) · [Documentation](https://memtensor.github.io/MemOS/apps/memos-local-openclaw/docs/) · [NPM](https://www.npmjs.com/package/@memtensor/memos-local-openclaw-plugin) · [GitHub](https://github.com/MemTensor/MemOS/tree/main/apps/memos-local-openclaw)
+> **Homepage:**  🌐 [Homepage](https://memos-claw.openmem.net) · 📖 [Documentation](https://memos-claw.openmem.net/docs/index.html) · 📦 [NPM](https://www.npmjs.com/package/@memtensor/memos-local-openclaw-plugin)
 
 ## Why MemOS
 
