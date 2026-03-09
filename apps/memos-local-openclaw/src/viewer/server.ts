@@ -221,6 +221,8 @@ export class ViewerServer {
       else if (p === "/api/sharing/search/skills" && req.method === "GET") this.serveSharingSkillSearch(res, url);
       else if (p === "/api/sharing/tasks/share" && req.method === "POST") this.handleSharingTaskShare(req, res);
       else if (p === "/api/sharing/tasks/unshare" && req.method === "POST") this.handleSharingTaskUnshare(req, res);
+      else if (p === "/api/sharing/memories/share" && req.method === "POST") this.handleSharingMemoryShare(req, res);
+      else if (p === "/api/sharing/memories/unshare" && req.method === "POST") this.handleSharingMemoryUnshare(req, res);
       else if (p === "/api/sharing/skills/pull" && req.method === "POST") this.handleSharingSkillPull(req, res);
       else if (p === "/api/sharing/groups" && req.method === "GET") this.serveSharingGroups(res);
       else if (p === "/api/sharing/groups" && req.method === "POST") this.handleSharingGroupCreate(req, res);
@@ -234,6 +236,8 @@ export class ViewerServer {
       else if (p.match(/^\/api\/admin\/shared-tasks\/[^/]+$/) && req.method === "DELETE") this.handleAdminDeleteTask(res, p);
       else if (p === "/api/admin/shared-skills" && req.method === "GET") this.serveAdminSharedSkills(res);
       else if (p.match(/^\/api\/admin\/shared-skills\/[^/]+$/) && req.method === "DELETE") this.handleAdminDeleteSkill(res, p);
+      else if (p === "/api/admin/shared-memories" && req.method === "GET") this.serveAdminSharedMemories(res);
+      else if (p.match(/^\/api\/admin\/shared-memories\/[^/]+$/) && req.method === "DELETE") this.handleAdminDeleteMemory(res, p);
       else if (p === "/api/config" && req.method === "GET") this.serveConfig(res);
       else if (p === "/api/config" && req.method === "PUT") this.handleSaveConfig(req, res);
       else if (p === "/api/auth/logout" && req.method === "POST") this.handleLogout(req, res);
@@ -387,11 +391,24 @@ export class ViewerServer {
     const where = conditions.length > 0 ? " WHERE " + conditions.join(" AND ") : "";
     const totalRow = db.prepare("SELECT COUNT(*) as count FROM chunks" + where).get(...params) as any;
     const rawMemories = db.prepare("SELECT * FROM chunks" + where + ` ORDER BY created_at ${sortBy} LIMIT ? OFFSET ?`).all(...params, limit, offset);
-    const memories = rawMemories.map((m: any) => {
-      if (m.role === "user" && m.content) {
-        return { ...m, content: stripInboundMetadata(m.content) };
+    // Batch-fetch sharing status to avoid N+1 queries
+    const chunkIds = rawMemories.map((m: any) => m.id);
+    const sharingMap = new Map<string, { visibility: string; group_id: string | null }>();
+    if (chunkIds.length > 0) {
+      try {
+        const placeholders = chunkIds.map(() => "?").join(",");
+        const sharedRows = db.prepare(`SELECT source_chunk_id, visibility, group_id FROM hub_memories WHERE source_chunk_id IN (${placeholders})`).all(...chunkIds) as Array<{ source_chunk_id: string; visibility: string; group_id: string | null }>;
+        for (const r of sharedRows) sharingMap.set(r.source_chunk_id, r);
+      } catch {
+        // hub_memories table may not exist in non-hub deployments — ignore
       }
-      return m;
+    }
+    const memories = rawMemories.map((m: any) => {
+      const out: any = m.role === "user" && m.content ? { ...m, content: stripInboundMetadata(m.content) } : { ...m };
+      const shared = sharingMap.get(m.id);
+      out.sharingVisibility = shared?.visibility ?? null;
+      out.sharingGroupId = shared?.group_id ?? null;
+      return out;
     });
 
     this.store.recordViewerEvent("list");
@@ -1173,6 +1190,77 @@ export class ViewerServer {
     });
   }
 
+  private handleSharingMemoryShare(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const chunkId = String(parsed.chunkId || "");
+        const visibility = parsed.visibility === "group" ? "group" : "public";
+        const groupId = typeof parsed.groupId === "string" ? parsed.groupId : undefined;
+        const db = (this.store as any).db;
+        const chunk = db.prepare("SELECT * FROM chunks WHERE id = ?").get(chunkId) as any;
+        if (!chunk) return this.jsonResponse(res, { ok: false, error: "memory_not_found" });
+        const hubClient = await resolveHubClient(this.store, this.ctx);
+        const response = await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/memories/share", {
+          method: "POST",
+          body: JSON.stringify({
+            memory: {
+              sourceChunkId: chunk.id,
+              role: chunk.role,
+              content: chunk.content,
+              summary: chunk.summary,
+              kind: chunk.kind,
+              groupId: visibility === "group" ? groupId ?? null : null,
+              visibility,
+            },
+          }),
+        });
+        const hubUserId = hubClient.userId;
+        if (hubUserId) {
+          const now = Date.now();
+          const existing = this.store.getHubMemoryBySource(hubUserId, chunk.id);
+          this.store.upsertHubMemory({
+            id: (response as any)?.memoryId ?? existing?.id ?? crypto.randomUUID(),
+            sourceChunkId: chunk.id,
+            sourceUserId: hubUserId,
+            role: chunk.role,
+            content: chunk.content,
+            summary: chunk.summary ?? "",
+            kind: chunk.kind,
+            groupId: visibility === "group" ? groupId ?? null : null,
+            visibility,
+            createdAt: existing?.createdAt ?? now,
+            updatedAt: now,
+          });
+        }
+        this.jsonResponse(res, { ok: true, chunkId, visibility, response });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private handleSharingMemoryUnshare(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const chunkId = String(parsed.chunkId || "");
+        const hubClient = await resolveHubClient(this.store, this.ctx);
+        await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/memories/unshare", {
+          method: "POST",
+          body: JSON.stringify({ sourceChunkId: chunkId }),
+        });
+        const hubUserId = hubClient.userId;
+        if (hubUserId) this.store.deleteHubMemoryBySource(hubUserId, chunkId);
+        this.jsonResponse(res, { ok: true, chunkId });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
   private handleSharingSkillPull(req: http.IncomingMessage, res: http.ServerResponse): void {
     this.readBody(req, async (body) => {
       if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
@@ -1378,6 +1466,29 @@ export class ViewerServer {
     const skillId = decodeURIComponent(p.replace("/api/admin/shared-skills/", ""));
     try {
       await hubRequestJson(hub.hubUrl, hub.userToken, `/api/v1/hub/admin/shared-skills/${encodeURIComponent(skillId)}`, { method: "DELETE" });
+      this.jsonResponse(res, { ok: true });
+    } catch (err) {
+      this.jsonResponse(res, { ok: false, error: String(err) });
+    }
+  }
+
+  private async serveAdminSharedMemories(res: http.ServerResponse): Promise<void> {
+    const hub = this.resolveHubConnection();
+    if (!hub) return this.jsonResponse(res, { memories: [], error: "not_configured" });
+    try {
+      const data = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/admin/shared-memories", { method: "GET" }) as any;
+      this.jsonResponse(res, { memories: Array.isArray(data?.memories) ? data.memories : [] });
+    } catch (err) {
+      this.jsonResponse(res, { memories: [], error: String(err) });
+    }
+  }
+
+  private async handleAdminDeleteMemory(res: http.ServerResponse, p: string): Promise<void> {
+    const hub = this.resolveHubConnection();
+    if (!hub) return this.jsonResponse(res, { ok: false, error: "not_configured" });
+    const memoryId = decodeURIComponent(p.replace("/api/admin/shared-memories/", ""));
+    try {
+      await hubRequestJson(hub.hubUrl, hub.userToken, `/api/v1/hub/admin/shared-memories/${encodeURIComponent(memoryId)}`, { method: "DELETE" });
       this.jsonResponse(res, { ok: true });
     } catch (err) {
       this.jsonResponse(res, { ok: false, error: String(err) });

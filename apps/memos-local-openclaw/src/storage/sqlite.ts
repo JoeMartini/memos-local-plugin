@@ -746,6 +746,56 @@ export class SqliteStore {
         INSERT INTO hub_skills_fts(rowid, name, description)
         VALUES (new.rowid, new.name, new.description);
       END;
+
+      -- Independent shared memories (not tied to a task)
+      CREATE TABLE IF NOT EXISTS hub_memories (
+        id              TEXT PRIMARY KEY,
+        source_chunk_id TEXT NOT NULL,
+        source_user_id  TEXT NOT NULL,
+        role            TEXT NOT NULL,
+        content         TEXT NOT NULL,
+        summary         TEXT NOT NULL DEFAULT '',
+        kind            TEXT NOT NULL DEFAULT 'paragraph',
+        group_id        TEXT,
+        visibility      TEXT NOT NULL,
+        created_at      INTEGER NOT NULL,
+        updated_at      INTEGER NOT NULL,
+        UNIQUE(source_user_id, source_chunk_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_hub_memories_visibility ON hub_memories(visibility);
+      CREATE INDEX IF NOT EXISTS idx_hub_memories_group ON hub_memories(group_id);
+
+      CREATE TABLE IF NOT EXISTS hub_memory_embeddings (
+        memory_id    TEXT PRIMARY KEY REFERENCES hub_memories(id) ON DELETE CASCADE,
+        vector       BLOB NOT NULL,
+        dimensions   INTEGER NOT NULL,
+        updated_at   INTEGER NOT NULL
+      );
+
+      CREATE VIRTUAL TABLE IF NOT EXISTS hub_memories_fts USING fts5(
+        summary,
+        content,
+        content='hub_memories',
+        content_rowid='rowid',
+        tokenize='porter unicode61'
+      );
+
+      CREATE TRIGGER IF NOT EXISTS hub_memories_ai AFTER INSERT ON hub_memories BEGIN
+        INSERT INTO hub_memories_fts(rowid, summary, content)
+        VALUES (new.rowid, new.summary, new.content);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS hub_memories_ad AFTER DELETE ON hub_memories BEGIN
+        INSERT INTO hub_memories_fts(hub_memories_fts, rowid, summary, content)
+        VALUES ('delete', old.rowid, old.summary, old.content);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS hub_memories_au AFTER UPDATE ON hub_memories BEGIN
+        INSERT INTO hub_memories_fts(hub_memories_fts, rowid, summary, content)
+        VALUES ('delete', old.rowid, old.summary, old.content);
+        INSERT INTO hub_memories_fts(rowid, summary, content)
+        VALUES (new.rowid, new.summary, new.content);
+      END;
     `);
   }
 
@@ -1813,6 +1863,137 @@ export class SqliteStore {
     return info.changes > 0;
   }
 
+  // ─── Hub Shared Memories (independent) ───
+
+  upsertHubMemory(memory: HubMemoryRecord): void {
+    this.db.prepare(`
+      INSERT INTO hub_memories (id, source_chunk_id, source_user_id, role, content, summary, kind, group_id, visibility, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source_user_id, source_chunk_id) DO UPDATE SET
+        role = excluded.role,
+        content = excluded.content,
+        summary = excluded.summary,
+        kind = excluded.kind,
+        group_id = excluded.group_id,
+        visibility = excluded.visibility,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
+    `).run(memory.id, memory.sourceChunkId, memory.sourceUserId, memory.role, memory.content, memory.summary, memory.kind, memory.groupId, memory.visibility, memory.createdAt, memory.updatedAt);
+  }
+
+  getHubMemoryBySource(sourceUserId: string, sourceChunkId: string): HubMemoryRecord | null {
+    const row = this.db.prepare('SELECT * FROM hub_memories WHERE source_user_id = ? AND source_chunk_id = ?').get(sourceUserId, sourceChunkId) as HubMemoryRow | undefined;
+    return row ? rowToHubMemory(row) : null;
+  }
+
+  getHubMemoryById(memoryId: string): HubMemoryRecord | null {
+    const row = this.db.prepare('SELECT * FROM hub_memories WHERE id = ?').get(memoryId) as HubMemoryRow | undefined;
+    return row ? rowToHubMemory(row) : null;
+  }
+
+  deleteHubMemoryBySource(sourceUserId: string, sourceChunkId: string): void {
+    this.db.prepare('DELETE FROM hub_memories WHERE source_user_id = ? AND source_chunk_id = ?').run(sourceUserId, sourceChunkId);
+  }
+
+  deleteHubMemoryById(memoryId: string): boolean {
+    const info = this.db.prepare('DELETE FROM hub_memories WHERE id = ?').run(memoryId);
+    return info.changes > 0;
+  }
+
+  upsertHubMemoryEmbedding(memoryId: string, vector: Float32Array): void {
+    const buf = Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength);
+    this.db.prepare(`
+      INSERT INTO hub_memory_embeddings (memory_id, vector, dimensions, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(memory_id) DO UPDATE SET vector = excluded.vector, dimensions = excluded.dimensions, updated_at = excluded.updated_at
+    `).run(memoryId, buf, vector.length, Date.now());
+  }
+
+  getHubMemoryEmbedding(memoryId: string): Float32Array | null {
+    const row = this.db.prepare('SELECT vector, dimensions FROM hub_memory_embeddings WHERE memory_id = ?').get(memoryId) as { vector: Buffer; dimensions: number } | undefined;
+    if (!row) return null;
+    return new Float32Array(row.vector.buffer, row.vector.byteOffset, row.dimensions);
+  }
+
+  searchHubMemories(query: string, options?: { userId?: string; maxResults?: number }): Array<{ hit: HubMemorySearchRow; rank: number }> {
+    const limit = options?.maxResults ?? 10;
+    const userId = options?.userId ?? "";
+    const sanitized = sanitizeFtsQuery(query);
+    if (!sanitized) return [];
+    const rows = this.db.prepare(`
+      SELECT hm.id, hm.content, hm.summary, hm.role, hm.created_at, hm.visibility, hg.name as group_name, hu.username as owner_name,
+             bm25(hub_memories_fts) as rank
+      FROM hub_memories_fts f
+      JOIN hub_memories hm ON hm.rowid = f.rowid
+      LEFT JOIN hub_groups hg ON hg.id = hm.group_id
+      LEFT JOIN hub_users hu ON hu.id = hm.source_user_id
+      WHERE hub_memories_fts MATCH ?
+        AND (
+          hm.visibility = 'public'
+          OR EXISTS (
+            SELECT 1 FROM hub_group_members gm
+            WHERE gm.group_id = hm.group_id AND gm.user_id = ?
+          )
+        )
+      ORDER BY rank
+      LIMIT ?
+    `).all(sanitized, userId, limit) as HubMemorySearchRow[];
+    return rows.map((row, idx) => ({ hit: row, rank: idx + 1 }));
+  }
+
+  getVisibleHubMemoryEmbeddings(userId: string): Array<{ memoryId: string; vector: Float32Array }> {
+    const rows = this.db.prepare(`
+      SELECT hme.memory_id, hme.vector, hme.dimensions
+      FROM hub_memory_embeddings hme
+      JOIN hub_memories hm ON hm.id = hme.memory_id
+      WHERE hm.visibility = 'public'
+         OR EXISTS (
+           SELECT 1 FROM hub_group_members gm
+           WHERE gm.group_id = hm.group_id AND gm.user_id = ?
+         )
+    `).all(userId) as Array<{ memory_id: string; vector: Buffer; dimensions: number }>;
+    return rows.map(r => ({
+      memoryId: r.memory_id,
+      vector: new Float32Array(r.vector.buffer, r.vector.byteOffset, r.dimensions),
+    }));
+  }
+
+  getVisibleHubSearchHitByMemoryId(memoryId: string, userId: string): HubMemorySearchRow | null {
+    const row = this.db.prepare(`
+      SELECT hm.id, hm.content, hm.summary, hm.role, hm.created_at, hm.visibility, hg.name as group_name, hu.username as owner_name,
+             0 as rank
+      FROM hub_memories hm
+      LEFT JOIN hub_groups hg ON hg.id = hm.group_id
+      LEFT JOIN hub_users hu ON hu.id = hm.source_user_id
+      WHERE hm.id = ?
+        AND (
+          hm.visibility = 'public'
+          OR EXISTS (
+            SELECT 1 FROM hub_group_members gm
+            WHERE gm.group_id = hm.group_id AND gm.user_id = ?
+          )
+        )
+      LIMIT 1
+    `).get(memoryId, userId) as HubMemorySearchRow | undefined;
+    return row ?? null;
+  }
+
+  listAllHubMemories(): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; createdAt: number; updatedAt: number }> {
+    const rows = this.db.prepare(`
+      SELECT m.*, u.username AS owner_name, g.name AS group_name
+      FROM hub_memories m
+      LEFT JOIN hub_users u ON u.id = m.source_user_id
+      LEFT JOIN hub_groups g ON g.id = m.group_id
+      ORDER BY m.updated_at DESC
+    `).all() as any[];
+    return rows.map(r => ({
+      id: r.id, sourceChunkId: r.source_chunk_id, sourceUserId: r.source_user_id,
+      role: r.role, summary: r.summary, kind: r.kind,
+      groupId: r.group_id, groupName: r.group_name ?? null, visibility: r.visibility,
+      ownerName: r.owner_name ?? "unknown", createdAt: r.created_at, updatedAt: r.updated_at,
+    }));
+  }
+
   private resolveCanonicalHubTaskId(taskId: string, sourceUserId: string, sourceTaskId?: string): string {
     if (sourceTaskId) {
       const bySource = this.db.prepare('SELECT id FROM hub_tasks WHERE source_user_id = ? AND source_task_id = ?').get(sourceUserId, sourceTaskId) as { id: string } | undefined;
@@ -2245,6 +2426,62 @@ interface HubSearchRow {
   role: string;
   created_at: number;
   task_title: string | null;
+  visibility: string;
+  group_name: string | null;
+  owner_name: string | null;
+  rank: number;
+}
+
+export interface HubMemoryRecord {
+  id: string;
+  sourceChunkId: string;
+  sourceUserId: string;
+  role: string;
+  content: string;
+  summary: string;
+  kind: string;
+  groupId: string | null;
+  visibility: SharedVisibility;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface HubMemoryRow {
+  id: string;
+  source_chunk_id: string;
+  source_user_id: string;
+  role: string;
+  content: string;
+  summary: string;
+  kind: string;
+  group_id: string | null;
+  visibility: string;
+  created_at: number;
+  updated_at: number;
+}
+
+function rowToHubMemory(row: HubMemoryRow): HubMemoryRecord {
+  return {
+    id: row.id,
+    sourceChunkId: row.source_chunk_id,
+    sourceUserId: row.source_user_id,
+    role: row.role,
+    content: row.content,
+    summary: row.summary,
+    kind: row.kind,
+    groupId: row.group_id,
+    visibility: row.visibility as SharedVisibility,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+interface HubMemorySearchRow {
+  id: string;
+  content: string;
+  summary: string;
+  role: string;
+  created_at: number;
   visibility: string;
   group_name: string | null;
   owner_name: string | null;

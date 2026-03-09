@@ -24,7 +24,7 @@ type HubAuthState = {
 
 export class HubServer {
   private server?: http.Server;
-  private remoteHitMap = new Map<string, { chunkId: string; expiresAt: number; requesterUserId: string }>();
+  private remoteHitMap = new Map<string, { chunkId: string; type: "chunk" | "memory"; expiresAt: number; requesterUserId: string }>();
   private readonly userManager: HubUserManager;
   private readonly authStatePath: string;
   private authState: HubAuthState;
@@ -157,6 +157,20 @@ export class HubServer {
       this.opts.log.info(`hub: embedded ${vectors.filter(Boolean).length}/${chunkIds.length} shared chunks`);
     }).catch((err) => {
       this.opts.log.warn(`hub: embedding shared chunks failed: ${err}`);
+    });
+  }
+
+  private embedMemoryAsync(memoryId: string, summary: string, content: string): void {
+    const embedder = this.opts.embedder;
+    if (!embedder) return;
+    const text = summary || content.slice(0, 500);
+    embedder.embed([text]).then((vectors) => {
+      if (vectors[0]) {
+        this.opts.store.upsertHubMemoryEmbedding(memoryId, new Float32Array(vectors[0]));
+        this.opts.log.info(`hub: embedded shared memory ${memoryId}`);
+      }
+    }).catch((err) => {
+      this.opts.log.warn(`hub: embedding shared memory failed: ${err}`);
     });
   }
 
@@ -365,11 +379,60 @@ export class HubServer {
       return this.json(res, 200, { ok: true });
     }
 
+    if (req.method === "POST" && routePath === "/api/v1/hub/memories/share") {
+      const body = await this.readJson(req);
+      if (!body?.memory) return this.json(res, 400, { error: "invalid_payload" });
+      const m = body.memory;
+      const sourceChunkId = String(m.sourceChunkId || "");
+      if (!sourceChunkId) return this.json(res, 400, { error: "missing_source_chunk_id" });
+      const existing = this.opts.store.getHubMemoryBySource(auth.userId, sourceChunkId);
+      const memoryId = existing?.id ?? randomUUID();
+      const visibility = m.visibility === "group" ? "group" : "public";
+      let resolvedGroupId: string | null = null;
+      if (visibility === "group") {
+        const gid = String(m.groupId || "");
+        if (!gid) return this.json(res, 400, { error: "missing_group_id" });
+        const group = this.opts.store.getHubGroupById(gid);
+        if (!group) return this.json(res, 404, { error: "group_not_found" });
+        resolvedGroupId = gid;
+      }
+      const now = Date.now();
+      this.opts.store.upsertHubMemory({
+        id: memoryId,
+        sourceChunkId,
+        sourceUserId: auth.userId,
+        role: String(m.role || "assistant"),
+        content: String(m.content || ""),
+        summary: String(m.summary || ""),
+        kind: String(m.kind || "paragraph"),
+        groupId: resolvedGroupId,
+        visibility,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
+      if (this.opts.embedder) {
+        this.embedMemoryAsync(memoryId, String(m.summary || ""), String(m.content || ""));
+      }
+      return this.json(res, 200, { ok: true, memoryId, visibility });
+    }
+
+    if (req.method === "POST" && routePath === "/api/v1/hub/memories/unshare") {
+      const body = await this.readJson(req);
+      const sourceChunkId = String(body?.sourceChunkId || "");
+      if (!sourceChunkId) return this.json(res, 400, { error: "missing_source_chunk_id" });
+      this.opts.store.deleteHubMemoryBySource(auth.userId, sourceChunkId);
+      return this.json(res, 200, { ok: true });
+    }
+
     if (req.method === "POST" && routePath === "/api/v1/hub/search") {
       const body = await this.readJson(req);
       const query = String(body.query || "");
       const maxResults = Number(body.maxResults || 10);
       const ftsHits = this.opts.store.searchHubChunks(query, { userId: auth.userId, maxResults: maxResults * 2 });
+      const memFtsHits = this.opts.store.searchHubMemories(query, { userId: auth.userId, maxResults: maxResults * 2 });
+
+      // Track which IDs are memories vs chunks
+      const memoryIdSet = new Set(memFtsHits.map(({ hit }) => hit.id));
 
       // Attempt vector search and RRF merge if embedder is available
       let mergedIds: string[];
@@ -378,38 +441,61 @@ export class HubServer {
           const [queryVec] = await this.opts.embedder.embed([query]);
           if (queryVec) {
             const allEmb = this.opts.store.getVisibleHubEmbeddings(auth.userId);
-            const scored = allEmb.map(e => {
+            const memEmb = this.opts.store.getVisibleHubMemoryEmbeddings(auth.userId);
+            const scored: Array<{ id: string; score: number }> = [];
+            const cosineSim = (vec: Float32Array) => {
               let dot = 0, nA = 0, nB = 0;
-              for (let i = 0; i < queryVec.length && i < e.vector.length; i++) {
-                dot += queryVec[i] * e.vector[i];
-                nA += queryVec[i] * queryVec[i];
-                nB += e.vector[i] * e.vector[i];
+              for (let i = 0; i < queryVec.length && i < vec.length; i++) {
+                dot += queryVec[i] * vec[i]; nA += queryVec[i] * queryVec[i]; nB += vec[i] * vec[i];
               }
-              const sim = nA > 0 && nB > 0 ? dot / (Math.sqrt(nA) * Math.sqrt(nB)) : 0;
-              return { chunkId: e.chunkId, score: sim };
-            }).sort((a, b) => b.score - a.score).slice(0, maxResults * 2);
+              return nA > 0 && nB > 0 ? dot / (Math.sqrt(nA) * Math.sqrt(nB)) : 0;
+            };
+            for (const e of allEmb) scored.push({ id: e.chunkId, score: cosineSim(e.vector) });
+            for (const e of memEmb) { scored.push({ id: e.memoryId, score: cosineSim(e.vector) }); memoryIdSet.add(e.memoryId); }
+            scored.sort((a, b) => b.score - a.score);
+            const topScored = scored.slice(0, maxResults * 2);
 
             const K = 60;
             const rrfScores = new Map<string, number>();
             ftsHits.forEach(({ hit }, idx) => {
               rrfScores.set(hit.id, (rrfScores.get(hit.id) ?? 0) + 1 / (K + idx + 1));
             });
-            scored.forEach(({ chunkId }, idx) => {
-              rrfScores.set(chunkId, (rrfScores.get(chunkId) ?? 0) + 1 / (K + idx + 1));
+            memFtsHits.forEach(({ hit }, idx) => {
+              rrfScores.set(hit.id, (rrfScores.get(hit.id) ?? 0) + 1 / (K + idx + 1));
+            });
+            topScored.forEach(({ id }, idx) => {
+              rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + idx + 1));
             });
             mergedIds = [...rrfScores.entries()].sort((a, b) => b[1] - a[1]).slice(0, maxResults).map(([id]) => id);
           } else {
-            mergedIds = ftsHits.slice(0, maxResults).map(({ hit }) => hit.id);
+            mergedIds = [...ftsHits.map(({ hit }) => hit.id), ...memFtsHits.map(({ hit }) => hit.id)].slice(0, maxResults);
           }
         } catch {
-          mergedIds = ftsHits.slice(0, maxResults).map(({ hit }) => hit.id);
+          mergedIds = [...ftsHits.map(({ hit }) => hit.id), ...memFtsHits.map(({ hit }) => hit.id)].slice(0, maxResults);
         }
       } else {
-        mergedIds = ftsHits.slice(0, maxResults).map(({ hit }) => hit.id);
+        mergedIds = [...ftsHits.map(({ hit }) => hit.id), ...memFtsHits.map(({ hit }) => hit.id)].slice(0, maxResults);
       }
 
       const ftsMap = new Map(ftsHits.map(({ hit }) => [hit.id, hit]));
+      const memFtsMap = new Map(memFtsHits.map(({ hit }) => [hit.id, hit]));
       const hits = mergedIds.map((id, rank) => {
+        const isMemory = memoryIdSet.has(id);
+        if (isMemory) {
+          let mhit = memFtsMap.get(id);
+          if (!mhit) {
+            const visibleHit = this.opts.store.getVisibleHubSearchHitByMemoryId(id, auth.userId);
+            if (!visibleHit) return null;
+            mhit = visibleHit;
+          }
+          const remoteHitId = randomUUID();
+          this.remoteHitMap.set(remoteHitId, { chunkId: id, type: "memory", expiresAt: Date.now() + 10 * 60 * 1000, requesterUserId: auth.userId });
+          return {
+            remoteHitId, summary: mhit.summary, excerpt: mhit.content.slice(0, 240), hubRank: rank + 1,
+            taskTitle: null, ownerName: mhit.owner_name || "unknown", groupName: mhit.group_name,
+            visibility: mhit.visibility, source: { ts: mhit.created_at, role: mhit.role },
+          };
+        }
         let hit = ftsMap.get(id);
         if (!hit) {
           const visibleHit = this.opts.store.getVisibleHubSearchHitByChunkId(id, auth.userId);
@@ -417,17 +503,11 @@ export class HubServer {
           hit = visibleHit as any;
         }
         const remoteHitId = randomUUID();
-        this.remoteHitMap.set(remoteHitId, { chunkId: id, expiresAt: Date.now() + 10 * 60 * 1000, requesterUserId: auth.userId });
+        this.remoteHitMap.set(remoteHitId, { chunkId: id, type: "chunk", expiresAt: Date.now() + 10 * 60 * 1000, requesterUserId: auth.userId });
         return {
-          remoteHitId,
-          summary: hit!.summary,
-          excerpt: hit!.content.slice(0, 240),
-          hubRank: rank + 1,
-          taskTitle: hit!.task_title,
-          ownerName: hit!.owner_name || "unknown",
-          groupName: hit!.group_name,
-          visibility: hit!.visibility,
-          source: { ts: hit!.created_at, role: hit!.role },
+          remoteHitId, summary: hit!.summary, excerpt: hit!.content.slice(0, 240), hubRank: rank + 1,
+          taskTitle: hit!.task_title, ownerName: hit!.owner_name || "unknown", groupName: hit!.group_name,
+          visibility: hit!.visibility, source: { ts: hit!.created_at, role: hit!.role },
         };
       }).filter(Boolean);
       return this.json(res, 200, { hits, meta: { totalCandidates: hits.length, searchedGroups: [], includedPublic: true } });
@@ -534,11 +614,31 @@ export class HubServer {
       return this.json(res, 200, { ok: true });
     }
 
+    if (req.method === "GET" && routePath === "/api/v1/hub/admin/shared-memories") {
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const memories = this.opts.store.listAllHubMemories();
+      return this.json(res, 200, { memories });
+    }
+
+    const adminMemoryDeleteMatch = req.method === "DELETE" ? routePath.match(/^\/api\/v1\/hub\/admin\/shared-memories\/([^/]+)$/) : null;
+    if (adminMemoryDeleteMatch) {
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const memoryId = decodeURIComponent(adminMemoryDeleteMatch[1]);
+      const deleted = this.opts.store.deleteHubMemoryById(memoryId);
+      if (!deleted) return this.json(res, 404, { error: "not_found" });
+      return this.json(res, 200, { ok: true });
+    }
+
     if (req.method === "POST" && routePath === "/api/v1/hub/memory-detail") {
       const body = await this.readJson(req);
       const hit = this.remoteHitMap.get(String(body.remoteHitId));
       if (!hit || hit.expiresAt < Date.now()) return this.json(res, 404, { error: "not_found" });
       if (hit.requesterUserId !== auth.userId) return this.json(res, 403, { error: "forbidden" });
+      if (hit.type === "memory") {
+        const mem = this.opts.store.getHubMemoryById(hit.chunkId);
+        if (!mem) return this.json(res, 404, { error: "not_found" });
+        return this.json(res, 200, { content: mem.content, summary: mem.summary, source: { ts: mem.createdAt, role: mem.role } });
+      }
       const chunk = this.opts.store.getHubChunkById(hit.chunkId);
       if (!chunk) return this.json(res, 404, { error: "not_found" });
       return this.json(res, 200, {

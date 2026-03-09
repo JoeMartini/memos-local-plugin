@@ -1224,11 +1224,13 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <button class="admin-tab" onclick="switchAdminTab('groups',this)" data-i18n="admin.tab.groups">Groups</button>
         <button class="admin-tab" onclick="switchAdminTab('memories',this)" data-i18n="admin.tab.memories">Shared Memories</button>
         <button class="admin-tab" onclick="switchAdminTab('skills',this)" data-i18n="admin.tab.skills">Shared Skills</button>
+        <button class="admin-tab" onclick="switchAdminTab('sharedMemories',this)" data-i18n="admin.tab.sharedMemories">Shared Memories (Hub)</button>
       </div>
       <div class="admin-panel active" id="adminUsersPanel"></div>
       <div class="admin-panel" id="adminGroupsPanel"></div>
       <div class="admin-panel" id="adminMemoriesPanel"></div>
       <div class="admin-panel" id="adminSkillsPanel"></div>
+      <div class="admin-panel" id="adminSharedMemoriesPanel"></div>
     </div>
 
     <!-- ─── Import Page ─── -->
@@ -1690,6 +1692,7 @@ const I18N={
     'admin.stat.groups':'Groups',
     'admin.stat.sharedTasks':'Shared Tasks',
     'admin.stat.sharedSkills':'Shared Skills',
+    'admin.stat.sharedMemories':'Shared Memories',
     'admin.pendingApproval':'Pending Approval',
     'admin.activeUsers':'Active Users',
     'admin.noActiveUsers':'No active users.',
@@ -1716,6 +1719,9 @@ const I18N={
     'admin.updated':'Updated: ',
     'admin.sharedSkills':'Shared Skills',
     'admin.noSharedSkills':'No shared skills on Hub.',
+    'admin.sharedMemories':'Shared Memories',
+    'admin.noSharedMemories':'No shared memories on Hub.',
+    'admin.tab.sharedMemories':'Shared Memories (Hub)',
     'admin.version':'v',
     'admin.quality':'Quality: ',
     'admin.membersCount':'Members ({n}):',
@@ -1732,6 +1738,7 @@ const I18N={
     'toast.memberRemoved':'Member removed',
     'toast.taskRemoved':'Task removed',
     'toast.skillRemoved':'Skill removed',
+    'toast.memoryRemoved':'Memory removed',
     'toast.createFail':'Create failed',
     'toast.deleteFail':'Delete failed',
     'toast.addFail':'Add failed',
@@ -1744,6 +1751,7 @@ const I18N={
     'confirm.deleteGroupShort':'Delete group "{name}"?',
     'confirm.removeTask':'Remove shared task "{name}" from Hub? This cannot be undone.',
     'confirm.removeSkill':'Remove shared skill "{name}" from Hub? This cannot be undone.',
+    'confirm.removeMemory':'Remove shared memory "{name}" from Hub? This cannot be undone.',
     'sharing.disabled':'Sharing disabled',
     'sharing.disabled.hint':'Enable sharing in plugin config to connect a Hub.',
     'sharing.hubAdmin':'Hub Admin',
@@ -1789,10 +1797,22 @@ const I18N={
     'search.viewDetail':'View Detail',
     'search.sharedMemory':'Shared Memory',
     'search.loadFailed':'Failed to load shared memory',
+    'share.alreadyShared':'Shared',
+    'share.shareBtn':'Share',
+    'share.updateBtn':'Update',
+    'share.unshareBtn':'Unshare',
     'toast.taskShared':'Task shared',
     'toast.taskShareFail':'Task share failed',
     'toast.taskUnshared':'Task unshared',
     'toast.taskUnshareFail':'Task unshare failed',
+    'toast.memoryShared':'Memory shared',
+    'toast.memoryShareFail':'Memory share failed',
+    'toast.memoryUnshared':'Memory unshared',
+    'toast.memoryUnshareFail':'Memory unshare failed',
+    'share.memoryVisibilityPrompt':'Share visibility (public or group):',
+    'share.memoryUnshareConfirm':'Unshare this memory?',
+    'share.group':'Group',
+    'share.public':'Public',
     'toast.skillPulled':'Skill pulled to local storage',
     'toast.skillPullFail':'Skill pull failed'
   },
@@ -2082,6 +2102,7 @@ const I18N={
     'admin.stat.groups':'分组',
     'admin.stat.sharedTasks':'共享任务',
     'admin.stat.sharedSkills':'共享技能',
+    'admin.stat.sharedMemories':'共享记忆',
     'admin.pendingApproval':'待审批',
     'admin.activeUsers':'活跃用户',
     'admin.noActiveUsers':'暂无活跃用户。',
@@ -2108,6 +2129,9 @@ const I18N={
     'admin.updated':'更新于：',
     'admin.sharedSkills':'共享技能',
     'admin.noSharedSkills':'Hub 上暂无共享技能。',
+    'admin.sharedMemories':'共享记忆',
+    'admin.noSharedMemories':'Hub 上暂无共享记忆。',
+    'admin.tab.sharedMemories':'共享记忆（Hub）',
     'admin.version':'v',
     'admin.quality':'质量：',
     'admin.membersCount':'成员（{n}）：',
@@ -2124,6 +2148,7 @@ const I18N={
     'toast.memberRemoved':'成员已移除',
     'toast.taskRemoved':'任务已移除',
     'toast.skillRemoved':'技能已移除',
+    'toast.memoryRemoved':'记忆已移除',
     'toast.createFail':'创建失败',
     'toast.deleteFail':'删除失败',
     'toast.addFail':'添加失败',
@@ -2136,6 +2161,7 @@ const I18N={
     'confirm.deleteGroupShort':'确定要删除分组「{name}」吗？',
     'confirm.removeTask':'确定要从 Hub 移除共享任务「{name}」吗？此操作不可撤销。',
     'confirm.removeSkill':'确定要从 Hub 移除共享技能「{name}」吗？此操作不可撤销。',
+    'confirm.removeMemory':'确定要从 Hub 移除共享记忆「{name}」吗？此操作不可撤销。',
     'sharing.disabled':'共享已禁用',
     'sharing.disabled.hint':'在插件配置中启用共享以连接 Hub。',
     'sharing.hubAdmin':'Hub 管理员',
@@ -2181,10 +2207,22 @@ const I18N={
     'search.viewDetail':'查看详情',
     'search.sharedMemory':'共享记忆',
     'search.loadFailed':'加载共享记忆失败',
+    'share.alreadyShared':'已共享',
+    'share.shareBtn':'共享',
+    'share.updateBtn':'更新共享',
+    'share.unshareBtn':'取消共享',
     'toast.taskShared':'任务已共享',
     'toast.taskShareFail':'任务共享失败',
     'toast.taskUnshared':'任务已取消共享',
     'toast.taskUnshareFail':'取消共享失败',
+    'toast.memoryShared':'记忆已共享',
+    'toast.memoryShareFail':'记忆共享失败',
+    'toast.memoryUnshared':'记忆已取消共享',
+    'toast.memoryUnshareFail':'记忆取消共享失败',
+    'share.memoryVisibilityPrompt':'共享可见性（public 或 group）：',
+    'share.memoryUnshareConfirm':'取消共享此记忆？',
+    'share.group':'团队',
+    'share.public':'公开',
     'toast.skillPulled':'技能已拉取到本地',
     'toast.skillPullFail':'技能拉取失败'
   }
@@ -2640,7 +2678,7 @@ async function reloadGroupMembers(groupId){
 }
 
 /* ─── Hub Admin Panel ─── */
-var adminDataCache={users:[],groups:[],tasks:[],skills:[]};
+var adminDataCache={users:[],groups:[],tasks:[],skills:[],memories:[]};
 
 function switchAdminTab(tab,btn){
   document.querySelectorAll('.admin-tabs .admin-tab').forEach(function(t){t.classList.remove('active');});
@@ -2652,23 +2690,26 @@ function switchAdminTab(tab,btn){
 
 async function loadAdminData(){
   try{
-    var [usersR,groupsR,tasksR,skillsR,pendingR]=await Promise.all([
+    var [usersR,groupsR,tasksR,skillsR,pendingR,memoriesR]=await Promise.all([
       fetch('/api/sharing/users').then(function(r){return r.json();}),
       fetch('/api/sharing/groups').then(function(r){return r.json();}),
       fetch('/api/admin/shared-tasks').then(function(r){return r.json();}),
       fetch('/api/admin/shared-skills').then(function(r){return r.json();}),
-      fetch('/api/sharing/pending-users').then(function(r){return r.json();})
+      fetch('/api/sharing/pending-users').then(function(r){return r.json();}),
+      fetch('/api/admin/shared-memories').then(function(r){return r.json();})
     ]);
     adminDataCache.users=Array.isArray(usersR.users)?usersR.users:[];
     adminDataCache.groups=Array.isArray(groupsR.groups)?groupsR.groups:[];
     adminDataCache.tasks=Array.isArray(tasksR.tasks)?tasksR.tasks:[];
     adminDataCache.skills=Array.isArray(skillsR.skills)?skillsR.skills:[];
+    adminDataCache.memories=Array.isArray(memoriesR.memories)?memoriesR.memories:[];
     var pending=Array.isArray(pendingR.users)?pendingR.users:[];
     renderAdminStats(pending.length);
     renderAdminUsers(adminDataCache.users, pending);
     renderAdminGroups(adminDataCache.groups);
     renderAdminMemories(adminDataCache.tasks);
     renderAdminSkills(adminDataCache.skills);
+    renderAdminSharedMemories(adminDataCache.memories);
   }catch(e){
     var statsEl=document.getElementById('adminStats');
     if(statsEl) statsEl.innerHTML='<div class="admin-empty">'+t('admin.loadFailed')+esc(String(e))+'</div>';
@@ -2683,7 +2724,8 @@ function renderAdminStats(pendingCount){
     '<div class="admin-stat-box"><div class="val">'+pendingCount+'</div><div class="lbl">'+t('admin.stat.pending')+'</div></div>'+
     '<div class="admin-stat-box"><div class="val">'+adminDataCache.groups.length+'</div><div class="lbl">'+t('admin.stat.groups')+'</div></div>'+
     '<div class="admin-stat-box"><div class="val">'+adminDataCache.tasks.length+'</div><div class="lbl">'+t('admin.stat.sharedTasks')+'</div></div>'+
-    '<div class="admin-stat-box"><div class="val">'+adminDataCache.skills.length+'</div><div class="lbl">'+t('admin.stat.sharedSkills')+'</div></div>';
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.skills.length+'</div><div class="lbl">'+t('admin.stat.sharedSkills')+'</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+(adminDataCache.memories||[]).length+'</div><div class="lbl">'+t('admin.stat.sharedMemories')+'</div></div>';
 }
 
 function renderAdminUsers(users,pending){
@@ -2753,14 +2795,12 @@ function renderAdminGroups(groups){
       html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(g.name)+'</div>'+
         '<button class="btn btn-sm btn-ghost" onclick="adminDeleteGroup(&quot;'+escAttr(g.id)+'&quot;,&quot;'+escAttr(g.name)+'&quot;)" style="color:var(--rose);font-size:11px">'+t('admin.delete')+'</button></div>'+
         (g.description?'<div class="admin-card-meta">'+esc(g.description)+'</div>':'')+
-        '<div class="admin-card-actions">'+
-          '<button class="btn btn-sm" onclick="adminToggleGroupMembers(&quot;'+escAttr(g.id)+'&quot;)">'+t('admin.members')+'</button>'+
-        '</div>'+
-        '<div id="adminGroupMembers_'+escAttr(g.id)+'" style="display:none;margin-top:10px"></div>'+
+        '<div id="adminGroupMembers_'+escAttr(g.id)+'" style="margin-top:10px"></div>'+
       '</div>';
     }
   }
   el.innerHTML=html;
+  for(var i=0;i<groups.length;i++){adminLoadGroupMembers(groups[i].id);}
 }
 function showAdminCreateGroup(){var f=document.getElementById('adminCreateGroupForm');if(f)f.style.display='block';}
 function hideAdminCreateGroup(){var f=document.getElementById('adminCreateGroupForm');if(f)f.style.display='none';}
@@ -2782,11 +2822,9 @@ async function adminDeleteGroup(groupId,groupName){
     if(d.ok){toast(t('toast.groupDeleted'),'success');loadAdminData();}else{toast(d.error||t('toast.deleteFail'),'error');}
   }catch(e){toast(t('toast.deleteFail')+': '+e.message,'error');}
 }
-async function adminToggleGroupMembers(groupId){
+async function adminLoadGroupMembers(groupId){
   var el=document.getElementById('adminGroupMembers_'+groupId);
   if(!el) return;
-  if(el.style.display!=='none'){el.style.display='none';return;}
-  el.style.display='block';
   el.innerHTML=t('sharing.loading');
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members');
@@ -2824,7 +2862,7 @@ async function adminAddGroupMember(groupId){
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:sel.value})});
     var d=await r.json();
-    if(d.ok){toast(t('toast.memberAdded'),'success');adminToggleGroupMembers(groupId);adminToggleGroupMembers(groupId);}else{toast(d.error||t('toast.addFail'),'error');}
+    if(d.ok){toast(t('toast.memberAdded'),'success');adminLoadGroupMembers(groupId);}else{toast(d.error||t('toast.addFail'),'error');}
   }catch(e){toast(t('toast.addFail')+': '+e.message,'error');}
 }
 async function adminRemoveGroupMember(groupId,userId){
@@ -2832,7 +2870,7 @@ async function adminRemoveGroupMember(groupId,userId){
   try{
     var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
     var d=await r.json();
-    if(d.ok){toast(t('toast.memberRemoved'),'success');adminToggleGroupMembers(groupId);adminToggleGroupMembers(groupId);}else{toast(d.error||t('toast.removeFail'),'error');}
+    if(d.ok){toast(t('toast.memberRemoved'),'success');adminLoadGroupMembers(groupId);}else{toast(d.error||t('toast.removeFail'),'error');}
   }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
 }
 
@@ -2902,6 +2940,41 @@ async function adminDeleteSkill(skillId,skillName){
     var r=await fetch('/api/admin/shared-skills/'+encodeURIComponent(skillId),{method:'DELETE'});
     var d=await r.json();
     if(d.ok){toast(t('toast.skillRemoved'),'success');loadAdminData();}else{toast(d.error||t('toast.removeFail'),'error');}
+  }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
+}
+
+function renderAdminSharedMemories(memories){
+  var el=document.getElementById('adminSharedMemoriesPanel');
+  if(!el) return;
+  var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.sharedMemories')+' ('+(memories||[]).length+')</h3>';
+  if(!memories||memories.length===0){
+    html+='<div class="admin-empty">'+t('admin.noSharedMemories')+'</div>';
+  }else{
+    for(var i=0;i<memories.length;i++){
+      var m=memories[i];
+      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(m.summary||m.content?.slice(0,80)||m.id)+'</div>'+
+        '<span class="admin-badge '+(m.visibility==='public'?'public':'group')+'">'+esc(m.visibility||'public')+'</span></div>'+
+        '<div class="admin-card-meta">'+
+          t('admin.owner')+esc(m.ownerName||m.sourceUserId||'unknown')+
+          (m.groupName?' \u00B7 '+t('admin.group')+esc(m.groupName):'')+
+          (m.kind?' \u00B7 Kind: '+esc(m.kind):'')+
+          (m.role?' \u00B7 Role: '+esc(m.role):'')+
+          ' \u00B7 '+t('admin.updated')+new Date(m.updatedAt||m.createdAt).toLocaleDateString()+
+        '</div>'+
+        '<div class="admin-card-actions">'+
+          '<button class="btn btn-sm btn-ghost" onclick="adminDeleteMemory(&quot;'+escAttr(m.id)+'&quot;,&quot;'+escAttr(m.summary||m.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
+        '</div></div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+async function adminDeleteMemory(memoryId,memoryTitle){
+  if(!confirm(t('confirm.removeMemory').replace('{name}',memoryTitle))) return;
+  try{
+    var r=await fetch('/api/admin/shared-memories/'+encodeURIComponent(memoryId),{method:'DELETE'});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.memoryRemoved'),'success');loadAdminData();}else{toast(d.error||t('toast.removeFail'),'error');}
   }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
 }
 
@@ -2977,14 +3050,20 @@ function renderTaskShareActions(task){
   const el=document.getElementById('taskShareActions');
   if(!el){return;}
   if(!task||!task.id){el.innerHTML='';return;}
-  const current=(task.sharingVisibility||task.visibility||'private');
-  el.innerHTML=''+
+  const current=(task.sharingVisibility||task.visibility||null);
+  const isShared=!!current;
+  var statusHtml='';
+  if(isShared){
+    var scopeLabel=current==='group'?'Group':'Public';
+    statusHtml='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:#22c55e22;border:1px solid #22c55e44;border-radius:12px;font-size:12px;color:#22c55e">\u2713 '+t('share.alreadyShared')+' ('+scopeLabel+')</span>';
+  }
+  el.innerHTML=statusHtml+
     '<select id="taskShareScope" class="filter-select" style="min-width:120px">'+
       '<option value="group"'+(current==='group'?' selected':'')+'>Share to Group</option>'+
       '<option value="public"'+(current==='public'?' selected':'')+'>Share to Public</option>'+
     '</select>'+
-    '<button class="btn btn-sm" onclick="shareCurrentTask()">Share</button>'+
-    '<button class="btn btn-sm btn-ghost" onclick="unshareCurrentTask()">Unshare</button>';
+    '<button class="btn btn-sm" onclick="shareCurrentTask()">'+(isShared?t('share.updateBtn'):t('share.shareBtn'))+'</button>'+
+    (isShared?'<button class="btn btn-sm btn-ghost" onclick="unshareCurrentTask()">'+t('share.unshareBtn')+'</button>':'');
 }
 
 async function shareCurrentTask(){
@@ -2993,7 +3072,7 @@ async function shareCurrentTask(){
   try{
     const r=await fetch('/api/sharing/tasks/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({taskId:currentTaskDetail.id,visibility:visibility})});
     const d=await r.json();
-    if(d.ok||d.shared){toast(t('toast.taskShared'),'success');} else {toast(d.error||t('toast.taskShareFail'),'error');}
+    if(d.ok||d.shared){toast(t('toast.taskShared'),'success');currentTaskDetail.sharingVisibility=visibility;renderTaskShareActions(currentTaskDetail);} else {toast(d.error||t('toast.taskShareFail'),'error');}
   }catch(e){toast(t('toast.taskShareFail')+': '+e.message,'error');}
 }
 
@@ -3002,8 +3081,28 @@ async function unshareCurrentTask(){
   try{
     const r=await fetch('/api/sharing/tasks/unshare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({taskId:currentTaskDetail.id})});
     const d=await r.json();
-    if(d.ok||d.unshared){toast(t('toast.taskUnshared'),'success');} else {toast(d.error||t('toast.taskUnshareFail'),'error');}
+    if(d.ok||d.unshared){toast(t('toast.taskUnshared'),'success');currentTaskDetail.sharingVisibility=null;renderTaskShareActions(currentTaskDetail);} else {toast(d.error||t('toast.taskUnshareFail'),'error');}
   }catch(e){toast(t('toast.taskUnshareFail')+': '+e.message,'error');}
+}
+
+async function shareMemoryPrompt(chunkId){
+  const visibility=prompt(t('share.memoryVisibilityPrompt'),'public');
+  if(!visibility) return;
+  const v=(visibility==='group')?'group':'public';
+  try{
+    const r=await fetch('/api/sharing/memories/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chunkId:chunkId,visibility:v})});
+    const d=await r.json();
+    if(d.ok){toast(t('toast.memoryShared'),'success');loadMemories();} else {toast(d.error||t('toast.memoryShareFail'),'error');}
+  }catch(e){toast(t('toast.memoryShareFail')+': '+e.message,'error');}
+}
+
+async function unshareMemory(chunkId){
+  if(!confirm(t('share.memoryUnshareConfirm'))) return;
+  try{
+    const r=await fetch('/api/sharing/memories/unshare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chunkId:chunkId})});
+    const d=await r.json();
+    if(d.ok){toast(t('toast.memoryUnshared'),'success');loadMemories();} else {toast(d.error||t('toast.memoryUnshareFail'),'error');}
+  }catch(e){toast(t('toast.memoryUnshareFail')+': '+e.message,'error');}
 }
 
 function debounceSkillSearch(){
@@ -4297,6 +4396,8 @@ function renderMemories(items){
     const ownerVal=m.owner||'agent:main';
     const isPublicMem=ownerVal==='public';
     const ownerBadge=isPublicMem?'<span class="owner-badge public">\\u{1F310} '+t('filter.public')+'</span>':'<span class="owner-badge agent">\\u{1F512} '+t('filter.private')+'</span>';
+    const memShared=m.sharingVisibility||null;
+    const memShareBadge=memShared?'<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:#22c55e22;border:1px solid #22c55e44;border-radius:10px;font-size:11px;color:#22c55e">\\u2713 '+(memShared==='group'?t('share.group'):t('share.public'))+'</span>':'';
     let dedupInfo='';
     if(isInactive){
       const reason=m.dedup_reason?'<span style="font-size:11px;color:var(--text-muted)">'+t('card.dedupReason')+esc(m.dedup_reason)+'</span>':'';
@@ -4321,7 +4422,7 @@ function renderMemories(items){
       }catch(e){}
     }
     return '<div class="memory-card'+(isInactive?' dedup-inactive':'')+'">'+
-      '<div class="card-header"><div class="meta"><span class="role-tag '+role+'">'+role+'</span><span class="kind-tag">'+kind+'</span>'+ownerBadge+importBadge+dedupBadge+mergeBadge+'</div><span class="card-time"><span class="session-tag" title="'+esc(sid)+'">'+esc(sidShort)+'</span> '+time+updatedAt+'</span></div>'+
+      '<div class="card-header"><div class="meta"><span class="role-tag '+role+'">'+role+'</span><span class="kind-tag">'+kind+'</span>'+ownerBadge+importBadge+dedupBadge+mergeBadge+memShareBadge+'</div><span class="card-time"><span class="session-tag" title="'+esc(sid)+'">'+esc(sidShort)+'</span> '+time+updatedAt+'</span></div>'+
       '<div class="card-summary">'+summary+'</div>'+
       dedupInfo+
       '<div class="card-content" id="content-'+id+'"><pre>'+content+'</pre></div>'+
@@ -4331,6 +4432,7 @@ function renderMemories(items){
         (mc>0?'<button class="btn btn-sm btn-ghost" onclick="toggleHistory(\\''+id+'\\')">'+t('card.evolveHistory')+'</button>':'')+
         '<button class="btn btn-sm btn-ghost" onclick="openEditModal(\\''+id+'\\')">'+t('card.edit')+'</button>'+
         (isPublicMem?'<button class="btn btn-sm btn-ghost" onclick="toggleMemoryPublic(\\''+id+'\\',false)">\\u{1F512} '+t('skills.setPrivate')+'</button>':'<button class="btn btn-sm btn-ghost mem-public-btn" onclick="toggleMemoryPublic(\\''+id+'\\',true)">\\u{1F310} '+t('skills.setPublic')+'</button>')+
+        (memShared?'<button class="btn btn-sm btn-ghost" onclick="unshareMemory(\\''+id+'\\')">'+t('share.unshareBtn')+'</button>':'<button class="btn btn-sm btn-ghost" onclick="shareMemoryPrompt(\\''+id+'\\')">'+t('share.shareBtn')+'</button>')+
         '<button class="btn btn-sm btn-ghost" style="color:var(--accent)" onclick="deleteMemory(\\''+id+'\\')">'+t('card.delete')+'</button>'+
         vscore+
       '</div></div>';
