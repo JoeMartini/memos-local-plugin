@@ -1060,6 +1060,13 @@ input,textarea,select{font-family:inherit;font-size:inherit}
           </div>
           <div class="settings-toggle">
             <label class="toggle-switch">
+              <input type="checkbox" id="cfgHostSkill" onchange="syncHostToggles()">
+              <span class="toggle-slider"></span>
+            </label>
+            <label data-i18n="settings.hostproxy.skill">Host Completion (Skill)</label>
+          </div>
+          <div class="settings-toggle">
+            <label class="toggle-switch">
               <input type="checkbox" id="cfgHostEmbedding" onchange="syncHostToggles()">
               <span class="toggle-slider"></span>
             </label>
@@ -1592,6 +1599,7 @@ const I18N={
     'settings.hostproxy':'Host Model Proxy',
     'settings.hostproxy.hint':'Use the LLM configured in OpenClaw host for embedding and summarization. No extra API key needed.',
     'settings.hostproxy.completion':'Host Completion (Summarizer)',
+    'settings.hostproxy.skill':'Host Completion (Skill)',
     'settings.hostproxy.embedding':'Host Embedding',
     'settings.embedding':'Embedding Model',
     'settings.summarizer':'Summarizer Model',
@@ -2006,6 +2014,7 @@ const I18N={
     'settings.hostproxy':'宿主模型代理',
     'settings.hostproxy.hint':'使用 OpenClaw 宿主已配置的 LLM 进行嵌入和摘要，无需额外 API Key。',
     'settings.hostproxy.completion':'宿主补全（摘要）',
+    'settings.hostproxy.skill':'宿主补全（技能）',
     'settings.hostproxy.embedding':'宿主嵌入',
     'settings.embedding':'嵌入模型',
     'settings.summarizer':'摘要模型',
@@ -3840,20 +3849,26 @@ async function toggleSkillVisibility(){
 /* ─── Settings / Config ─── */
 function syncHostToggles(){
   const hc=document.getElementById('cfgHostCompletion').checked;
+  const hs=document.getElementById('cfgHostSkill').checked;
   const he=document.getElementById('cfgHostEmbedding').checked;
   const sumSel=document.getElementById('cfgSumProvider');
   const embSel=document.getElementById('cfgEmbProvider');
   const skillSel=document.getElementById('cfgSkillProvider');
-  if(hc){sumSel.value='openclaw';sumSel.disabled=true;skillSel.value='';skillSel.disabled=true;}else{sumSel.disabled=false;skillSel.disabled=false;}
+  if(hc){sumSel.value='openclaw';sumSel.disabled=true;}else{sumSel.disabled=false;}
+  if(hs){skillSel.value='openclaw';skillSel.disabled=true;}else{skillSel.disabled=false;}
   if(he){embSel.value='openclaw';embSel.disabled=true;}else{embSel.disabled=false;}
 }
 function onProviderChange(){
   const sumSel=document.getElementById('cfgSumProvider');
   const embSel=document.getElementById('cfgEmbProvider');
+  const skillSel=document.getElementById('cfgSkillProvider');
   const hcEl=document.getElementById('cfgHostCompletion');
+  const hsEl=document.getElementById('cfgHostSkill');
   const heEl=document.getElementById('cfgHostEmbedding');
   if(sumSel.value==='openclaw'&&!hcEl.checked){hcEl.checked=true;sumSel.disabled=true;}
   if(sumSel.value!=='openclaw'&&hcEl.checked){hcEl.checked=false;}
+  if(skillSel.value==='openclaw'&&!hsEl.checked){hsEl.checked=true;skillSel.disabled=true;}
+  if(skillSel.value!=='openclaw'&&hsEl.checked){hsEl.checked=false;}
   if(embSel.value==='openclaw'&&!heEl.checked){heEl.checked=true;embSel.disabled=true;}
   if(embSel.value!=='openclaw'&&heEl.checked){heEl.checked=false;}
 }
@@ -3898,7 +3913,9 @@ async function loadConfig(){
     // Also infer toggle state from provider selection (e.g. config file edited manually)
     const embProv=(cfg.embedding||{}).provider;
     const sumProv=(cfg.summarizer||{}).provider;
+    const skProv=((cfg.skillEvolution||{}).summarizer||{}).provider;
     document.getElementById('cfgHostCompletion').checked=!!caps.hostCompletion||sumProv==='openclaw';
+    document.getElementById('cfgHostSkill').checked=!!caps.hostSkill||skProv==='openclaw';
     document.getElementById('cfgHostEmbedding').checked=!!caps.hostEmbedding||embProv==='openclaw';
     syncHostToggles();
   }catch(e){
@@ -3946,8 +3963,9 @@ async function saveConfig(){
   };
 
   const hostCompletion=document.getElementById('cfgHostCompletion').checked;
+  const hostSkill=document.getElementById('cfgHostSkill').checked;
   const hostEmbedding=document.getElementById('cfgHostEmbedding').checked;
-  cfg.sharing={capabilities:{hostCompletion,hostEmbedding}};
+  cfg.sharing={capabilities:{hostCompletion,hostSkill,hostEmbedding}};
 
   try{
     const r=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});

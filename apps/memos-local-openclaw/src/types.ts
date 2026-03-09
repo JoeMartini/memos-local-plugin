@@ -250,6 +250,8 @@ export interface SkillEvolutionConfig {
   minConfidence?: number;
   maxSkillLines?: number;
   autoInstall?: boolean;
+  /** Optional independent LLM config for skill evaluation/validation. Falls back to main summarizer if not set. */
+  summarizer?: SummarizerConfig;
 }
 
 export interface TelemetryConfig {

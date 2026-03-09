@@ -276,6 +276,9 @@ export class SkillUpgrader {
   }
 
   private getProviderConfig(): SummarizerConfig | undefined {
+    // Prefer skillEvolution.summarizer if configured, fallback to main summarizer
+    const skillCfg = this.ctx.config.skillEvolution?.summarizer;
+    if (skillCfg?.provider) return skillCfg;
     return this.ctx.config.summarizer;
   }
 
