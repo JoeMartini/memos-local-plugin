@@ -1,8 +1,15 @@
 # 🧠 MemOS — OpenClaw Memory Plugin
 
+[![npm version](https://img.shields.io/npm/v/@memtensor/memos-local-openclaw-plugin)](https://www.npmjs.com/package/@memtensor/memos-local-openclaw-plugin)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/MemTensor/MemOS/blob/main/LICENSE)
+[![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
+[![GitHub](https://img.shields.io/badge/GitHub-Source-181717?logo=github)](https://github.com/MemTensor/MemOS/tree/main/apps/memos-local-openclaw)
+
 Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/openclaw) AI Agents. Every conversation is automatically captured, semantically indexed, and instantly recallable — with **task summarization & skill evolution**, and **multi-agent collaborative memory**.
 
 **Full-write | Hybrid Search | Task Summarization & Skill Evolution | Multi-Agent Collaboration | Memory Viewer**
+
+> **Homepage:**  🌐 [Homepage](https://memos-claw.openmem.net) · 📖 [Documentation](https://memos-claw.openmem.net/docs/index.html) · 📦 [NPM](https://www.npmjs.com/package/@memtensor/memos-local-openclaw-plugin)
 
 ## Why MemOS
 
@@ -615,7 +622,7 @@ This section is for contributors who want to develop, test, or modify the plugin
 ### Clone & Setup
 
 ```bash
-git clone https://github.com/tangbotony/MemOS.git
+git clone https://github.com/MemTensor/MemOS.git
 cd MemOS/apps/memos-local-openclaw
 npm install
 ```
