@@ -2,9 +2,10 @@ import { v4 as uuid } from "uuid";
 import * as fs from "fs";
 import * as path from "path";
 import type { SqliteStore } from "../storage/sqlite";
-import type { Task, Skill, PluginContext, SummarizerConfig } from "../types";
+import type { Task, Skill, PluginContext } from "../types";
 import type { UpgradeEvalResult } from "./evaluator";
 import { SkillValidator } from "./validator";
+import { buildSkillConfigChain, callLLMWithFallback } from "../shared/llm-call";
 
 const UPGRADE_PROMPT = `You are a Skill upgrade expert. You're merging new real-world execution experience into an existing Skill to make it better.
 
@@ -163,8 +164,8 @@ export class SkillUpgrader {
     currentContent: string,
     evalResult: UpgradeEvalResult,
   ): Promise<{ newContent: string; changelog: string; changeSummary: string }> {
-    const cfg = this.getProviderConfig();
-    if (!cfg) throw new Error("No LLM configured for skill upgrade");
+    const chain = buildSkillConfigChain(this.ctx);
+    if (chain.length === 0) throw new Error("No LLM configured for skill upgrade");
 
     const newVersion = skill.version + 1;
 
@@ -189,66 +190,7 @@ export class SkillUpgrader {
       .replace("{TASK_ID}", task.id)
       + langInstruction;
 
-    // Use openclawAPI when provider is "openclaw"
-    if (cfg.provider === "openclaw") {
-      const api = this.ctx.openclawAPI;
-      if (!api) {
-        throw new Error("OpenClaw API not available. Ensure sharing.capabilities.hostCompletion is enabled.");
-      }
-      const response = await api.complete({
-        prompt,
-        maxTokens: 6000,
-        temperature: cfg.temperature ?? 0.2,
-        model: cfg.model,
-      });
-      const raw = response.text.trim();
-
-      const changelogSep = raw.indexOf("---CHANGELOG---");
-      if (changelogSep !== -1) {
-        const newContent = raw.slice(0, changelogSep).trim();
-        const afterChangelog = raw.slice(changelogSep + "---CHANGELOG---".length).trim();
-
-        const summarySep = afterChangelog.indexOf("---CHANGE_SUMMARY---");
-        if (summarySep !== -1) {
-          const changelog = afterChangelog.slice(0, summarySep).trim();
-          const changeSummary = afterChangelog.slice(summarySep + "---CHANGE_SUMMARY---".length).trim();
-          return { newContent, changelog, changeSummary };
-        }
-        return { newContent, changelog: afterChangelog, changeSummary: "" };
-      }
-
-      return { newContent: raw, changelog: "", changeSummary: "" };
-    }
-
-    const endpoint = this.normalizeEndpoint(cfg.endpoint ?? "https://api.openai.com/v1/chat/completions");
-    const model = cfg.model ?? "gpt-4o-mini";
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${cfg.apiKey}`,
-      ...cfg.headers,
-    };
-
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model,
-        temperature: cfg.temperature ?? 0.2,
-        max_tokens: 6000,
-        messages: [
-          { role: "user", content: prompt },
-        ],
-      }),
-      signal: AbortSignal.timeout(cfg.timeoutMs ?? 90_000),
-    });
-
-    if (!resp.ok) {
-      const body = await resp.text();
-      throw new Error(`Skill upgrade LLM failed (${resp.status}): ${body}`);
-    }
-
-    const json = (await resp.json()) as { choices: Array<{ message: { content: string } }> };
-    const raw = json.choices[0]?.message?.content?.trim() ?? "";
+    const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillUpgrader.upgrade", { maxTokens: 6000, temperature: 0.2, timeoutMs: 90_000, openclawAPI: this.ctx.openclawAPI });
 
     const changelogSep = raw.indexOf("---CHANGELOG---");
     if (changelogSep !== -1) {
@@ -273,19 +215,5 @@ export class SkillUpgrader {
     const match2 = content.match(/description:\s*'([^']+)'/);
     if (match2) return match2[1];
     return "";
-  }
-
-  private getProviderConfig(): SummarizerConfig | undefined {
-    // Prefer skillEvolution.summarizer if configured, fallback to main summarizer
-    const skillCfg = this.ctx.config.skillEvolution?.summarizer;
-    if (skillCfg?.provider) return skillCfg;
-    return this.ctx.config.summarizer;
-  }
-
-  private normalizeEndpoint(url: string): string {
-    const stripped = url.replace(/\/+$/, "");
-    if (stripped.endsWith("/chat/completions")) return stripped;
-    if (stripped.endsWith("/completions")) return stripped;
-    return `${stripped}/chat/completions`;
   }
 }

@@ -162,8 +162,10 @@ describe("OpenClaw Fallback Configuration", () => {
       );
 
       const summarizer = new Summarizer(ctx.config.summarizer, ctx.log, ctx.openclawAPI);
-      // Access private provider getter via type assertion for testing
-      expect((summarizer as any).provider).toBe("openclaw");
+      // After upstream refactor, Summarizer uses getConfigChain() instead of a provider getter.
+      // Verify openclaw config is included in the chain when capability is enabled.
+      const chain = (summarizer as any).getConfigChain();
+      expect(chain.some((c: any) => c.provider === "openclaw")).toBe(true);
     } finally {
       fs.rmSync(stateDir, { recursive: true, force: true });
     }
@@ -191,8 +193,9 @@ describe("OpenClaw Fallback Configuration", () => {
       );
 
       const summarizer = new Summarizer(ctx.config.summarizer, ctx.log, ctx.openclawAPI);
-      // Access private provider getter via type assertion for testing
-      expect((summarizer as any).provider).toBeUndefined();
+      // Without capability, openclaw config should be excluded from the chain
+      const chain = (summarizer as any).getConfigChain();
+      expect(chain.some((c: any) => c.provider === "openclaw")).toBe(false);
     } finally {
       fs.rmSync(stateDir, { recursive: true, force: true });
     }

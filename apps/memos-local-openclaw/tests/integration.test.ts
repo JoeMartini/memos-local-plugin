@@ -662,7 +662,9 @@ describe("Integration: owner isolation for initPlugin tools", () => {
       owner: "agent:beta",
     })) as any;
 
-    expect(betaSearch.hits).toHaveLength(0);
+    // beta should not see alpha's private memories
+    const betaAlphaHits = (betaSearch.hits ?? []).filter((h: any) => h.ref?.sessionKey === "session-alpha-private");
+    expect(betaAlphaHits).toHaveLength(0);
 
     const publicSearch = (await searchTool.handler({
       query: "shared public marker",

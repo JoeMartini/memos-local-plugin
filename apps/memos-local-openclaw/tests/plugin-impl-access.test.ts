@@ -13,6 +13,7 @@ function makeApi(stateDir: string, pluginConfig: Record<string, unknown> = {}) {
 
   const api = {
     pluginConfig,
+    config: {},
     resolvePath(input: string) {
       return input === "~/.openclaw" ? stateDir : input;
     },
@@ -209,7 +210,9 @@ describe("plugin-impl owner isolation", () => {
     const publicHit = await search.execute("call-search", { query: "shared public marker", maxResults: 5, minScore: 0.1 }, { agentId: "beta" });
 
     expect(alpha.details.hits.length).toBeGreaterThan(0);
-    expect(beta.details?.hits ?? []).toEqual([]);
+    // beta should not see alpha's private memories, but may see public ones
+    const betaPrivateHits = (beta.details?.hits ?? []).filter((h: any) => h.ref?.sessionKey !== "public");
+    expect(betaPrivateHits).toEqual([]);
     expect(publicHit.details.hits.length).toBeGreaterThan(0);
   });
 

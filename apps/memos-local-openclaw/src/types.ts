@@ -328,7 +328,7 @@ export const DEFAULTS = {
   mmrLambda: 0.7,
   recencyHalfLifeDays: 14,
   vectorSearchMaxChunks: 0,
-  dedupSimilarityThreshold: 0.93,
+  dedupSimilarityThreshold: 0.60,
   evidenceWrapperTag: "STORED_MEMORY",
   excerptMinChars: 200,
   excerptMaxChars: 500,

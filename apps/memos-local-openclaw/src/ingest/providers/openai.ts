@@ -114,16 +114,30 @@ export async function summarizeOpenAI(
   return json.choices[0]?.message?.content?.trim() ?? "";
 }
 
-const TOPIC_JUDGE_PROMPT = `You are a conversation topic boundary detector. Given a summary of the CURRENT conversation and a NEW user message, determine if the new message starts a DIFFERENT topic/task.
+const TOPIC_JUDGE_PROMPT = `You are a conversation topic boundary detector. Given the CURRENT task context (may include opening topic + recent exchanges) and a single NEW user message, decide if the new message belongs to the SAME task or starts a NEW one.
 
 Answer ONLY "NEW" or "SAME".
 
-Rules:
-- "NEW" = the new message is about a completely different subject, project, or task
-- "SAME" = the new message continues, follows up on, or is closely related to the current topic
-- Follow-up questions, clarifications, refinements, bug fixes, or next steps on the same task = SAME
-- Greetings or meta-questions like "你好" or "谢谢" without new substance = SAME
-- A clearly unrelated request (e.g., current topic is deployment, new message asks about cooking) = NEW
+SAME — the new message:
+- Continues, follows up on, refines, or corrects the same subject/project/task
+- Asks a clarification or next-step question about what was just discussed
+- Reports a result, error, or feedback about the current task
+- Discusses different tools, methods, or approaches for the SAME goal (e.g., learning English via BBC → via ChatGPT → via AI tools = all SAME "learning English" task)
+- Mentions a related technology or platform in the context of the current goal
+- Is a short acknowledgment (ok, thanks, 好的, 嗯) in direct response to the current flow
+
+NEW — the new message:
+- Introduces a clearly UNRELATED subject with NO logical connection to the current task
+- The topic has ZERO overlap with any aspect of the current conversation (e.g., from "learning English" to "what's the weather tomorrow")
+- Starts a request about a completely different domain or life area
+- Begins with a new greeting/reset followed by a different topic
+
+Key principles:
+- STRONGLY lean toward SAME — only mark NEW for obvious, unambiguous topic shifts
+- Different aspects, tools, or methods related to the same overall goal are SAME
+- If the new message could reasonably be interpreted as part of the ongoing discussion, choose SAME
+- Only choose NEW when there is absolutely no thematic connection to the current task
+- Examples: "学英语" → "用AI工具学英语" = SAME; "学英语" → "明天天气" = NEW
 
 Output exactly one word: NEW or SAME`;
 
@@ -141,7 +155,7 @@ export async function judgeNewTopicOpenAI(
     ...cfg.headers,
   };
 
-  const userContent = `CURRENT CONVERSATION SUMMARY:\n${currentContext}\n\nNEW USER MESSAGE:\n${newMessage}`;
+  const userContent = `CURRENT TASK CONTEXT:\n${currentContext}\n\n---\n\nNEW USER MESSAGE:\n${newMessage}`;
 
   const resp = await fetch(endpoint, {
     method: "POST",
@@ -258,21 +272,27 @@ export function parseFilterResult(raw: string, log: Logger): FilterResult {
 
 // ─── Smart Dedup: judge whether new memory is DUPLICATE / UPDATE / NEW ───
 
-export const DEDUP_JUDGE_PROMPT = `You are a memory deduplication system. Given a NEW memory summary and several EXISTING memory summaries, determine the relationship.
+export const DEDUP_JUDGE_PROMPT = `You are a memory deduplication system.
+
+LANGUAGE RULE (MUST FOLLOW): You MUST reply in the SAME language as the input memories. 如果输入是中文，reason 和 mergedSummary 必须用中文。If input is English, reply in English. This applies to ALL text fields in your JSON output.
+
+Given a NEW memory summary and several EXISTING memory summaries, determine the relationship.
 
 For each EXISTING memory, the NEW memory is either:
-- "DUPLICATE": NEW is fully covered by an EXISTING memory — no new information at all
-- "UPDATE": NEW contains information that supplements or updates an EXISTING memory (new data, status change, additional detail)
-- "NEW": NEW is a different topic/event despite surface similarity
+- "DUPLICATE": NEW conveys the same intent/meaning as an EXISTING memory, even if worded differently. Examples: "请告诉我你的名字" vs "你希望我怎么称呼你"; "新会话已开始" vs "New session started"; greetings with minor variations. If the core information/intent is the same, it IS a duplicate.
+- "UPDATE": NEW contains meaningful additional information that supplements an EXISTING memory (new data, status change, concrete detail not present before)
+- "NEW": NEW covers a genuinely different topic/event with no semantic overlap
+
+IMPORTANT: Lean toward DUPLICATE when memories share the same intent, topic, or factual content. Only choose NEW when the topics are truly unrelated. Repetitive conversational patterns (greetings, session starts, identity questions, capability descriptions) across different sessions should be treated as DUPLICATE.
 
 Pick the BEST match among all candidates. If none match well, choose "NEW".
 
-Output a single JSON object:
-- If DUPLICATE: {"action":"DUPLICATE","targetIndex":2,"reason":"..."}
-- If UPDATE: {"action":"UPDATE","targetIndex":3,"reason":"...","mergedSummary":"a combined summary preserving all info from both old and new, same language as input"}
-- If NEW: {"action":"NEW","reason":"..."}
+Output a single JSON object (reason and mergedSummary MUST match input language):
+- If DUPLICATE: {"action":"DUPLICATE","targetIndex":2,"reason":"与已有记忆意图相同"}
+- If UPDATE: {"action":"UPDATE","targetIndex":3,"reason":"新记忆补充了额外细节","mergedSummary":"合并后的完整摘要，保留新旧所有信息"}
+- If NEW: {"action":"NEW","reason":"不同主题，无关联"}
 
-CRITICAL: mergedSummary must use the SAME language as the input. Output ONLY the JSON object.`;
+Output ONLY the JSON object, no other text.`;
 
 export interface DedupResult {
   action: "DUPLICATE" | "UPDATE" | "NEW";

@@ -1,7 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
-import type { PluginContext, SummarizerConfig } from "../types";
+import type { PluginContext } from "../types";
 import { DEFAULTS } from "../types";
+import { buildSkillConfigChain, callLLMWithFallback } from "../shared/llm-call";
 
 export interface ValidationResult {
   valid: boolean;
@@ -133,62 +134,20 @@ export class SkillValidator {
   }
 
   private async assessQuality(dirPath: string, result: ValidationResult): Promise<void> {
-    const cfg = this.getProviderConfig();
-    if (!cfg) return;
+    const chain = buildSkillConfigChain(this.ctx);
+    if (chain.length === 0) return;
 
     const skillMdPath = path.join(dirPath, "SKILL.md");
     const content = fs.readFileSync(skillMdPath, "utf-8");
 
     const prompt = QUALITY_PROMPT.replace("{SKILL_CONTENT}", content.slice(0, 6000));
 
-    let raw: string;
-
-    // Use openclawAPI when provider is "openclaw"
-    if (cfg.provider === "openclaw") {
-      const api = this.ctx.openclawAPI;
-      if (!api) {
-        throw new Error("OpenClaw API not available. Ensure sharing.capabilities.hostCompletion is enabled.");
-      }
-      const response = await api.complete({
-        prompt,
-        maxTokens: 1024,
-        temperature: cfg.temperature ?? 0.1,
-        model: cfg.model,
-      });
-      raw = response.text.trim();
-    } else {
-      const endpoint = this.normalizeEndpoint(cfg.endpoint ?? "https://api.openai.com/v1/chat/completions");
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${cfg.apiKey}`,
-        ...cfg.headers,
-      };
-
-      const resp = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: cfg.model ?? "gpt-4o-mini",
-          temperature: cfg.temperature ?? 0.1,
-          max_tokens: 1024,
-          messages: [{ role: "user", content: prompt }],
-        }),
-        signal: AbortSignal.timeout(cfg.timeoutMs ?? 30_000),
-      });
-
-      if (!resp.ok) {
-        const body = await resp.text();
-        throw new Error(`Quality LLM failed (${resp.status}): ${body}`);
-      }
-
-      const json = (await resp.json()) as { choices: Array<{ message: { content: string } }> };
-      raw = json.choices[0]?.message?.content?.trim() ?? "";
-    }
-
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return;
-
     try {
+      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillValidator.quality", { openclawAPI: this.ctx.openclawAPI });
+
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return;
+
       const assessment = JSON.parse(jsonMatch[0]) as {
         score: number;
         strengths: string[];
@@ -207,23 +166,9 @@ export class SkillValidator {
       if (result.qualityScore < 6) {
         result.warnings.push(`Quality score ${result.qualityScore}/10 is below threshold, marked as draft`);
       }
-    } catch {
-      this.ctx.log.warn("SkillValidator: failed to parse quality assessment JSON");
+    } catch (err) {
+      this.ctx.log.warn(`SkillValidator: quality assessment failed: ${err}`);
     }
-  }
-
-  private getProviderConfig(): SummarizerConfig | undefined {
-    // Prefer skillEvolution.summarizer if configured, fallback to main summarizer
-    const skillCfg = this.ctx.config.skillEvolution?.summarizer;
-    if (skillCfg?.provider) return skillCfg;
-    return this.ctx.config.summarizer;
-  }
-
-  private normalizeEndpoint(url: string): string {
-    const stripped = url.replace(/\/+$/, "");
-    if (stripped.endsWith("/chat/completions")) return stripped;
-    if (stripped.endsWith("/completions")) return stripped;
-    return `${stripped}/chat/completions`;
   }
 }
 
@@ -239,10 +184,12 @@ Criteria:
 SKILL.md:
 {SKILL_CONTENT}
 
+LANGUAGE RULE: "strengths", "weaknesses", and "suggestions" MUST use the SAME language as the SKILL.md content. Chinese skill → Chinese feedback. English skill → English feedback.
+
 Reply in JSON only:
 {
   "score": 0-10,
-  "strengths": ["what's good"],
-  "weaknesses": ["what's lacking"],
-  "suggestions": ["how to improve"]
+  "strengths": ["what's good (same language as skill)"],
+  "weaknesses": ["what's lacking (same language as skill)"],
+  "suggestions": ["how to improve (same language as skill)"]
 }`;

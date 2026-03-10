@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import type { SummarizerConfig, Logger, OpenClawAPI } from "../../types";
 import { summarizeOpenAI, summarizeTaskOpenAI, judgeNewTopicOpenAI, filterRelevantOpenAI, judgeDedupOpenAI, parseFilterResult, parseDedupResult } from "./openai";
 import type { FilterResult, DedupResult } from "./openai";
@@ -6,208 +8,172 @@ import { summarizeAnthropic, summarizeTaskAnthropic, judgeNewTopicAnthropic, fil
 import { summarizeGemini, summarizeTaskGemini, judgeNewTopicGemini, filterRelevantGemini, judgeDedupGemini } from "./gemini";
 import { summarizeBedrock, summarizeTaskBedrock, judgeNewTopicBedrock, filterRelevantBedrock, judgeDedupBedrock } from "./bedrock";
 
+/**
+ * Build a SummarizerConfig from OpenClaw's native model configuration (openclaw.json).
+ * This serves as the final fallback when both strongCfg and plugin summarizer fail or are absent.
+ */
+function loadOpenClawFallbackConfig(log: Logger): SummarizerConfig | undefined {
+  try {
+    const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+    const cfgPath = path.join(home, ".openclaw", "openclaw.json");
+    if (!fs.existsSync(cfgPath)) return undefined;
+
+    const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
+
+    const agentModel: string | undefined = raw?.agents?.defaults?.model?.primary;
+    if (!agentModel) return undefined;
+
+    const [providerKey, modelId] = agentModel.includes("/")
+      ? agentModel.split("/", 2)
+      : [undefined, agentModel];
+
+    const providerCfg = providerKey
+      ? raw?.models?.providers?.[providerKey]
+      : Object.values(raw?.models?.providers ?? {})[0] as any;
+    if (!providerCfg) return undefined;
+
+    const baseUrl: string | undefined = providerCfg.baseUrl;
+    const apiKey: string | undefined = providerCfg.apiKey;
+    if (!baseUrl || !apiKey) return undefined;
+
+    const endpoint = baseUrl.endsWith("/chat/completions")
+      ? baseUrl
+      : baseUrl.replace(/\/+$/, "") + "/chat/completions";
+
+    log.debug(`OpenClaw fallback model: ${modelId} via ${baseUrl}`);
+    return {
+      provider: "openai_compatible",
+      endpoint,
+      apiKey,
+      model: modelId,
+    };
+  } catch (err) {
+    log.debug(`Failed to load OpenClaw fallback config: ${err}`);
+    return undefined;
+  }
+}
+
 export class Summarizer {
+  private strongCfg: SummarizerConfig | undefined;
+  private fallbackCfg: SummarizerConfig | undefined;
+
   constructor(
     private cfg: SummarizerConfig | undefined,
     private log: Logger,
     private openclawAPI?: OpenClawAPI,
-  ) {}
+    strongCfg?: SummarizerConfig,
+  ) {
+    this.strongCfg = strongCfg;
+    this.fallbackCfg = loadOpenClawFallbackConfig(log);
+  }
 
-  private get provider(): SummarizerConfig["provider"] | undefined {
-    if (!this.cfg) {
-      return undefined;
+  /**
+   * Ordered config chain: strongCfg → cfg → fallbackCfg (OpenClaw native model).
+   * Returns configs that are defined, in priority order.
+   * Openclaw configs without hostCompletion capability or without openclawAPI are excluded.
+   */
+  private getConfigChain(): SummarizerConfig[] {
+    const chain: SummarizerConfig[] = [];
+    if (this.strongCfg) chain.push(this.strongCfg);
+    if (this.cfg) {
+      if (this.cfg.provider === "openclaw") {
+        if (this.cfg.capabilities?.hostCompletion === true && this.openclawAPI) {
+          chain.push(this.cfg);
+        }
+      } else {
+        chain.push(this.cfg);
+      }
     }
-    if (this.cfg.provider === "openclaw" && this.cfg.capabilities?.hostCompletion !== true) {
-      return undefined;
+    if (this.fallbackCfg) chain.push(this.fallbackCfg);
+    return chain;
+  }
+
+  /**
+   * Try calling fn with each config in the chain until one succeeds.
+   * Returns undefined if all fail.
+   */
+  private async tryChain<T>(
+    label: string,
+    fn: (cfg: SummarizerConfig) => Promise<T>,
+  ): Promise<T | undefined> {
+    const chain = this.getConfigChain();
+    for (let i = 0; i < chain.length; i++) {
+      try {
+        return await fn(chain[i]);
+      } catch (err) {
+        const level = i < chain.length - 1 ? "warn" : "error";
+        const modelInfo = `${chain[i].provider}/${chain[i].model ?? "?"}`;
+        this.log[level](`${label} failed (${modelInfo}), ${i < chain.length - 1 ? "trying next" : "no more fallbacks"}: ${err}`);
+      }
     }
-    return this.cfg.provider;
+    return undefined;
   }
 
   async summarize(text: string): Promise<string> {
-    if (!this.provider) {
+    if (!this.cfg && !this.fallbackCfg) {
       return ruleFallback(text);
     }
 
-    try {
-      return await this.callProvider(text);
-    } catch (err) {
-      this.log.warn(`Summarizer provider failed, using rule fallback: ${err}`);
-      return ruleFallback(text);
-    }
+    const result = await this.tryChain("summarize", (cfg) =>
+      cfg.provider === "openclaw" ? this.summarizeOpenClaw(text) : callSummarize(cfg, text, this.log),
+    );
+    return result ?? ruleFallback(text);
   }
 
   async summarizeTask(text: string): Promise<string> {
-    if (!this.provider) {
+    if (!this.cfg && !this.fallbackCfg) {
       return taskFallback(text);
     }
 
-    try {
-      return await this.callTaskProvider(text);
-    } catch (err) {
-      this.log.warn(`Task summarizer failed, using fallback: ${err}`);
-      return taskFallback(text);
-    }
+    const result = await this.tryChain("summarizeTask", (cfg) =>
+      cfg.provider === "openclaw" ? this.summarizeTaskOpenClaw(text) : callSummarizeTask(cfg, text, this.log),
+    );
+    return result ?? taskFallback(text);
   }
 
-  private async callProvider(text: string): Promise<string> {
-    const cfg = this.cfg!;
-    switch (this.provider) {
-      case "openai":
-      case "openai_compatible":
-        return summarizeOpenAI(text, cfg, this.log);
-      case "anthropic":
-        return summarizeAnthropic(text, cfg, this.log);
-      case "gemini":
-        return summarizeGemini(text, cfg, this.log);
-      case "azure_openai":
-        return summarizeOpenAI(text, cfg, this.log);
-      case "bedrock":
-        return summarizeBedrock(text, cfg, this.log);
-      case "openclaw":
-        return await this.summarizeOpenClaw(text);
-      default:
-        throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
-    }
-  }
-
-  /**
-   * Ask the LLM whether the new message starts a different topic from the current conversation.
-   * Returns true if it's a new topic, false if it continues the current one.
-   * Returns null if no summarizer is configured (caller should fall back to heuristic).
-   */
   async judgeNewTopic(currentContext: string, newMessage: string): Promise<boolean | null> {
-    if (!this.provider) return null;
+    if (!this.cfg && !this.fallbackCfg) return null;
 
-    try {
-      return await this.callTopicJudge(currentContext, newMessage);
-    } catch (err) {
-      this.log.warn(`Topic judge failed: ${err}`);
-      return null;
-    }
+    const result = await this.tryChain("judgeNewTopic", (cfg) =>
+      cfg.provider === "openclaw"
+        ? this.judgeNewTopicOpenClaw(currentContext, newMessage)
+        : callTopicJudge(cfg, currentContext, newMessage, this.log),
+    );
+    return result ?? null;
   }
 
-  private async callTopicJudge(currentContext: string, newMessage: string): Promise<boolean> {
-    const cfg = this.cfg!;
-    switch (this.provider) {
-      case "openai":
-      case "openai_compatible":
-      case "azure_openai":
-        return judgeNewTopicOpenAI(currentContext, newMessage, cfg, this.log);
-      case "anthropic":
-        return judgeNewTopicAnthropic(currentContext, newMessage, cfg, this.log);
-      case "gemini":
-        return judgeNewTopicGemini(currentContext, newMessage, cfg, this.log);
-      case "bedrock":
-        return judgeNewTopicBedrock(currentContext, newMessage, cfg, this.log);
-      case "openclaw":
-        return await this.judgeNewTopicOpenClaw(currentContext, newMessage);
-      default:
-        throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
-    }
-  }
-
-  /**
-   * Filter search results by LLM relevance judgment.
-   * Returns { relevant: number[], sufficient: boolean } or null if no summarizer configured.
-   */
   async filterRelevant(
     query: string,
     candidates: Array<{ index: number; summary: string; role: string }>,
   ): Promise<FilterResult | null> {
-    if (!this.provider) return null;
+    if (!this.cfg && !this.fallbackCfg) return null;
     if (candidates.length === 0) return { relevant: [], sufficient: true };
 
-    try {
-      return await this.callFilterRelevant(query, candidates);
-    } catch (err) {
-      this.log.warn(`filterRelevant failed, returning all candidates: ${err}`);
-      return null;
-    }
+    const result = await this.tryChain("filterRelevant", (cfg) =>
+      cfg.provider === "openclaw"
+        ? this.filterRelevantOpenClaw(query, candidates)
+        : callFilterRelevant(cfg, query, candidates, this.log),
+    );
+    return result ?? null;
   }
 
-  private async callFilterRelevant(
-    query: string,
-    candidates: Array<{ index: number; summary: string; role: string }>,
-  ): Promise<FilterResult> {
-    const cfg = this.cfg!;
-    switch (this.provider) {
-      case "openai":
-      case "openai_compatible":
-      case "azure_openai":
-        return filterRelevantOpenAI(query, candidates, cfg, this.log);
-      case "anthropic":
-        return filterRelevantAnthropic(query, candidates, cfg, this.log);
-      case "gemini":
-        return filterRelevantGemini(query, candidates, cfg, this.log);
-      case "bedrock":
-        return filterRelevantBedrock(query, candidates, cfg, this.log);
-      case "openclaw":
-        return await this.filterRelevantOpenClaw(query, candidates);
-      default:
-        throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
-    }
-  }
-
-  /**
-   * Judge whether a new memory is DUPLICATE / UPDATE / NEW relative to similar existing memories.
-   * Returns null if no summarizer configured (caller should treat as NEW).
-   */
   async judgeDedup(
     newSummary: string,
     candidates: Array<{ index: number; summary: string; chunkId: string }>,
   ): Promise<DedupResult | null> {
-    if (!this.provider) return null;
+    if (!this.cfg && !this.fallbackCfg) return null;
     if (candidates.length === 0) return null;
 
-    try {
-      return await this.callJudgeDedup(newSummary, candidates);
-    } catch (err) {
-      this.log.warn(`judgeDedup failed, treating as NEW: ${err}`);
-      return { action: "NEW", reason: "llm_error" };
-    }
+    const result = await this.tryChain("judgeDedup", (cfg) =>
+      cfg.provider === "openclaw"
+        ? this.judgeDedupOpenClaw(newSummary, candidates)
+        : callJudgeDedup(cfg, newSummary, candidates, this.log),
+    );
+    return result ?? { action: "NEW", reason: "all_models_failed" };
   }
 
-  private async callJudgeDedup(
-    newSummary: string,
-    candidates: Array<{ index: number; summary: string; chunkId: string }>,
-  ): Promise<DedupResult> {
-    const cfg = this.cfg!;
-    switch (this.provider) {
-      case "openai":
-      case "openai_compatible":
-      case "azure_openai":
-        return judgeDedupOpenAI(newSummary, candidates, cfg, this.log);
-      case "anthropic":
-        return judgeDedupAnthropic(newSummary, candidates, cfg, this.log);
-      case "gemini":
-        return judgeDedupGemini(newSummary, candidates, cfg, this.log);
-      case "bedrock":
-        return judgeDedupBedrock(newSummary, candidates, cfg, this.log);
-      case "openclaw":
-        return await this.judgeDedupOpenClaw(newSummary, candidates);
-      default:
-        throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
-    }
-  }
-
-  private async callTaskProvider(text: string): Promise<string> {
-    const cfg = this.cfg!;
-    switch (this.provider) {
-      case "openai":
-      case "openai_compatible":
-      case "azure_openai":
-        return summarizeTaskOpenAI(text, cfg, this.log);
-      case "anthropic":
-        return summarizeTaskAnthropic(text, cfg, this.log);
-      case "gemini":
-        return summarizeTaskGemini(text, cfg, this.log);
-      case "bedrock":
-        return summarizeTaskBedrock(text, cfg, this.log);
-      case "openclaw":
-        return await this.summarizeTaskOpenClaw(text);
-      default:
-        throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
-    }
+  getStrongConfig(): SummarizerConfig | undefined {
+    return this.strongCfg;
   }
 
   // ─── OpenClaw API Implementation ───
@@ -337,6 +303,95 @@ export class Summarizer {
     return parseDedupResult(response.text.trim(), this.log);
   }
 }
+
+// ─── Dispatch helpers ───
+
+function callSummarize(cfg: SummarizerConfig, text: string, log: Logger): Promise<string> {
+  switch (cfg.provider) {
+    case "openai":
+    case "openai_compatible":
+    case "azure_openai":
+      return summarizeOpenAI(text, cfg, log);
+    case "anthropic":
+      return summarizeAnthropic(text, cfg, log);
+    case "gemini":
+      return summarizeGemini(text, cfg, log);
+    case "bedrock":
+      return summarizeBedrock(text, cfg, log);
+    default:
+      throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
+  }
+}
+
+function callSummarizeTask(cfg: SummarizerConfig, text: string, log: Logger): Promise<string> {
+  switch (cfg.provider) {
+    case "openai":
+    case "openai_compatible":
+    case "azure_openai":
+      return summarizeTaskOpenAI(text, cfg, log);
+    case "anthropic":
+      return summarizeTaskAnthropic(text, cfg, log);
+    case "gemini":
+      return summarizeTaskGemini(text, cfg, log);
+    case "bedrock":
+      return summarizeTaskBedrock(text, cfg, log);
+    default:
+      throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
+  }
+}
+
+function callTopicJudge(cfg: SummarizerConfig, currentContext: string, newMessage: string, log: Logger): Promise<boolean> {
+  switch (cfg.provider) {
+    case "openai":
+    case "openai_compatible":
+    case "azure_openai":
+      return judgeNewTopicOpenAI(currentContext, newMessage, cfg, log);
+    case "anthropic":
+      return judgeNewTopicAnthropic(currentContext, newMessage, cfg, log);
+    case "gemini":
+      return judgeNewTopicGemini(currentContext, newMessage, cfg, log);
+    case "bedrock":
+      return judgeNewTopicBedrock(currentContext, newMessage, cfg, log);
+    default:
+      throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
+  }
+}
+
+function callFilterRelevant(cfg: SummarizerConfig, query: string, candidates: Array<{ index: number; summary: string; role: string }>, log: Logger): Promise<FilterResult> {
+  switch (cfg.provider) {
+    case "openai":
+    case "openai_compatible":
+    case "azure_openai":
+      return filterRelevantOpenAI(query, candidates, cfg, log);
+    case "anthropic":
+      return filterRelevantAnthropic(query, candidates, cfg, log);
+    case "gemini":
+      return filterRelevantGemini(query, candidates, cfg, log);
+    case "bedrock":
+      return filterRelevantBedrock(query, candidates, cfg, log);
+    default:
+      throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
+  }
+}
+
+function callJudgeDedup(cfg: SummarizerConfig, newSummary: string, candidates: Array<{ index: number; summary: string; chunkId: string }>, log: Logger): Promise<DedupResult> {
+  switch (cfg.provider) {
+    case "openai":
+    case "openai_compatible":
+    case "azure_openai":
+      return judgeDedupOpenAI(newSummary, candidates, cfg, log);
+    case "anthropic":
+      return judgeDedupAnthropic(newSummary, candidates, cfg, log);
+    case "gemini":
+      return judgeDedupGemini(newSummary, candidates, cfg, log);
+    case "bedrock":
+      return judgeDedupBedrock(newSummary, candidates, cfg, log);
+    default:
+      throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
+  }
+}
+
+// ─── Fallbacks ───
 
 function taskFallback(text: string): string {
   const lines = text.split("\n").filter((l) => l.trim().length > 10);

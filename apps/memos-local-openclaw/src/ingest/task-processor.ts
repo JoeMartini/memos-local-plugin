@@ -38,7 +38,8 @@ export class TaskProcessor {
     private store: SqliteStore,
     private ctx: PluginContext,
   ) {
-    this.summarizer = new Summarizer(ctx.config.summarizer, ctx.log, ctx.openclawAPI);
+    const strongCfg = ctx.config.skillEvolution?.summarizer;
+    this.summarizer = new Summarizer(ctx.config.summarizer, ctx.log, ctx.openclawAPI, strongCfg);
   }
 
   onTaskCompleted(cb: (task: Task) => void): void {
@@ -81,7 +82,6 @@ export class TaskProcessor {
   private async detectAndProcess(sessionKey: string, latestTimestamp: number, owner: string): Promise<void> {
     this.ctx.log.debug(`TaskProcessor.detectAndProcess session=${sessionKey} owner=${owner}`);
 
-    // Finalize any active tasks from OTHER sessions for the SAME owner (session change = task boundary)
     const allActive = this.store.getAllActiveTasks(owner);
     for (const t of allActive) {
       if (t.sessionKey !== sessionKey) {
@@ -90,83 +90,177 @@ export class TaskProcessor {
       }
     }
 
-    const activeTask = this.store.getActiveTask(sessionKey, owner);
+    let activeTask = this.store.getActiveTask(sessionKey, owner);
     this.ctx.log.debug(`TaskProcessor.detectAndProcess activeTask=${activeTask?.id ?? "none"} owner=${owner}`);
 
     if (!activeTask) {
-      await this.createNewTask(sessionKey, latestTimestamp, owner);
-      return;
+      // Create a new empty task — do NOT assign all chunks yet.
+      // processChunksIncrementally will assign them one turn at a time with boundary checks.
+      activeTask = await this.createNewTaskReturn(sessionKey, latestTimestamp, owner);
     }
 
-    const isNewTask = await this.isTaskBoundary(activeTask, sessionKey, latestTimestamp);
-
-    if (isNewTask) {
-      await this.finalizeTask(activeTask);
-      await this.createNewTask(sessionKey, latestTimestamp, owner);
-    } else {
-      this.assignUnassignedChunks(sessionKey, activeTask.id);
-      this.store.updateTask(activeTask.id, { endedAt: undefined });
-    }
-  }
-
-  private async isTaskBoundary(activeTask: Task, sessionKey: string, latestTimestamp: number): Promise<boolean> {
-    if (activeTask.sessionKey !== sessionKey) return true;
-
-    const chunks = this.store.getChunksByTask(activeTask.id);
-    if (chunks.length === 0) return false;
-
-    const lastChunkTs = Math.max(...chunks.map((c) => c.createdAt));
-    const gap = latestTimestamp - lastChunkTs;
-
-    // Hard timeout: always split after 2h regardless of topic
-    if (gap > DEFAULTS.taskIdleTimeoutMs) {
-      this.ctx.log.info(
-        `Task boundary: time gap ${Math.round(gap / 60000)}min > ${Math.round(DEFAULTS.taskIdleTimeoutMs / 60000)}min`,
-      );
-      return true;
-    }
-
-    // LLM topic judgment: build context from existing task and compare with new message
-    const newUserChunks = this.store.getUnassignedChunks(sessionKey).filter((c) => c.role === "user");
-    if (newUserChunks.length === 0) return false;
-
-    const existingUserChunks = chunks.filter((c) => c.role === "user");
-    if (existingUserChunks.length === 0) return false;
-
-    const currentContext = this.buildContextSummary(chunks);
-    const newMessage = newUserChunks.map((c) => c.content).join("\n");
-
-    const isNew = await this.summarizer.judgeNewTopic(currentContext, newMessage);
-
-    if (isNew === null) {
-      this.ctx.log.debug("Topic judge unavailable (no LLM configured), keeping current task");
-      return false;
-    }
-
-    if (isNew) {
-      this.ctx.log.info(`Task boundary: LLM judged new topic. New message: "${newMessage.slice(0, 80)}..."`);
-    } else {
-      this.ctx.log.debug(`LLM judged SAME topic, continuing task=${activeTask.id}`);
-    }
-
-    return isNew;
+    await this.processChunksIncrementally(activeTask, sessionKey, latestTimestamp, owner);
   }
 
   /**
-   * Build a concise context string from existing task chunks for the LLM topic judge.
-   * Takes recent user/assistant summaries to keep token usage low.
+   * Process unassigned chunks one user-turn at a time.
+   *
+   * Strategy:
+   * - Need at least 1 user turn in the current task before starting LLM judgment
+   *   (0 turns = no reference point for comparison).
+   * - Each subsequent user turn is individually checked against the full task context.
+   * - Time gap > 2h always triggers a split regardless of topic.
    */
-  private buildContextSummary(chunks: Chunk[]): string {
-    const relevant = chunks
-      .filter((c) => c.role === "user" || c.role === "assistant")
-      .slice(-6);
+  private async processChunksIncrementally(
+    activeTask: Task,
+    sessionKey: string,
+    latestTimestamp: number,
+    owner: string,
+  ): Promise<void> {
+    const unassigned = this.store.getUnassignedChunks(sessionKey);
+    if (unassigned.length === 0) return;
 
-    return relevant
-      .map((c) => `[${c.role === "user" ? "User" : "Assistant"}]: ${c.summary || c.content.slice(0, 150)}`)
-      .join("\n");
+    const taskChunks = this.store.getChunksByTask(activeTask.id);
+
+    // Time gap check against the earliest unassigned chunk
+    if (taskChunks.length > 0) {
+      const lastTaskTs = Math.max(...taskChunks.map((c) => c.createdAt));
+      const firstUnassignedTs = Math.min(...unassigned.map((c) => c.createdAt));
+      const gap = firstUnassignedTs - lastTaskTs;
+      if (gap > DEFAULTS.taskIdleTimeoutMs) {
+        this.ctx.log.info(
+          `Task boundary: time gap ${Math.round(gap / 60000)}min > ${Math.round(DEFAULTS.taskIdleTimeoutMs / 60000)}min`,
+        );
+        await this.finalizeTask(activeTask);
+        const newTask = await this.createNewTaskReturn(sessionKey, latestTimestamp, owner);
+        // Recurse with the new empty task so remaining unassigned chunks get boundary-checked too
+        return this.processChunksIncrementally(newTask, sessionKey, latestTimestamp, owner);
+      }
+    }
+
+    const turns = this.groupIntoTurns(unassigned);
+    if (turns.length === 0) {
+      this.assignChunksToTask(unassigned, activeTask.id);
+      return;
+    }
+
+    let currentTask = activeTask;
+    let currentTaskChunks = [...taskChunks];
+
+    for (let i = 0; i < turns.length; i++) {
+      const turn = turns[i];
+      const userChunk = turn.find((c) => c.role === "user");
+
+      if (!userChunk) {
+        this.assignChunksToTask(turn, currentTask.id);
+        currentTaskChunks = currentTaskChunks.concat(turn);
+        continue;
+      }
+
+      // Time gap check per turn
+      if (currentTaskChunks.length > 0) {
+        const lastTs = Math.max(...currentTaskChunks.map((c) => c.createdAt));
+        if (userChunk.createdAt - lastTs > DEFAULTS.taskIdleTimeoutMs) {
+          this.ctx.log.info(`Task boundary at turn ${i}: time gap ${Math.round((userChunk.createdAt - lastTs) / 60000)}min`);
+          await this.finalizeTask(currentTask);
+          currentTask = await this.createNewTaskReturn(sessionKey, userChunk.createdAt, owner);
+          currentTaskChunks = [];
+          this.assignChunksToTask(turn, currentTask.id);
+          currentTaskChunks = currentTaskChunks.concat(turn);
+          continue;
+        }
+      }
+
+      // Need at least 1 user turn before we can meaningfully judge topic shifts
+      const existingUserCount = currentTaskChunks.filter((c) => c.role === "user").length;
+      if (existingUserCount < 1) {
+        this.assignChunksToTask(turn, currentTask.id);
+        currentTaskChunks = currentTaskChunks.concat(turn);
+        continue;
+      }
+
+      // LLM topic judgment — check this single user message against full task context
+      const context = this.buildContextSummary(currentTaskChunks);
+      const newMsg = userChunk.content.slice(0, 500);
+      this.ctx.log.info(`Topic judge: "${newMsg.slice(0, 60)}" vs ${existingUserCount} user turns`);
+      const isNew = await this.summarizer.judgeNewTopic(context, newMsg);
+      this.ctx.log.info(`Topic judge result: ${isNew === null ? "null(fallback)" : isNew ? "NEW" : "SAME"}`);
+
+      if (isNew === null) {
+        this.assignChunksToTask(turn, currentTask.id);
+        currentTaskChunks = currentTaskChunks.concat(turn);
+        continue;
+      }
+
+      if (isNew) {
+        this.ctx.log.info(`Task boundary at turn ${i}: LLM judged new topic. Msg: "${newMsg.slice(0, 80)}..."`);
+        await this.finalizeTask(currentTask);
+        currentTask = await this.createNewTaskReturn(sessionKey, userChunk.createdAt, owner);
+        currentTaskChunks = [];
+      }
+
+      this.assignChunksToTask(turn, currentTask.id);
+      currentTaskChunks = currentTaskChunks.concat(turn);
+    }
+
+    this.store.updateTask(currentTask.id, { endedAt: undefined });
   }
 
-  private async createNewTask(sessionKey: string, timestamp: number, owner: string = "agent:main"): Promise<void> {
+  /**
+   * Group chunks into user-turns: each turn starts with a user message
+   * and includes all subsequent non-user messages until the next user message.
+   */
+  private groupIntoTurns(chunks: Chunk[]): Chunk[][] {
+    const turns: Chunk[][] = [];
+    let current: Chunk[] = [];
+
+    for (const c of chunks) {
+      if (c.role === "user" && current.length > 0) {
+        turns.push(current);
+        current = [];
+      }
+      current.push(c);
+    }
+    if (current.length > 0) turns.push(current);
+    return turns;
+  }
+
+  /**
+   * Build context from existing task chunks for the LLM topic judge.
+   * Includes both the task's opening topic and recent exchanges,
+   * so the LLM understands both what the task was originally about
+   * and where the conversation currently is.
+   *
+   * For user messages, include full content (up to 500 chars) since
+   * they carry the topic signal. For assistant messages, use summary
+   * or truncated content since they mostly elaborate.
+   */
+  private buildContextSummary(chunks: Chunk[]): string {
+    const conversational = chunks.filter((c) => c.role === "user" || c.role === "assistant");
+    if (conversational.length === 0) return "";
+
+    const formatChunk = (c: Chunk) => {
+      const label = c.role === "user" ? "User" : "Assistant";
+      const maxLen = c.role === "user" ? 500 : 200;
+      const text = c.summary || c.content.slice(0, maxLen);
+      return `[${label}]: ${text}`;
+    };
+
+    if (conversational.length <= 10) {
+      return conversational.map(formatChunk).join("\n");
+    }
+
+    const opening = conversational.slice(0, 6).map(formatChunk);
+    const recent = conversational.slice(-4).map(formatChunk);
+    return [
+      "--- Task opening ---",
+      ...opening,
+      "--- Recent exchanges ---",
+      ...recent,
+    ].join("\n");
+  }
+
+  private async createNewTaskReturn(sessionKey: string, timestamp: number, owner: string = "agent:main"): Promise<Task> {
     const taskId = uuid();
     const task: Task = {
       id: taskId,
@@ -180,18 +274,27 @@ export class TaskProcessor {
       updatedAt: timestamp,
     };
     this.store.insertTask(task);
-    this.assignUnassignedChunks(sessionKey, taskId);
     this.ctx.log.info(`Created new task=${taskId} session=${sessionKey}`);
+    return task;
+  }
+
+  private async createNewTask(sessionKey: string, timestamp: number, owner: string = "agent:main"): Promise<void> {
+    const task = await this.createNewTaskReturn(sessionKey, timestamp, owner);
+    this.assignUnassignedChunks(sessionKey, task.id);
+  }
+
+  private assignChunksToTask(chunks: Chunk[], taskId: string): void {
+    for (const chunk of chunks) {
+      this.store.setChunkTaskId(chunk.id, taskId);
+    }
+    if (chunks.length > 0) {
+      this.ctx.log.debug(`Assigned ${chunks.length} chunks to task=${taskId}`);
+    }
   }
 
   private assignUnassignedChunks(sessionKey: string, taskId: string): void {
     const unassigned = this.store.getUnassignedChunks(sessionKey);
-    for (const chunk of unassigned) {
-      this.store.setChunkTaskId(chunk.id, taskId);
-    }
-    if (unassigned.length > 0) {
-      this.ctx.log.debug(`Assigned ${unassigned.length} chunks to task=${taskId}`);
-    }
+    this.assignChunksToTask(unassigned, taskId);
   }
 
   async finalizeTask(task: Task): Promise<void> {

@@ -76,16 +76,30 @@ export async function summarizeTaskBedrock(
   return json.output?.message?.content?.[0]?.text?.trim() ?? "";
 }
 
-const TOPIC_JUDGE_PROMPT = `You are a conversation topic boundary detector. Given a summary of the CURRENT conversation and a NEW user message, determine if the new message starts a DIFFERENT topic/task.
+const TOPIC_JUDGE_PROMPT = `You are a conversation topic boundary detector. Given the CURRENT task context (may include opening topic + recent exchanges) and a single NEW user message, decide if the new message belongs to the SAME task or starts a NEW one.
 
 Answer ONLY "NEW" or "SAME".
 
-Rules:
-- "NEW" = the new message is about a completely different subject, project, or task
-- "SAME" = the new message continues, follows up on, or is closely related to the current topic
-- Follow-up questions, clarifications, refinements, bug fixes, or next steps on the same task = SAME
-- Greetings or meta-questions like "你好" or "谢谢" without new substance = SAME
-- A clearly unrelated request (e.g., current topic is deployment, new message asks about cooking) = NEW
+SAME — the new message:
+- Continues, follows up on, refines, or corrects the same subject/project/task
+- Asks a clarification or next-step question about what was just discussed
+- Reports a result, error, or feedback about the current task
+- Discusses different tools, methods, or approaches for the SAME goal (e.g., learning English via BBC → via ChatGPT → via AI tools = all SAME "learning English" task)
+- Mentions a related technology or platform in the context of the current goal
+- Is a short acknowledgment (ok, thanks, 好的, 嗯) in direct response to the current flow
+
+NEW — the new message:
+- Introduces a clearly UNRELATED subject with NO logical connection to the current task
+- The topic has ZERO overlap with any aspect of the current conversation (e.g., from "learning English" to "what's the weather tomorrow")
+- Starts a request about a completely different domain or life area
+- Begins with a new greeting/reset followed by a different topic
+
+Key principles:
+- STRONGLY lean toward SAME — only mark NEW for obvious, unambiguous topic shifts
+- Different aspects, tools, or methods related to the same overall goal are SAME
+- If the new message could reasonably be interpreted as part of the ongoing discussion, choose SAME
+- Only choose NEW when there is absolutely no thematic connection to the current task
+- Examples: "学英语" → "用AI工具学英语" = SAME; "学英语" → "明天天气" = NEW
 
 Output exactly one word: NEW or SAME`;
 
@@ -107,7 +121,7 @@ export async function judgeNewTopicBedrock(
     ...cfg.headers,
   };
 
-  const userContent = `CURRENT CONVERSATION SUMMARY:\n${currentContext}\n\nNEW USER MESSAGE:\n${newMessage}`;
+  const userContent = `CURRENT TASK CONTEXT:\n${currentContext}\n\n---\n\nNEW USER MESSAGE:\n${newMessage}`;
 
   const resp = await fetch(url, {
     method: "POST",

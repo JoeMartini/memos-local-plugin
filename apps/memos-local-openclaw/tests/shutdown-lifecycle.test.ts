@@ -109,6 +109,7 @@ describe("shutdown lifecycle", () => {
     const plugin = pluginModule.default;
     plugin.register({
       pluginConfig: {},
+      config: {},
       resolvePath: () => "/tmp/memos-service-stop",
       logger: noopLog,
       registerTool: () => {},

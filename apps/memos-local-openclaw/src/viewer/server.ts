@@ -198,11 +198,16 @@ export class ViewerServer {
       else if (p === "/api/tool-metrics") this.serveToolMetrics(res, url);
       else if (p === "/api/search") this.serveSearch(req, res, url);
       else if (p === "/api/tasks" && req.method === "GET") this.serveTasks(res, url);
+      else if (p.match(/^\/api\/task\/[^/]+\/retry-skill$/) && req.method === "POST") this.handleTaskRetrySkill(req, res, p);
+      else if (p.startsWith("/api/task/") && req.method === "DELETE") this.handleTaskDelete(res, p);
+      else if (p.startsWith("/api/task/") && req.method === "PUT") this.handleTaskUpdate(req, res, p);
       else if (p.startsWith("/api/task/") && req.method === "GET") this.serveTaskDetail(res, p);
-      else       if (p === "/api/skills" && req.method === "GET") this.serveSkills(res, url);
+      else if (p === "/api/skills" && req.method === "GET") this.serveSkills(res, url);
       else if (p.match(/^\/api\/skill\/[^/]+\/download$/) && req.method === "GET") this.serveSkillDownload(res, p);
       else if (p.match(/^\/api\/skill\/[^/]+\/files$/) && req.method === "GET") this.serveSkillFiles(res, p);
       else if (p.match(/^\/api\/skill\/[^/]+\/visibility$/) && req.method === "PUT") this.handleSkillVisibility(req, res, p);
+      else if (p.startsWith("/api/skill/") && req.method === "DELETE") this.handleSkillDelete(res, p);
+      else if (p.startsWith("/api/skill/") && req.method === "PUT") this.handleSkillUpdate(req, res, p);
       else if (p.startsWith("/api/skill/") && req.method === "GET") this.serveSkillDetail(res, p);
       else if (p === "/api/memory" && req.method === "POST") this.handleCreate(req, res);
       else if (p.startsWith("/api/memory/") && req.method === "GET") this.serveMemoryDetail(res, p);
@@ -245,6 +250,8 @@ export class ViewerServer {
       else if (p.match(/^\/api\/admin\/shared-memories\/[^/]+$/) && req.method === "DELETE") this.handleAdminDeleteMemory(res, p);
       else if (p === "/api/config" && req.method === "GET") this.serveConfig(res);
       else if (p === "/api/config" && req.method === "PUT") this.handleSaveConfig(req, res);
+      else if (p === "/api/test-model" && req.method === "POST") this.handleTestModel(req, res);
+      else if (p === "/api/fallback-model" && req.method === "GET") this.serveFallbackModel(res);
       else if (p === "/api/auth/logout" && req.method === "POST") this.handleLogout(req, res);
       else if (p === "/api/migrate/scan" && req.method === "GET") this.handleMigrateScan(res);
       else if (p === "/api/migrate/start" && req.method === "POST") this.handleMigrateStart(req, res);
@@ -442,16 +449,21 @@ export class ViewerServer {
     const offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
     const { tasks, total } = this.store.listTasks({ status, limit, offset });
 
-    const items = tasks.map((t) => ({
-      id: t.id,
-      sessionKey: t.sessionKey,
-      title: t.title,
-      summary: t.summary ? (t.summary.length > 300 ? t.summary.slice(0, 297) + "..." : t.summary) : "",
-      status: t.status,
-      startedAt: t.startedAt,
-      endedAt: t.endedAt,
-      chunkCount: this.store.countChunksByTask(t.id),
-    }));
+    const db = (this.store as any).db;
+    const items = tasks.map((t) => {
+      const meta = db.prepare("SELECT skill_status FROM tasks WHERE id = ?").get(t.id) as { skill_status: string | null } | undefined;
+      return {
+        id: t.id,
+        sessionKey: t.sessionKey,
+        title: t.title,
+        summary: t.summary ? (t.summary.length > 300 ? t.summary.slice(0, 297) + "..." : t.summary) : "",
+        status: t.status,
+        startedAt: t.startedAt,
+        endedAt: t.endedAt,
+        chunkCount: this.store.countChunksByTask(t.id),
+        skillStatus: meta?.skill_status ?? null,
+      };
+    });
 
     this.jsonResponse(res, { tasks: items, total, limit, offset });
   }
@@ -586,21 +598,24 @@ export class ViewerServer {
       ftsResults = db.prepare(
         "SELECT c.* FROM chunks_fts f JOIN chunks c ON f.rowid = c.rowid WHERE chunks_fts MATCH ? ORDER BY rank LIMIT 100",
       ).all(q).filter(passesFilter);
-    } catch {
+    } catch { /* FTS syntax error, fall through */ }
+    if (ftsResults.length === 0) {
       ftsResults = db.prepare(
         "SELECT * FROM chunks WHERE content LIKE ? OR summary LIKE ? ORDER BY created_at DESC LIMIT 100",
       ).all(`%${q}%`, `%${q}%`).filter(passesFilter);
     }
 
+    const SEMANTIC_THRESHOLD = 0.64;
     let vectorResults: any[] = [];
+    let scoreMap = new Map<string, number>();
     try {
       const queryVec = await this.embedder.embedQuery(q);
       const hits = vectorSearch(this.store, queryVec, 40);
-      const hitIds = new Set(hits.filter(h => h.score > 0.3).map(h => h.chunkId));
+      scoreMap = new Map(hits.map(h => [h.chunkId, h.score]));
+      const hitIds = new Set(hits.filter(h => h.score >= SEMANTIC_THRESHOLD).map(h => h.chunkId));
       if (hitIds.size > 0) {
         const placeholders = [...hitIds].map(() => "?").join(",");
         const rows = db.prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})`).all(...hitIds).filter(passesFilter);
-        const scoreMap = new Map(hits.map(h => [h.chunkId, h.score]));
         rows.forEach((r: any) => { r._vscore = scoreMap.get(r.id) ?? 0; });
         rows.sort((a: any, b: any) => (b._vscore ?? 0) - (a._vscore ?? 0));
         vectorResults = rows;
@@ -618,13 +633,15 @@ export class ViewerServer {
       if (!seenIds.has(r.id)) { seenIds.add(r.id); merged.push(r); }
     }
 
+    const results = merged.length > 0 ? merged : ftsResults.slice(0, 20);
+
     this.store.recordViewerEvent("search");
     this.jsonResponse(res, {
-      results: merged,
+      results,
       query: q,
       vectorCount: vectorResults.length,
       ftsCount: ftsResults.length,
-      total: merged.length,
+      total: results.length,
     });
   }
 
@@ -786,7 +803,101 @@ export class ViewerServer {
         this.store.setSkillVisibility(skillId, visibility);
         this.jsonResponse(res, { ok: true, skillId, visibility });
       } catch (err) {
-        this.log.error(`handleSkillVisibility error: skillId=${skillId}, body=${body}, err=${err}`);
+        const errMsg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        this.log.error(`handleSkillVisibility error: skillId=${skillId}, body=${body}, err=${errMsg}`);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: errMsg }));
+      }
+    });
+  }
+
+  // ─── Task/Skill management ───
+
+  private handleTaskRetrySkill(_req: http.IncomingMessage, res: http.ServerResponse, urlPath: string): void {
+    const taskId = urlPath.replace("/api/task/", "").replace("/retry-skill", "");
+    const task = this.store.getTask(taskId);
+    if (!task) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Task not found" })); return; }
+    if (task.status !== "completed") { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Only completed tasks can retry skill generation" })); return; }
+    if (!this.ctx) { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Plugin context not available" })); return; }
+
+    // Clean up stale task_skills references (e.g., skill was manually deleted)
+    const db = (this.store as any).db;
+    db.prepare("DELETE FROM task_skills WHERE task_id = ? AND skill_id NOT IN (SELECT id FROM skills)").run(taskId);
+
+    this.store.setTaskSkillMeta(taskId, { skillStatus: "queued", skillReason: "手动重试中..." });
+    this.jsonResponse(res, { ok: true, taskId, status: "queued" });
+
+    const ctx = this.ctx;
+    const recallEngine = new RecallEngine(this.store, this.embedder, ctx);
+    const evolver = new SkillEvolver(this.store, recallEngine, ctx, this.embedder);
+    evolver.onTaskCompleted(task).then(() => {
+      this.log.info(`Retry skill generation completed for task ${taskId}`);
+    }).catch((err) => {
+      this.log.error(`Retry skill generation failed for task ${taskId}: ${err}`);
+      this.store.setTaskSkillMeta(taskId, { skillStatus: "skipped", skillReason: `error: ${err}` });
+    });
+  }
+
+  private handleTaskDelete(res: http.ServerResponse, urlPath: string): void {
+    const taskId = urlPath.replace("/api/task/", "");
+    const deleted = this.store.deleteTask(taskId);
+    if (!deleted) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Task not found" })); return; }
+    this.jsonResponse(res, { ok: true, taskId });
+  }
+
+  private handleTaskUpdate(req: http.IncomingMessage, res: http.ServerResponse, urlPath: string): void {
+    const taskId = urlPath.replace("/api/task/", "");
+    this.readBody(req, (body) => {
+      try {
+        const data = JSON.parse(body);
+        const task = this.store.getTask(taskId);
+        if (!task) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Task not found" })); return; }
+        this.store.updateTask(taskId, {
+          title: data.title ?? task.title,
+          summary: data.summary ?? task.summary,
+          status: data.status ?? task.status,
+          endedAt: task.endedAt ?? undefined,
+        });
+        this.jsonResponse(res, { ok: true, taskId });
+      } catch (err) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(err) }));
+      }
+    });
+  }
+
+  private handleSkillDelete(res: http.ServerResponse, urlPath: string): void {
+    const skillId = urlPath.replace("/api/skill/", "");
+    const skill = this.store.getSkill(skillId);
+    if (!skill) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Skill not found" })); return; }
+    // Remove skill directory from disk
+    try {
+      if (skill.dirPath && fs.existsSync(skill.dirPath)) {
+        fs.rmSync(skill.dirPath, { recursive: true, force: true });
+      }
+    } catch (err) {
+      this.log.warn(`Failed to remove skill directory ${skill.dirPath}: ${err}`);
+    }
+    this.store.deleteSkill(skillId);
+    this.jsonResponse(res, { ok: true, skillId });
+  }
+
+  private handleSkillUpdate(req: http.IncomingMessage, res: http.ServerResponse, urlPath: string): void {
+    const skillId = urlPath.replace("/api/skill/", "");
+    this.readBody(req, (body) => {
+      try {
+        const data = JSON.parse(body);
+        const skill = this.store.getSkill(skillId);
+        if (!skill) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Skill not found" })); return; }
+        this.store.updateSkill(skillId, {
+          description: data.description ?? skill.description,
+          version: skill.version,
+          status: data.status ?? skill.status,
+          installed: skill.installed,
+          qualityScore: skill.qualityScore,
+        });
+        this.jsonResponse(res, { ok: true, skillId });
+      } catch (err) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: String(err) }));
       }
@@ -799,13 +910,18 @@ export class ViewerServer {
     this.readBody(req, (body) => {
       try {
         const data = JSON.parse(body);
+        if (!data.content || typeof data.content !== "string" || !data.content.trim()) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "content is required and must be a non-empty string" }));
+          return;
+        }
         const { v4: uuidv4 } = require("uuid");
         const id = uuidv4();
         const now = Date.now();
         this.store.insertChunk({
           id, sessionKey: data.session_key || "manual", turnId: `manual-${now}`, seq: 0,
-          role: data.role || "user", content: data.content || "", kind: data.kind || "paragraph",
-          summary: data.summary || data.content?.slice(0, 100) || "",
+          role: data.role || "user", content: data.content, kind: data.kind || "paragraph",
+          summary: data.summary || data.content.slice(0, 100),
           taskId: null, skillId: null, owner: data.owner || "agent:main",
           dedupStatus: "active", dedupTarget: null, dedupReason: null,
           mergeCount: 0, lastHitAt: null, mergeHistory: "[]",
@@ -838,6 +954,11 @@ export class ViewerServer {
     this.readBody(req, (body) => {
       try {
         const data = JSON.parse(body);
+        if (data.content !== undefined && (typeof data.content !== "string" || !data.content.trim())) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "content must be a non-empty string" }));
+          return;
+        }
         const ok = this.store.updateChunk(chunkId, { summary: data.summary, content: data.content, role: data.role, kind: data.kind, owner: data.owner });
         if (ok) this.jsonResponse(res, { ok: true, message: "Memory updated" });
         else { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Not found" })); }
@@ -862,19 +983,25 @@ export class ViewerServer {
   }
 
   private handleDeleteAll(res: http.ServerResponse): void {
-    const result = this.store.deleteAll();
-    // Clean up skills-store directory
-    const skillsStoreDir = path.join(this.dataDir, "skills-store");
     try {
-      if (fs.existsSync(skillsStoreDir)) {
-        fs.rmSync(skillsStoreDir, { recursive: true });
-        fs.mkdirSync(skillsStoreDir, { recursive: true });
-        this.log.info("Cleared skills-store directory");
+      const result = this.store.deleteAll();
+      const skillsStoreDir = path.join(this.dataDir, "skills-store");
+      try {
+        if (fs.existsSync(skillsStoreDir)) {
+          fs.rmSync(skillsStoreDir, { recursive: true });
+          fs.mkdirSync(skillsStoreDir, { recursive: true });
+          this.log.info("Cleared skills-store directory");
+        }
+      } catch (err) {
+        this.log.warn(`Failed to clear skills-store: ${err}`);
       }
+      this.jsonResponse(res, { ok: true, deleted: result });
     } catch (err) {
-      this.log.warn(`Failed to clear skills-store: ${err}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      this.log.error(`handleDeleteAll error: ${msg}`);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: msg }));
     }
-    this.jsonResponse(res, { ok: true, deleted: result });
   }
 
   // ─── Helpers ───
@@ -904,7 +1031,7 @@ export class ViewerServer {
     const embedding = cfg.embedding;
     if (!embedding?.provider) return false;
     if (embedding.provider === "openclaw") {
-      return embedding.capabilities?.hostEmbedding === true;
+      return !!(this.ctx?.openclawAPI) && embedding.capabilities?.hostEmbedding === true;
     }
     return true;
   }
@@ -913,7 +1040,7 @@ export class ViewerServer {
     const summarizer = cfg.summarizer;
     if (!summarizer?.provider) return false;
     if (summarizer.provider === "openclaw") {
-      return summarizer.capabilities?.hostCompletion === true;
+      return !!(this.ctx?.openclawAPI) && summarizer.capabilities?.hostCompletion === true;
     }
     return true;
   }
@@ -1733,6 +1860,158 @@ export class ViewerServer {
     });
   }
 
+  private handleTestModel(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      try {
+        const { type, provider, model, endpoint, apiKey } = JSON.parse(body);
+        if (!provider) {
+          this.jsonResponse(res, { ok: false, error: "provider is required" });
+          return;
+        }
+        if (type === "embedding") {
+          await this.testEmbeddingModel(provider, model, endpoint, apiKey);
+          this.jsonResponse(res, { ok: true, detail: `${provider}/${model}` });
+        } else {
+          await this.testChatModel(provider, model, endpoint, apiKey);
+          this.jsonResponse(res, { ok: true, detail: `${provider}/${model}` });
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.log.warn(`test-model failed: ${msg}`);
+        this.jsonResponse(res, { ok: false, error: msg });
+      }
+    });
+  }
+
+  private serveFallbackModel(res: http.ServerResponse): void {
+    try {
+      const cfgPath = this.getOpenClawConfigPath();
+      if (!fs.existsSync(cfgPath)) {
+        this.jsonResponse(res, { available: false });
+        return;
+      }
+      const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
+      const agentModel: string | undefined = raw?.agents?.defaults?.model?.primary;
+      if (!agentModel) {
+        this.jsonResponse(res, { available: false });
+        return;
+      }
+      const [providerKey, modelId] = agentModel.includes("/")
+        ? agentModel.split("/", 2)
+        : [undefined, agentModel];
+      const providerCfg = providerKey
+        ? raw?.models?.providers?.[providerKey]
+        : Object.values(raw?.models?.providers ?? {})[0] as Record<string, unknown> | undefined;
+      if (!providerCfg || !providerCfg.baseUrl || !providerCfg.apiKey) {
+        this.jsonResponse(res, { available: false });
+        return;
+      }
+      this.jsonResponse(res, { available: true, model: modelId || agentModel, baseUrl: providerCfg.baseUrl });
+    } catch {
+      this.jsonResponse(res, { available: false });
+    }
+  }
+
+  private async testEmbeddingModel(provider: string, model: string, endpoint: string, apiKey: string): Promise<void> {
+    if (provider === "local") {
+      return;
+    }
+    const baseUrl = (endpoint || "https://api.openai.com/v1").replace(/\/+$/, "");
+    const embUrl = baseUrl.endsWith("/embeddings") ? baseUrl : `${baseUrl}/embeddings`;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    };
+    if (provider === "cohere") {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+      const resp = await fetch(baseUrl.replace(/\/v\d+.*/, "/v2/embed"), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ texts: ["test"], model: model || "embed-english-v3.0", input_type: "search_query", embedding_types: ["float"] }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Cohere embed ${resp.status}: ${txt}`);
+      }
+      return;
+    }
+    if (provider === "gemini") {
+      const url = `https://generativelanguage.googleapis.com/v1/models/${model || "text-embedding-004"}:embedContent?key=${apiKey}`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: { parts: [{ text: "test" }] } }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Gemini embed ${resp.status}: ${txt}`);
+      }
+      return;
+    }
+    const resp = await fetch(embUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ input: ["test"], model: model || "text-embedding-3-small" }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`${resp.status}: ${txt}`);
+    }
+  }
+
+  private async testChatModel(provider: string, model: string, endpoint: string, apiKey: string): Promise<void> {
+    const baseUrl = (endpoint || "https://api.openai.com/v1").replace(/\/+$/, "");
+    if (provider === "anthropic") {
+      const url = endpoint || "https://api.anthropic.com/v1/messages";
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({ model: model || "claude-3-haiku-20240307", max_tokens: 5, messages: [{ role: "user", content: "hi" }] }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Anthropic ${resp.status}: ${txt}`);
+      }
+      return;
+    }
+    if (provider === "gemini") {
+      const url = `https://generativelanguage.googleapis.com/v1/models/${model || "gemini-1.5-flash"}:generateContent?key=${apiKey}`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: "hi" }] }], generationConfig: { maxOutputTokens: 5 } }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Gemini ${resp.status}: ${txt}`);
+      }
+      return;
+    }
+    const chatUrl = baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl}/chat/completions`;
+    const resp = await fetch(chatUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ model: model || "gpt-4o-mini", max_tokens: 5, messages: [{ role: "user", content: "hi" }] }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`${resp.status}: ${txt}`);
+    }
+  }
+
   private serveLogs(res: http.ServerResponse, url: URL): void {
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 20), 200);
     const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
@@ -1920,8 +2199,10 @@ export class ViewerServer {
     }
 
     this.readBody(req, (body) => {
-      let opts: { sources?: string[] } = {};
+      let opts: { sources?: string[]; concurrency?: number } = {};
       try { opts = JSON.parse(body); } catch { /* defaults */ }
+
+      const concurrency = Math.max(1, Math.min(opts.concurrency ?? 1, 8));
 
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -1957,7 +2238,7 @@ export class ViewerServer {
       };
 
       this.migrationRunning = true;
-      this.runMigration(send, opts.sources).finally(() => {
+      this.runMigration(send, opts.sources, concurrency).finally(() => {
         this.migrationRunning = false;
         this.migrationState.done = true;
         if (this.migrationAbort) {
@@ -1978,6 +2259,7 @@ export class ViewerServer {
   private async runMigration(
     send: (event: string, data: unknown) => void,
     sources?: string[],
+    concurrency: number = 1,
   ): Promise<void> {
     const ocHome = this.getOpenClawHome();
     const importSqlite = !sources || sources.includes("sqlite");
@@ -1990,12 +2272,17 @@ export class ViewerServer {
 
     const cfgPath = this.getOpenClawConfigPath();
     let summarizerCfg: any;
+    let strongCfg: any;
     try {
       const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
-      summarizerCfg = this.getResolvedViewerConfig(raw).summarizer;
+      const pluginCfg = raw?.plugins?.entries?.["memos-local-openclaw-plugin"]?.config ??
+                        raw?.plugins?.entries?.["memos-lite"]?.config ??
+                        raw?.plugins?.entries?.["memos-lite-openclaw-plugin"]?.config ?? {};
+      summarizerCfg = pluginCfg.summarizer;
+      strongCfg = pluginCfg.skillEvolution?.summarizer;
     } catch { /* no config */ }
 
-    const summarizer = new Summarizer(summarizerCfg, this.log, this.ctx?.openclawAPI);
+    const summarizer = new Summarizer(summarizerCfg, this.log, this.ctx?.openclawAPI, strongCfg);
 
     // Phase 1: Import SQLite memory chunks
     if (importSqlite) {
@@ -2035,6 +2322,23 @@ export class ViewerServer {
                 continue;
               }
 
+              const importOwner = `agent:${agentId}`;
+
+              // Exact hash dedup within same agent
+              const existingByHash = this.store.findActiveChunkByHash(row.text, importOwner);
+              if (existingByHash) {
+                totalSkipped++;
+                send("item", {
+                  index: i + 1,
+                  total: rows.length,
+                  status: "skipped",
+                  preview: row.text.slice(0, 120),
+                  source: file,
+                  reason: "exact duplicate within agent",
+                });
+                continue;
+              }
+
               try {
                 const summary = await summarizer.summarize(row.text);
                 let embedding: number[] | null = null;
@@ -2049,7 +2353,9 @@ export class ViewerServer {
                 let dedupReason: string | null = null;
 
                 if (embedding) {
-                  const topSimilar = findTopSimilar(this.store, embedding, 0.85, 3, this.log);
+                  const importThreshold = this.ctx?.config?.dedup?.similarityThreshold ?? 0.60;
+                  const dedupOwnerFilter = [importOwner];
+                  const topSimilar = findTopSimilar(this.store, embedding, importThreshold, 5, this.log, dedupOwnerFilter);
                   if (topSimilar.length > 0) {
                     const candidates = topSimilar.map((s, idx) => {
                       const chunk = this.store.getChunk(s.chunkId);
@@ -2140,18 +2446,34 @@ export class ViewerServer {
       }
     }
 
-    // Phase 2: Import session JSONL files
+    // Phase 2: Import session JSONL files from ALL agents (supports parallel by agent)
     if (importSessions) {
-      const sessionsDir = path.join(ocHome, "agents", "main", "sessions");
-      if (fs.existsSync(sessionsDir)) {
-        const jsonlFiles = fs.readdirSync(sessionsDir).filter(f => f.includes(".jsonl")).sort();
-        send("phase", { phase: "sessions", files: jsonlFiles.length });
+      const agentsDir = path.join(ocHome, "agents");
+      const agentGroups: Map<string, Array<{ file: string; filePath: string }>> = new Map();
+      if (fs.existsSync(agentsDir)) {
+        for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
+          if (entry.isDirectory()) {
+            const sessDir = path.join(agentsDir, entry.name, "sessions");
+            if (fs.existsSync(sessDir)) {
+              const jsonlFiles = fs.readdirSync(sessDir).filter(f => f.includes(".jsonl")).sort();
+              if (jsonlFiles.length > 0) {
+                agentGroups.set(entry.name, jsonlFiles.map(f => ({ file: f, filePath: path.join(sessDir, f) })));
+              }
+            }
+          }
+        }
+      }
 
-        let globalMsgIdx = 0;
-        let totalMsgs = 0;
-        for (const f of jsonlFiles) {
+      const agentIds = Array.from(agentGroups.keys());
+      const allFileCount = Array.from(agentGroups.values()).reduce((s, g) => s + g.length, 0);
+      send("phase", { phase: "sessions", files: allFileCount, agents: agentIds, concurrency });
+
+      // Count total messages across all agents
+      let totalMsgs = 0;
+      for (const files of agentGroups.values()) {
+        for (const { filePath } of files) {
           try {
-            const raw = fs.readFileSync(path.join(sessionsDir, f), "utf-8");
+            const raw = fs.readFileSync(filePath, "utf-8");
             for (const line of raw.split("\n")) {
               if (!line.trim()) continue;
               try {
@@ -2172,12 +2494,18 @@ export class ViewerServer {
             }
           } catch { /* skip */ }
         }
+      }
 
-        for (const file of jsonlFiles) {
+      // Thread-safe counters for parallel execution
+      let globalMsgIdx = 0;
+      const incIdx = () => ++globalMsgIdx;
+
+      // Import one agent's sessions sequentially
+      const importAgent = async (agentId: string, files: Array<{ file: string; filePath: string }>) => {
+        const agentOwner = `agent:${agentId}`;
+        for (const { file, filePath } of files) {
           if (this.migrationAbort) break;
           const sessionId = file.replace(/\.jsonl.*$/, "");
-          const filePath = path.join(sessionsDir, file);
-          send("progress", { total: totalMsgs, processed: globalMsgIdx, phase: "sessions", file });
 
           try {
             const fileStream = fs.createReadStream(filePath, { encoding: "utf-8" });
@@ -2209,21 +2537,20 @@ export class ViewerServer {
               }
               if (!content || content.length < 10) continue;
 
-              globalMsgIdx++;
+              const idx = incIdx();
               totalProcessed++;
 
               const sessionKey = `openclaw-session-${sessionId}`;
               if (this.store.chunkExistsByContent(sessionKey, msgRole, content)) {
                 totalSkipped++;
-                send("item", {
-                  index: globalMsgIdx,
-                  total: totalMsgs,
-                  status: "skipped",
-                  preview: content.slice(0, 120),
-                  source: file,
-                  role: msgRole,
-                  reason: "duplicate",
-                });
+                send("item", { index: idx, total: totalMsgs, status: "skipped", preview: content.slice(0, 120), source: file, agent: agentId, role: msgRole, reason: "duplicate" });
+                continue;
+              }
+
+              const existingByHash = this.store.findActiveChunkByHash(content, agentOwner);
+              if (existingByHash) {
+                totalSkipped++;
+                send("item", { index: idx, total: totalMsgs, status: "skipped", preview: content.slice(0, 120), source: file, agent: agentId, role: msgRole, reason: "exact duplicate within agent" });
                 continue;
               }
 
@@ -2241,33 +2568,26 @@ export class ViewerServer {
                 let dedupReason: string | null = null;
 
                 if (embedding) {
-                  const topSimilar = findTopSimilar(this.store, embedding, 0.85, 3, this.log);
+                  const importThreshold = this.ctx?.config?.dedup?.similarityThreshold ?? 0.60;
+                  const dedupOwnerFilter = [agentOwner];
+                  const topSimilar = findTopSimilar(this.store, embedding, importThreshold, 5, this.log, dedupOwnerFilter);
                   if (topSimilar.length > 0) {
-                    const candidates = topSimilar.map((s, idx) => {
+                    const candidates = topSimilar.map((s, i) => {
                       const chunk = this.store.getChunk(s.chunkId);
-                      return { index: idx + 1, summary: chunk?.summary ?? "", chunkId: s.chunkId };
+                      return { index: i + 1, summary: chunk?.summary ?? "", chunkId: s.chunkId };
                     }).filter(c => c.summary);
 
                     if (candidates.length > 0) {
                       const dedupResult = await summarizer.judgeDedup(summary, candidates);
                       if (dedupResult?.action === "DUPLICATE" && dedupResult.targetIndex) {
                         const targetId = candidates[dedupResult.targetIndex - 1]?.chunkId;
-                        if (targetId) {
-                          dedupStatus = "duplicate";
-                          dedupTarget = targetId;
-                          dedupReason = dedupResult.reason;
-                        }
+                        if (targetId) { dedupStatus = "duplicate"; dedupTarget = targetId; dedupReason = dedupResult.reason; }
                       } else if (dedupResult?.action === "UPDATE" && dedupResult.targetIndex && dedupResult.mergedSummary) {
                         const targetId = candidates[dedupResult.targetIndex - 1]?.chunkId;
                         if (targetId) {
                           this.store.updateChunkSummaryAndContent(targetId, dedupResult.mergedSummary, content);
-                          try {
-                            const [newEmb] = await this.embedder.embed([dedupResult.mergedSummary]);
-                            if (newEmb) this.store.upsertEmbedding(targetId, newEmb);
-                          } catch { /* best-effort */ }
-                          dedupStatus = "merged";
-                          dedupTarget = targetId;
-                          dedupReason = dedupResult.reason;
+                          try { const [newEmb] = await this.embedder.embed([dedupResult.mergedSummary]); if (newEmb) this.store.upsertEmbedding(targetId, newEmb); } catch { /* best-effort */ }
+                          dedupStatus = "merged"; dedupTarget = targetId; dedupReason = dedupResult.reason;
                         }
                       }
                     }
@@ -2278,60 +2598,53 @@ export class ViewerServer {
                 const msgTs = obj.message?.timestamp ?? obj.timestamp;
                 const ts = msgTs ? new Date(msgTs).getTime() : Date.now();
                 const chunk: Chunk = {
-                  id: chunkId,
-                  sessionKey,
-                  turnId: `import-${sessionId}-${globalMsgIdx}`,
-                  seq: 0,
-                  role: msgRole as any,
-                  content,
-                  kind: "paragraph",
-                  summary,
-                  embedding: null,
-                  taskId: null,
-                  skillId: null,
-                  owner: "agent:main",
-                  dedupStatus,
-                  dedupTarget,
-                  dedupReason,
-                  mergeCount: 0,
-                  lastHitAt: null,
-                  mergeHistory: "[]",
-                  createdAt: ts,
-                  updatedAt: ts,
+                  id: chunkId, sessionKey, turnId: `import-${agentId}-${sessionId}-${idx}`, seq: 0,
+                  role: msgRole as any, content, kind: "paragraph", summary, embedding: null,
+                  taskId: null, skillId: null, owner: agentOwner, dedupStatus, dedupTarget, dedupReason,
+                  mergeCount: 0, lastHitAt: null, mergeHistory: "[]", createdAt: ts, updatedAt: ts,
                 };
 
                 this.store.insertChunk(chunk);
-                if (embedding && dedupStatus === "active") {
-                  this.store.upsertEmbedding(chunkId, embedding);
-                }
+                if (embedding && dedupStatus === "active") this.store.upsertEmbedding(chunkId, embedding);
 
                 totalStored++;
-                send("item", {
-                  index: globalMsgIdx,
-                  total: totalMsgs,
-                  status: dedupStatus === "active" ? "stored" : dedupStatus,
-                  preview: content.slice(0, 120),
-                  summary: summary.slice(0, 80),
-                  source: file,
-                  role: msgRole,
-                });
+                send("item", { index: idx, total: totalMsgs, status: dedupStatus === "active" ? "stored" : dedupStatus, preview: content.slice(0, 120), summary: summary.slice(0, 80), source: file, agent: agentId, role: msgRole });
               } catch (err) {
                 totalErrors++;
-                send("item", {
-                  index: globalMsgIdx,
-                  total: totalMsgs,
-                  status: "error",
-                  preview: content.slice(0, 120),
-                  source: file,
-                  error: String(err).slice(0, 200),
-                });
+                send("item", { index: idx, total: totalMsgs, status: "error", preview: content.slice(0, 120), source: file, agent: agentId, error: String(err).slice(0, 200) });
               }
             }
           } catch (err) {
-            send("error", { file, error: String(err) });
+            send("error", { file, agent: agentId, error: String(err) });
             totalErrors++;
           }
         }
+      };
+
+      // Execute agents with concurrency control
+      const agentEntries = Array.from(agentGroups.entries());
+      if (concurrency <= 1 || agentEntries.length <= 1) {
+        for (const [agentId, files] of agentEntries) {
+          if (this.migrationAbort) break;
+          send("progress", { total: totalMsgs, processed: globalMsgIdx, phase: "sessions", agent: agentId });
+          await importAgent(agentId, files);
+        }
+      } else {
+        // Parallel: run up to `concurrency` agents at once
+        let cursor = 0;
+        const runBatch = async () => {
+          while (cursor < agentEntries.length && !this.migrationAbort) {
+            const batch: Promise<void>[] = [];
+            const batchStart = cursor;
+            while (batch.length < concurrency && cursor < agentEntries.length) {
+              const [agentId, files] = agentEntries[cursor++];
+              send("progress", { total: totalMsgs, processed: globalMsgIdx, phase: "sessions", agent: agentId, parallel: true });
+              batch.push(importAgent(agentId, files));
+            }
+            await Promise.all(batch);
+          }
+        };
+        await runBatch();
       }
     }
 
@@ -2354,8 +2667,10 @@ export class ViewerServer {
     }
 
     this.readBody(req, (body) => {
-      let opts: { enableTasks?: boolean; enableSkills?: boolean } = {};
+      let opts: { enableTasks?: boolean; enableSkills?: boolean; concurrency?: number } = {};
       try { opts = JSON.parse(body); } catch { /* defaults */ }
+
+      const concurrency = Math.max(1, Math.min(opts.concurrency ?? 1, 8));
 
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -2375,7 +2690,7 @@ export class ViewerServer {
       };
 
       this.ppRunning = true;
-      this.runPostprocess(send, !!opts.enableTasks, !!opts.enableSkills).finally(() => {
+      this.runPostprocess(send, !!opts.enableTasks, !!opts.enableSkills, concurrency).finally(() => {
         this.ppRunning = false;
         this.ppState.running = false;
         this.ppState.done = true;
@@ -2433,43 +2748,39 @@ export class ViewerServer {
     send: (event: string, data: unknown) => void,
     enableTasks: boolean,
     enableSkills: boolean,
+    concurrency: number = 1,
   ): Promise<void> {
     const ctx = this.ctx!;
-    const taskProcessor = new TaskProcessor(this.store, ctx);
-    let skillEvolver: SkillEvolver | null = null;
-
-    if (enableSkills) {
-      const recallEngine = new RecallEngine(this.store, this.embedder, ctx);
-      skillEvolver = new SkillEvolver(this.store, recallEngine, ctx);
-      taskProcessor.onTaskCompleted(async (task) => {
-        try {
-          await skillEvolver!.onTaskCompleted(task);
-          this.ppState.skillsCreated++;
-          send("skill", { taskId: task.id, title: task.title });
-        } catch (err) {
-          this.log.warn(`Postprocess skill evolution error: ${err}`);
-        }
-      });
-    }
 
     const importSessions = this.store.getDistinctSessionKeys()
       .filter((sk: string) => sk.startsWith("openclaw-import-") || sk.startsWith("openclaw-session-"));
 
-    type PendingItem = { sessionKey: string; action: "full" | "skill-only" };
+    type PendingItem = { sessionKey: string; action: "full" | "skill-only"; owner: string };
     const pendingItems: PendingItem[] = [];
     let skippedCount = 0;
+
+    const ownerMap = this.store.getSessionOwnerMap(importSessions);
 
     for (const sk of importSessions) {
       const hasTask = this.store.hasTaskForSession(sk);
       const hasSkill = this.store.hasSkillForSessionTask(sk);
+      const owner = ownerMap.get(sk) ?? "agent:main";
 
       if (enableTasks && !hasTask) {
-        pendingItems.push({ sessionKey: sk, action: "full" });
+        pendingItems.push({ sessionKey: sk, action: "full", owner });
       } else if (enableSkills && hasTask && !hasSkill) {
-        pendingItems.push({ sessionKey: sk, action: "skill-only" });
+        pendingItems.push({ sessionKey: sk, action: "skill-only", owner });
       } else {
         skippedCount++;
       }
+    }
+
+    // Group pending items by agent (owner)
+    const agentGroups = new Map<string, PendingItem[]>();
+    for (const item of pendingItems) {
+      const group = agentGroups.get(item.owner) ?? [];
+      group.push(item);
+      agentGroups.set(item.owner, group);
     }
 
     this.ppState.total = pendingItems.length;
@@ -2477,84 +2788,114 @@ export class ViewerServer {
       totalSessions: importSessions.length,
       alreadyProcessed: skippedCount,
       pending: pendingItems.length,
+      agents: Array.from(agentGroups.keys()),
+      concurrency,
     });
     send("progress", { processed: 0, total: pendingItems.length });
 
-    for (let i = 0; i < pendingItems.length; i++) {
-      if (this.ppAbort) break;
-      const { sessionKey, action } = pendingItems[i];
-      this.ppState.processed = i + 1;
+    let globalIdx = 0;
+    const incIdx = () => ++globalIdx;
 
-      send("item", {
-        index: i + 1,
-        total: pendingItems.length,
-        session: sessionKey,
-        step: "processing",
-        action,
-      });
+    // Process one agent's sessions sequentially
+    const processAgent = async (agentOwner: string, items: PendingItem[]) => {
+      const taskProcessor = new TaskProcessor(this.store, ctx);
+      let skillEvolver: SkillEvolver | null = null;
 
-      try {
-        if (action === "full") {
-          await taskProcessor.onChunksIngested(sessionKey, Date.now());
-          const activeTask = this.store.getActiveTask(sessionKey);
-          if (activeTask) {
-            await taskProcessor.finalizeTask(activeTask);
-            const finalized = this.store.getTask(activeTask.id);
-            this.ppState.tasksCreated++;
-            send("item", {
-              index: i + 1,
-              total: pendingItems.length,
-              session: sessionKey,
-              step: "done",
-              taskTitle: finalized?.title || "",
-              taskStatus: finalized?.status || "",
-            });
-          } else {
-            send("item", {
-              index: i + 1,
-              total: pendingItems.length,
-              session: sessionKey,
-              step: "done",
-              taskTitle: "(no chunks)",
-            });
+      if (enableSkills) {
+        const recallEngine = new RecallEngine(this.store, this.embedder, ctx);
+        skillEvolver = new SkillEvolver(this.store, recallEngine, ctx);
+        taskProcessor.onTaskCompleted(async (task) => {
+          try {
+            await skillEvolver!.onTaskCompleted(task);
+            this.ppState.skillsCreated++;
+            send("skill", { taskId: task.id, title: task.title, agent: agentOwner });
+          } catch (err) {
+            this.log.warn(`Postprocess skill evolution error (${agentOwner}): ${err}`);
           }
-        } else if (action === "skill-only" && skillEvolver) {
-          const completedTasks = this.store.getCompletedTasksForSession(sessionKey);
-          let skillGenerated = false;
-          for (const task of completedTasks) {
-            if (this.ppAbort) break;
-            try {
-              await skillEvolver.onTaskCompleted(task);
-              this.ppState.skillsCreated++;
-              skillGenerated = true;
-              send("skill", { taskId: task.id, title: task.title });
-            } catch (err) {
-              this.log.warn(`Skill evolution error for task=${task.id}: ${err}`);
-            }
-          }
-          send("item", {
-            index: i + 1,
-            total: pendingItems.length,
-            session: sessionKey,
-            step: "done",
-            taskTitle: completedTasks[0]?.title || sessionKey,
-            action: "skill-only",
-            skillGenerated,
-          });
-        }
-      } catch (err) {
-        this.ppState.errors++;
-        this.log.warn(`Postprocess error for ${sessionKey}: ${err}`);
-        send("item", {
-          index: i + 1,
-          total: pendingItems.length,
-          session: sessionKey,
-          step: "error",
-          error: String(err).slice(0, 200),
         });
       }
 
-      send("progress", { processed: i + 1, total: pendingItems.length });
+      for (const { sessionKey, action } of items) {
+        if (this.ppAbort) break;
+        const idx = incIdx();
+        this.ppState.processed = globalIdx;
+
+        send("item", {
+          index: idx,
+          total: pendingItems.length,
+          session: sessionKey,
+          agent: agentOwner,
+          step: "processing",
+          action,
+        });
+
+        try {
+          if (action === "full") {
+            await taskProcessor.onChunksIngested(sessionKey, Date.now());
+            const activeTask = this.store.getActiveTask(sessionKey);
+            if (activeTask) {
+              await taskProcessor.finalizeTask(activeTask);
+              const finalized = this.store.getTask(activeTask.id);
+              this.ppState.tasksCreated++;
+              send("item", {
+                index: idx, total: pendingItems.length, session: sessionKey, agent: agentOwner,
+                step: "done", taskTitle: finalized?.title || "", taskStatus: finalized?.status || "",
+              });
+            } else {
+              send("item", {
+                index: idx, total: pendingItems.length, session: sessionKey, agent: agentOwner,
+                step: "done", taskTitle: "(no chunks)",
+              });
+            }
+          } else if (action === "skill-only" && skillEvolver) {
+            const completedTasks = this.store.getCompletedTasksForSession(sessionKey);
+            let skillGenerated = false;
+            for (const task of completedTasks) {
+              if (this.ppAbort) break;
+              try {
+                await skillEvolver.onTaskCompleted(task);
+                this.ppState.skillsCreated++;
+                skillGenerated = true;
+                send("skill", { taskId: task.id, title: task.title, agent: agentOwner });
+              } catch (err) {
+                this.log.warn(`Skill evolution error (${agentOwner}) task=${task.id}: ${err}`);
+              }
+            }
+            send("item", {
+              index: idx, total: pendingItems.length, session: sessionKey, agent: agentOwner,
+              step: "done", taskTitle: completedTasks[0]?.title || sessionKey, action: "skill-only", skillGenerated,
+            });
+          }
+        } catch (err) {
+          this.ppState.errors++;
+          this.log.warn(`Postprocess error (${agentOwner}) ${sessionKey}: ${err}`);
+          send("item", {
+            index: idx, total: pendingItems.length, session: sessionKey, agent: agentOwner,
+            step: "error", error: String(err).slice(0, 200),
+          });
+        }
+
+        send("progress", { processed: globalIdx, total: pendingItems.length });
+      }
+    };
+
+    // Execute agents with concurrency control
+    const agentEntries = Array.from(agentGroups.entries());
+    if (concurrency <= 1 || agentEntries.length <= 1) {
+      for (const [agentOwner, items] of agentEntries) {
+        if (this.ppAbort) break;
+        await processAgent(agentOwner, items);
+      }
+    } else {
+      let cursor = 0;
+      while (cursor < agentEntries.length && !this.ppAbort) {
+        const batch: Promise<void>[] = [];
+        while (batch.length < concurrency && cursor < agentEntries.length) {
+          const [agentOwner, items] = agentEntries[cursor++];
+          batch.push(processAgent(agentOwner, items));
+        }
+        await Promise.all(batch);
+      }
     }
   }
 

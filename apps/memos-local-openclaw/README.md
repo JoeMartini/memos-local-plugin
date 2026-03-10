@@ -1,8 +1,15 @@
 # 🧠 MemOS — OpenClaw Memory Plugin
 
-Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/openclaw) AI Agents. Every conversation is automatically captured, semantically indexed, and instantly recallable — with **task summarization & skill evolution**, and **Hub-based team sharing for memories and skills**.
+[![npm version](https://img.shields.io/npm/v/@memtensor/memos-local-openclaw-plugin)](https://www.npmjs.com/package/@memtensor/memos-local-openclaw-plugin)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/MemTensor/MemOS/blob/main/LICENSE)
+[![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
+[![GitHub](https://img.shields.io/badge/GitHub-Source-181717?logo=github)](https://github.com/MemTensor/MemOS/tree/main/apps/memos-local-openclaw)
+
+Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/openclaw) AI Agents. Every conversation is automatically captured, semantically indexed, and instantly recallable — with **task summarization & skill evolution**, **Hub-based team sharing for memories and skills**, and **multi-agent collaborative memory**.
 
 **Full-write | Hybrid Search | Task Summarization & Skill Evolution | Hub Team Sharing | Memory Viewer**
+
+> **Homepage:**  🌐 [Homepage](https://memos-claw.openmem.net) · 📖 [Documentation](https://memos-claw.openmem.net/docs/index.html) · 📦 [NPM](https://www.npmjs.com/package/@memtensor/memos-local-openclaw-plugin)
 
 ## Why MemOS
 
@@ -26,11 +33,12 @@ Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/o
 - **Multi-provider embedding** — OpenAI-compatible, Gemini, Cohere, Voyage, Mistral, or local offline (Xenova/all-MiniLM-L6-v2)
 
 ### Task Summarization & Skill Evolution
-- **Auto task boundary detection** — LLM topic judgment + 2-hour idle timeout segments conversations into tasks
+- **Auto task boundary detection** — Per-turn LLM topic judgment (warm-up: 1 user turn) + 2-hour idle timeout segments conversations into tasks. Strongly biased toward SAME to avoid over-splitting related topics
 - **Structured summaries** — LLM generates Goal, Key Steps, Result, Key Details for each completed task
 - **Key detail preservation** — Code, commands, URLs, file paths, error messages retained in summaries
 - **Quality filtering** — Tasks with too few chunks, too few turns, or trivial content are auto-skipped
 - **Task status** — `active` (in progress), `completed` (with LLM summary), `skipped` (too brief, excluded from search)
+- **Task/Skill CRUD** — Edit title/summary, delete tasks and skills, retry skill generation from task cards
 - **Automatic evaluation** — After task completion, rule filter + LLM evaluates if the task is worth distilling into a skill
 - **Skill generation** — Multi-step LLM pipeline creates SKILL.md + scripts + references + evals from real execution records
 - **Skill upgrading** — When similar tasks appear, existing skills are auto-upgraded (refine / extend / fix)
@@ -38,6 +46,7 @@ Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/o
 - **Version management** — Full version history with changelog, change summary, and upgrade type tracking
 - **Auto-install** — Generated skills can be auto-installed into the workspace for immediate use
 - **Dedicated model** — Optional separate LLM model for skill generation (e.g., Claude 4.6 for higher quality)
+- **LLM fallback chain** — `skillSummarizer` → `summarizer` → OpenClaw native model (auto-detected from `openclaw.json`). If all configured models fail, the next in chain is tried automatically
 
 ### Hub Team Sharing (v4)
 - **Hub-Spoke collaboration** — One Hub stores shared tasks, memories, and skills; clients keep private data local and query the Hub only when needed
@@ -51,15 +60,16 @@ Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/o
 - **One-click import** — Seamlessly migrate OpenClaw's native built-in memories (SQLite + JSONL) into the MemOS intelligent memory system
 - **Smart deduplication** — Vector similarity + LLM judgment prevents duplicate imports; similar content auto-merged
 - **Resume anytime** — Pause and resume at any time; refreshing the page auto-restores progress; already processed items are skipped
-- **Post-import processing** — Optionally generate task summaries and evolve skills from imported memories, with serial processing per session
+- **Post-import processing** — Optionally generate task summaries and evolve skills from imported memories; serial processing within each agent, parallel across agents
+- **Agent parallelism** — Configurable concurrency (1–8) for parallel processing across agents; sessions within each agent are processed serially
 - **Source tagging** — All migrated memories are tagged with 🦐, visually distinguishing them from conversation-generated memories
 - **Real-time progress** — Live progress bar, stats (stored/skipped/merged/errors), and scrolling log via SSE
 
 ### Memory Viewer
 - **7 management pages** — Memories, Tasks, Skills, Analytics, **Logs**, **Import**, Settings
 - **Full CRUD** — Create, edit, delete, search memories; evolution badges and merge history on memory cards
-- **Task browser** — Status filters, chat-bubble chunk view, structured summaries, skill generation status
-- **Skill browser** — Version history, quality scores, one-click download as ZIP
+- **Task browser** — Status filters, chat-bubble chunk view, structured summaries, skill generation status; edit/delete/retry-skill buttons on cards
+- **Skill browser** — Version history, quality scores, visibility toggle, one-click download as ZIP; edit/delete/publish buttons on cards
 - **Analytics dashboard** — Daily read/write activity, memory breakdown charts
 - **Logs** — Tool call log (memory_search, auto_recall, memory_add, etc.) with input/output and duration; filter by tool, auto-refresh
 - **Online configuration** — Modify embedding, summarizer, skill evolution settings via web UI
@@ -77,17 +87,38 @@ Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/o
 
 ### 1. Install
 
-**From npm (recommended):**
+**Step 0 — Prepare build environment (macOS / Linux):**
+
+This plugin uses `better-sqlite3`, a native C/C++ module. On **macOS** and **Linux**, prebuilt binaries may not be available, so **install C++ build tools first** to ensure a smooth installation:
+
+```bash
+# macOS
+xcode-select --install
+
+# Linux (Ubuntu / Debian)
+sudo apt install build-essential python3
+```
+
+> **Windows users:** `better-sqlite3` ships prebuilt binaries for Windows + Node.js LTS, so you can usually skip this step and go directly to Step 1. If installation still fails, install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (select "C++ build tools" workload).
+>
+> Already have build tools? Skip to Step 1. Not sure? Run the install command above — it's safe to re-run.
+>
+> **Still having issues?** See the [Troubleshooting](#troubleshooting) section, the [detailed troubleshooting guide](https://memtensor.github.io/MemOS/apps/memos-local-openclaw/docs/troubleshooting.html), or the [official better-sqlite3 troubleshooting docs](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/troubleshooting.md).
+
+**Step 1 — Install the plugin:**
 
 ```bash
 openclaw plugins install @memtensor/memos-local-openclaw-plugin
 ```
 
-The plugin is installed under `~/.openclaw/extensions/memos-local-openclaw-plugin` and registered as `memos-local-openclaw-plugin`. Dependencies and native modules are built automatically during installation.
+The plugin is installed under `~/.openclaw/extensions/memos-local-openclaw-plugin` and registered as `memos-local-openclaw-plugin`. Dependencies and `better-sqlite3` native module are built automatically during installation.
 
 > **Note:** The Memory Viewer starts only when the **OpenClaw gateway** is running. After install, **configure** `openclaw.json` (step 2) and **start the gateway** (step 3); the viewer will then be available at `http://127.0.0.1:18799`.
 >
-> If better-sqlite3 fails to build automatically, ensure you have C++ build tools installed: macOS: `xcode-select --install`, Linux: `sudo apt install build-essential`.
+> **Installation failed?** If `better-sqlite3` compilation fails during install, manually rebuild after ensuring build tools are installed:
+> ```bash
+> cd ~/.openclaw/extensions/memos-local-openclaw-plugin && npm rebuild better-sqlite3
+> ```
 
 **From source (development):**
 
@@ -164,7 +195,7 @@ Add the plugin config to `~/.openclaw/openclaw.json`:
 | Gemini | `gemini` | `gemini-1.5-flash` |
 | AWS Bedrock | `bedrock` | `anthropic.claude-3-haiku-20240307-v1:0` |
 
-> **No summarizer config?** In the current sidecar build, the plugin falls back to rule-based summarization. Configure an explicit summarizer provider for higher-quality task summaries and skill generation.
+> **No summarizer config?** The plugin automatically falls back to the OpenClaw native model (auto-detected from `~/.openclaw/openclaw.json`). If that is also unavailable, a rule-based fallback generates summaries from the first sentence + key entities. Good enough to start.
 
 #### Skill Evolution Configuration (Optional)
 
@@ -188,7 +219,7 @@ You can optionally configure a dedicated model for skill generation (for higher 
 }
 ```
 
-If `skillSummarizer` is not configured, the plugin uses the regular `summarizer` model for skill generation.
+**LLM fallback chain:** `skillSummarizer` → `summarizer` → OpenClaw native model (auto-detected from `~/.openclaw/openclaw.json`). If `skillSummarizer` is not configured, the plugin tries the regular `summarizer`, then falls back to the OpenClaw native model. Each step in the chain is tried automatically if the previous one fails.
 
 #### Environment Variable Support
 
@@ -281,9 +312,13 @@ Conversation → Capture (filter roles, strip system prompts)
 ### Pipeline 2: Task Generation (auto after memory write)
 
 ```
-New chunks → Task boundary detection (LLM topic judge / 2h idle / session change)
-→ Boundary crossed? → Finalize previous task
-  → Chunks ≥ 4 & turns ≥ 2? → LLM structured summary → status = "completed"
+New chunks → Group into user-turns → Process one turn at a time
+→ Warm-up (first user turn): assign directly
+→ Each subsequent user turn: LLM topic judge (context vs new message)
+  → "NEW"? → Finalize current task, create new task
+  → "SAME"? → Assign to current task
+→ Time gap > 2h? → Always split regardless of topic
+→ Finalize: Chunks ≥ 4 & turns ≥ 2? → LLM structured summary → status = "completed"
   → Otherwise → status = "skipped" (excluded from search)
 ```
 
@@ -368,6 +403,8 @@ The plugin provides local memory tools plus v4 Hub-sharing tools, and auto-insta
 | `maxResults` | 20 | 1–20 | Maximum candidates before LLM filter |
 | `minScore` | 0.45 | 0.35–1.0 | Minimum relevance score |
 | `role` | — | `user` / `assistant` / `tool` | Filter by message role (e.g. `user` to find what the user said) |
+
+> **Viewer search** uses a stricter threshold (`minScore` 0.64) for vector results. When no semantic matches are found, it falls back to FTS5 keyword search and returns the top 20 keyword-based results.
 
 ## Memory Viewer
 
@@ -515,6 +552,8 @@ openclaw plugins install @memtensor/memos-local-openclaw-plugin
 ## Troubleshooting
 
 > 📖 **详细排查指南 / Detailed troubleshooting guide:** [docs/troubleshooting.html](https://memtensor.github.io/MemOS/apps/memos-local-openclaw/docs/troubleshooting.html) — 包含逐步排查流程、日志查看方法、完全重装步骤等。
+>
+> 📦 **better-sqlite3 official troubleshooting:** [better-sqlite3 Troubleshooting](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/troubleshooting.md) — the upstream guide for native module build issues.
 
 ### Common Issues
 
@@ -550,18 +589,24 @@ openclaw plugins install @memtensor/memos-local-openclaw-plugin
    npm rebuild better-sqlite3
    ```
    If rebuild fails, install C++ build tools first:
-   - **macOS:** `xcode-select --install`
+   - **macOS:** `xcode-select --install` (if you see `xcrun: error: invalid active developer path`, run this first)
    - **Linux:** `sudo apt install build-essential python3`
-   - **Windows:** Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+   - **Windows:** Usually not needed — `better-sqlite3` provides prebuilt binaries for Windows + Node.js LTS. If it still fails, install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (select "C++ build tools" workload)
 
    Then retry `npm rebuild better-sqlite3` and restart the gateway.
+
+   > **Still failing?** Check the official [better-sqlite3 troubleshooting guide](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/troubleshooting.md) for platform-specific solutions. For non-LTS Node.js versions (e.g., v25.x), prebuilt binaries may not be available and compilation from source is required.
 
 7. **Memory conflict with built-in search** — If the agent calls both the built-in memory search and the plugin's `memory_search`, it means `agents.defaults.memorySearch.enabled` is not set to `false`.
 
 8. **Skills not generating** — Check:
    - `skillEvolution.enabled` is `true`
    - Tasks have enough content (default requires >= 6 chunks)
+   - LLM model is accessible (check gateway log for `judgeNewTopic failed` or `SkillEvolver` errors)
+   - The LLM fallback chain will try: `skillSummarizer` → `summarizer` → OpenClaw native model. If all fail, skill generation is skipped
    - Look for `SkillEvolver` output in the gateway log
+
+9. **LLM calls failing** — All LLM-dependent features (summarization, topic detection, skill generation) use a fallback chain. If the configured model returns an error, the next model in the chain is tried automatically. Check the gateway log for messages like `failed (model), trying next`. If all models fail, the operation falls back to rule-based logic or is skipped.
 
 ## Data Location
 
@@ -586,13 +631,15 @@ This section is for contributors who want to develop, test, or modify the plugin
 - **C++ build tools** (for `better-sqlite3` native module):
   - macOS: `xcode-select --install`
   - Linux: `sudo apt install build-essential python3`
-  - Windows: [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+  - Windows: usually not needed (prebuilt binaries available for LTS Node.js); if build fails, install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 - **OpenClaw CLI** installed and available in PATH (`openclaw --version`)
+
+> **`better-sqlite3` build issues?** This is the most common installation problem on macOS and Linux. If `npm install` fails, first install the C++ build tools above, then run `npm rebuild better-sqlite3`. For detailed platform-specific solutions, see the [official better-sqlite3 troubleshooting guide](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/troubleshooting.md) and our [installation troubleshooting page](https://memtensor.github.io/MemOS/apps/memos-local-openclaw/docs/troubleshooting.html).
 
 ### Clone & Setup
 
 ```bash
-git clone https://github.com/tangbotony/MemOS.git
+git clone https://github.com/MemTensor/MemOS.git
 cd MemOS/apps/memos-local-openclaw
 npm install
 ```
@@ -622,6 +669,8 @@ apps/memos-local-openclaw/
 │   │   ├── rrf.ts           # Reciprocal Rank Fusion
 │   │   ├── mmr.ts           # Maximal Marginal Relevance
 │   │   └── recency.ts       # Time-decay scoring
+│   ├── shared/
+│   │   └── llm-call.ts      # LLM fallback chain utility (callLLMWithFallback, buildSkillConfigChain)
 │   ├── skill/               # Skill evolution pipeline (evaluator, generator, upgrader)
 │   ├── storage/
 │   │   ├── sqlite.ts        # SQLite database layer (chunks, tasks, skills, FTS5)

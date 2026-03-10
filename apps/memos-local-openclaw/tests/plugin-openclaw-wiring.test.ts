@@ -108,6 +108,7 @@ describe("plugin-impl OpenClaw wiring", () => {
     const pluginModule = await import("../plugin-impl");
     pluginModule.default.register({
       pluginConfig: {},
+      config: {},
       resolvePath: () => "/tmp/memos-openclaw-wiring",
       logger: { info() {}, warn() {} },
       registerTool: () => {},

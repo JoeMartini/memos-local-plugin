@@ -1,6 +1,6 @@
 {
   "name": "@memtensor/memos-local-openclaw-plugin",
-  "version": "0.3.20",
+  "version": "1.0.1",
   "description": "MemOS Local memory plugin for OpenClaw — full-write, hybrid-recall, progressive retrieval",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -46,6 +46,7 @@
     "@sinclair/typebox": "^0.34.48",
     "better-sqlite3": "^12.6.2",
     "posthog-node": "^5.28.0",
+    "puppeteer": "^24.38.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {

@@ -177,7 +177,7 @@ const memosLocalPlugin = {
     }
 
     // Extract host model providers so OpenClawAPIClient can proxy completion/embedding
-    const hostModels: HostModelsConfig | undefined = api.config.models?.providers
+    const hostModels: HostModelsConfig | undefined = api.config?.models?.providers
       ? { providers: api.config.models.providers as Record<string, import("./src/openclaw-api").HostModelProvider> }
       : undefined;
 
@@ -292,7 +292,7 @@ const memosLocalPlugin = {
           const searchLimit = Math.min(maxResults ?? 20, 20);
           const agentId = context?.agentId ?? (params as any).agentId ?? "main";
           const ownerFilter = [`agent:${agentId}`, "public"];
-          ctx.log.debug(`memory_search query="${query}" minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId} scope=${searchScope}`);
+          ctx.log.debug(`memory_search query="${query}" maxResults=${searchLimit} minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId} scope=${searchScope}`);
           const result = await engine.search({ query, maxResults: searchLimit, minScore, role, ownerFilter });
           ctx.log.debug(`memory_search raw candidates: ${result.hits.length}`);
 
@@ -1634,6 +1634,11 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
           api.logger.info(`╚══════════════════════════════════════════╝`);
           api.logger.info(`memos-local: password reset token: ${viewer.getResetToken()}`);
           api.logger.info(`memos-local: forgot password? Use the reset token on the login page.`);
+          skillEvolver.recoverOrphanedTasks().then((count) => {
+            if (count > 0) api.logger.info(`memos-local: recovered ${count} orphaned skill tasks`);
+          }).catch((err) => {
+            api.logger.warn(`memos-local: skill recovery failed: ${err}`);
+          });
         } catch (err) {
           api.logger.warn(`memos-local: viewer failed to start: ${err}`);
           api.logger.info(`memos-local: started (embedding: ${embedder.provider})`);
