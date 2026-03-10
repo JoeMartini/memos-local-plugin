@@ -15,8 +15,8 @@ import { RecallEngine } from "../recall/engine";
 import { SkillEvolver } from "../skill/evolver";
 import { resolveConfig } from "../config";
 import { getHubStatus } from "../client/connector";
-import { hubGetMemoryDetail, hubListMemories, hubListTasks, hubListSkills, hubRequestJson, hubSearchMemories, hubSearchSkills, normalizeHubUrl, resolveHubClient } from "../client/hub";
-import { fetchHubSkillBundle, restoreSkillBundleFromHub } from "../client/skill-sync";
+import { type ResolvedHubClient, hubGetMemoryDetail, hubListMemories, hubListTasks, hubListSkills, hubRequestJson, hubSearchMemories, hubSearchSkills, normalizeHubUrl, resolveHubClient } from "../client/hub";
+import { buildSkillBundleForHub, fetchHubSkillBundle, restoreSkillBundleFromHub } from "../client/skill-sync";
 import type { Logger, Chunk, PluginContext, MemosLocalConfig } from "../types";
 import { viewerHTML } from "./html";
 import { v4 as uuid } from "uuid";
@@ -227,6 +227,8 @@ export class ViewerServer {
       else if (p === "/api/sharing/memories/share" && req.method === "POST") this.handleSharingMemoryShare(req, res);
       else if (p === "/api/sharing/memories/unshare" && req.method === "POST") this.handleSharingMemoryUnshare(req, res);
       else if (p === "/api/sharing/skills/pull" && req.method === "POST") this.handleSharingSkillPull(req, res);
+      else if (p === "/api/sharing/skills/share" && req.method === "POST") this.handleSharingSkillShare(req, res);
+      else if (p === "/api/sharing/skills/unshare" && req.method === "POST") this.handleSharingSkillUnshare(req, res);
       else if (p === "/api/sharing/groups" && req.method === "GET") this.serveSharingGroups(res);
       else if (p === "/api/sharing/groups" && req.method === "POST") this.handleSharingGroupCreate(req, res);
       else if (p.match(/^\/api\/sharing\/groups\/[^/]+$/) && req.method === "PUT") this.handleSharingGroupUpdate(req, res, p);
@@ -651,8 +653,11 @@ export class ViewerServer {
     const relatedTasks = this.store.getTasksBySkill(skillId);
     const files = fs.existsSync(skill.dirPath) ? this.walkDir(skill.dirPath, skill.dirPath) : [];
 
+    const db = (this.store as any).db;
+    const sharedSkill = db.prepare("SELECT visibility, group_id FROM hub_skills WHERE source_skill_id = ? ORDER BY updated_at DESC LIMIT 1").get(skillId) as { visibility: string | null; group_id: string | null } | undefined;
+
     this.jsonResponse(res, {
-      skill,
+      skill: { ...skill, sharingVisibility: sharedSkill?.visibility ?? null, sharingGroupId: sharedSkill?.group_id ?? null },
       versions: versions.map(v => ({
         id: v.id,
         version: v.version,
@@ -940,8 +945,26 @@ export class ViewerServer {
       base.admin.canManageUsers = true;
       base.admin.rejectSupported = true;
       base.connection.connected = true;
-      base.connection.user = { username: "hub-admin", role: "admin", groups: [] };
       base.connection.hubUrl = resolvedHubUrl ?? undefined;
+
+      // 通过 hub API 获取 admin 用户的真实信息（含分组）
+      let adminUser: any = { username: "hub-admin", role: "admin", groups: [] };
+      try {
+        const hub = this.resolveHubConnection();
+        if (hub) {
+          const me = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/me", { method: "GET" }) as any;
+          if (me) {
+            adminUser = {
+              id: me.id,
+              username: me.username ?? "hub-admin",
+              role: me.role ?? "admin",
+              groups: Array.isArray(me.groups) ? me.groups : [],
+            };
+          }
+        }
+      } catch { /* fallback to default */ }
+      base.connection.user = adminUser;
+
       // Fetch team info from own hub
       try {
         const selfUrl = resolvedHubUrl || `http://localhost:${sharing.hub?.port ?? 21816}`;
@@ -1169,7 +1192,7 @@ export class ViewerServer {
         if (!task) return this.jsonResponse(res, { ok: false, error: "task_not_found" });
         const chunks = this.store.getChunksByTask(taskId);
         if (chunks.length === 0) return this.jsonResponse(res, { ok: false, error: "no_chunks" });
-        const hubClient = await resolveHubClient(this.store, this.ctx);
+        const hubClient = await this.resolveHubClientAware();
         const response = await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/tasks/share", {
           method: "POST",
           body: JSON.stringify({
@@ -1225,7 +1248,7 @@ export class ViewerServer {
         const taskId = String(parsed.taskId || "");
         const task = this.store.getTask(taskId);
         if (!task) return this.jsonResponse(res, { ok: false, error: "task_not_found" });
-        const hubClient = await resolveHubClient(this.store, this.ctx);
+        const hubClient = await this.resolveHubClientAware();
         await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/tasks/unshare", {
           method: "POST",
           body: JSON.stringify({ sourceTaskId: task.id }),
@@ -1250,7 +1273,7 @@ export class ViewerServer {
         const db = (this.store as any).db;
         const chunk = db.prepare("SELECT * FROM chunks WHERE id = ?").get(chunkId) as any;
         if (!chunk) return this.jsonResponse(res, { ok: false, error: "memory_not_found" });
-        const hubClient = await resolveHubClient(this.store, this.ctx);
+        const hubClient = await this.resolveHubClientAware();
         const response = await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/memories/share", {
           method: "POST",
           body: JSON.stringify({
@@ -1296,7 +1319,7 @@ export class ViewerServer {
       try {
         const parsed = JSON.parse(body || "{}");
         const chunkId = String(parsed.chunkId || "");
-        const hubClient = await resolveHubClient(this.store, this.ctx);
+        const hubClient = await this.resolveHubClientAware();
         await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/memories/unshare", {
           method: "POST",
           body: JSON.stringify({ sourceChunkId: chunkId }),
@@ -1319,6 +1342,74 @@ export class ViewerServer {
         const payload = await fetchHubSkillBundle(this.store, this.ctx, { skillId });
         const restored = restoreSkillBundleFromHub(this.store, this.ctx, payload);
         this.jsonResponse(res, { ok: true, pulled: true, hubSkillId: skillId, ...restored });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private handleSharingSkillShare(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const skillId = String(parsed.skillId || "");
+        const visibility = parsed.visibility === "group" ? "group" : "public";
+        const groupId = parsed.groupId ? String(parsed.groupId) : null;
+        const skill = this.store.getSkill(skillId);
+        if (!skill) return this.jsonResponse(res, { ok: false, error: "skill_not_found" });
+        const bundle = buildSkillBundleForHub(this.store, skillId);
+        const hubClient = await this.resolveHubClientAware();
+        const response = await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/skills/publish", {
+          method: "POST",
+          body: JSON.stringify({
+            visibility,
+            groupId: visibility === "group" ? groupId : null,
+            metadata: bundle.metadata,
+            bundle: bundle.bundle,
+          }),
+        });
+        const hubUserId = hubClient.userId;
+        if (hubUserId) {
+          const existing = this.store.getHubSkillBySource(hubUserId, skillId);
+          this.store.upsertHubSkill({
+            id: (response as any)?.skillId ?? existing?.id ?? crypto.randomUUID(),
+            sourceSkillId: skillId,
+            sourceUserId: hubUserId,
+            name: skill.name,
+            description: skill.description,
+            version: skill.version,
+            groupId: visibility === "group" ? groupId : null,
+            visibility,
+            bundle: JSON.stringify(bundle.bundle),
+            qualityScore: skill.qualityScore,
+            createdAt: existing?.createdAt ?? Date.now(),
+            updatedAt: Date.now(),
+          });
+        }
+        this.jsonResponse(res, { ok: true, skillId, visibility, response });
+      } catch (err) {
+        this.jsonResponse(res, { ok: false, error: String(err) });
+      }
+    });
+  }
+
+  private handleSharingSkillUnshare(req: http.IncomingMessage, res: http.ServerResponse): void {
+    this.readBody(req, async (body) => {
+      if (!this.ctx) return this.jsonResponse(res, { ok: false, error: "sharing_unavailable" });
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const skillId = String(parsed.skillId || "");
+        const skill = this.store.getSkill(skillId);
+        if (!skill) return this.jsonResponse(res, { ok: false, error: "skill_not_found" });
+        const hubClient = await this.resolveHubClientAware();
+        await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/skills/unpublish", {
+          method: "POST",
+          body: JSON.stringify({ sourceSkillId: skill.id }),
+        });
+        const hubUserId = hubClient.userId;
+        if (hubUserId) this.store.deleteHubSkillBySource(hubUserId, skill.id);
+        this.jsonResponse(res, { ok: true, skillId });
       } catch (err) {
         this.jsonResponse(res, { ok: false, error: String(err) });
       }
@@ -1349,6 +1440,26 @@ export class ViewerServer {
     const userToken = conn?.userToken || this.ctx.config.sharing?.client?.userToken || "";
     if (!hubUrl || !userToken) return null;
     return { hubUrl: normalizeHubUrl(hubUrl), userToken };
+  }
+
+  /** resolveHubClient 的 viewer 版本：hub 模式下使用 bootstrap admin 身份 */
+  private async resolveHubClientAware(): Promise<ResolvedHubClient> {
+    if (!this.ctx) throw new Error("sharing_unavailable");
+    const sharing = this.ctx.config.sharing;
+    if (sharing?.role === "hub") {
+      const hub = this.resolveHubConnection();
+      if (hub) {
+        const me = await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/me", { method: "GET" }) as any;
+        return {
+          hubUrl: hub.hubUrl,
+          userToken: hub.userToken,
+          userId: String(me.id),
+          username: String(me.username ?? "hub-admin"),
+          role: String(me.role ?? "admin"),
+        };
+      }
+    }
+    return resolveHubClient(this.store, this.ctx);
   }
 
   private extractGroupId(path: string): string {
