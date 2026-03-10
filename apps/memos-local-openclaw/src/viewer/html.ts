@@ -976,6 +976,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         </div>
         <div class="task-detail-meta" id="skillDetailMeta"></div>
         <div class="skill-detail-desc" id="skillDetailDesc"></div>
+        <div id="skillShareActions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0"></div>
         <div class="task-detail-chunks-title" data-i18n="skills.files">Skill Files</div>
         <div class="skill-files-list" id="skillFilesList"></div>
         <div class="task-detail-chunks-title" id="skillContentTitle" data-i18n="skills.content">SKILL.md Content</div>
@@ -1437,7 +1438,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 <div class="toast-container" id="toasts"></div>
 
 <script>
-let activeSession=null,activeRole='',editingId=null,searchTimer=null,skillSearchTimer=null,memoryCache={},currentPage=1,totalPages=1,totalCount=0,PAGE_SIZE=40,metricsDays=30,memorySearchScope='local',skillSearchScope='local',taskSearchScope='local',sharingStatusCache=null,currentTaskDetail=null,currentSharedMemoryHitId='';
+let activeSession=null,activeRole='',editingId=null,searchTimer=null,skillSearchTimer=null,memoryCache={},currentPage=1,totalPages=1,totalCount=0,PAGE_SIZE=40,metricsDays=30,memorySearchScope='local',skillSearchScope='local',taskSearchScope='local',sharingStatusCache=null,currentTaskDetail=null,currentSharedMemoryHitId='',hubTasksCache=[],hubSkillsCache=[],hubMemoriesCache=[],adminMemoriesCache=[],adminTasksCache=[],adminSkillsCache=[];
 
 /* ─── i18n ─── */
 const I18N={
@@ -1849,6 +1850,10 @@ const I18N={
     'toast.memoryShareFail':'Memory share failed',
     'toast.memoryUnshared':'Memory unshared',
     'toast.memoryUnshareFail':'Memory unshare failed',
+    'toast.skillShared':'Skill shared',
+    'toast.skillShareFail':'Skill share failed',
+    'toast.skillUnshared':'Skill unshared',
+    'toast.skillUnshareFail':'Skill unshare failed',
     'share.memoryVisibilityPrompt':'Share visibility (public or group):',
     'share.memoryUnshareConfirm':'Unshare this memory?',
     'share.group':'Group',
@@ -2264,6 +2269,10 @@ const I18N={
     'toast.memoryShareFail':'记忆共享失败',
     'toast.memoryUnshared':'记忆已取消共享',
     'toast.memoryUnshareFail':'记忆取消共享失败',
+    'toast.skillShared':'技能已共享',
+    'toast.skillShareFail':'技能共享失败',
+    'toast.skillUnshared':'技能已取消共享',
+    'toast.skillUnshareFail':'技能取消共享失败',
     'share.memoryVisibilityPrompt':'共享可见性（public 或 group）：',
     'share.memoryUnshareConfirm':'取消共享此记忆？',
     'share.group':'团队',
@@ -2929,13 +2938,14 @@ async function adminRemoveGroupMember(groupId,userId){
 function renderAdminMemories(tasks){
   var el=document.getElementById('adminMemoriesPanel');
   if(!el) return;
+  adminTasksCache=tasks;
   var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.sharedTasks')+' ('+tasks.length+')</h3>';
   if(tasks.length===0){
     html+='<div class="admin-empty">'+t('admin.noSharedTasks')+'</div>';
   }else{
     for(var i=0;i<tasks.length;i++){
       var tk=tasks[i];
-      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(tk.title||tk.id)+'</div>'+
+      html+='<div class="admin-card" onclick="openHubTaskDetailFromCache(\\\'admin\\\','+i+')" style="cursor:pointer"><div class="admin-card-header"><div class="admin-card-title">'+esc(tk.title||tk.id)+'</div>'+
         '<span class="admin-badge '+(tk.visibility==='public'?'public':'group')+'">'+esc(tk.visibility||'public')+'</span></div>'+
         '<div class="admin-card-meta">'+
           t('admin.owner')+esc(tk.ownerName||tk.sourceUserId||'unknown')+
@@ -2944,7 +2954,7 @@ function renderAdminMemories(tasks){
           ' \u00B7 '+t('admin.updated')+new Date(tk.updatedAt||tk.createdAt).toLocaleDateString()+
         '</div>'+
         '<div class="admin-card-actions">'+
-          '<button class="btn btn-sm btn-ghost" onclick="adminDeleteTask(&quot;'+escAttr(tk.id)+'&quot;,&quot;'+escAttr(tk.title||tk.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
+          '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();adminDeleteTask(&quot;'+escAttr(tk.id)+'&quot;,&quot;'+escAttr(tk.title||tk.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
         '</div></div>';
     }
   }
@@ -2963,13 +2973,14 @@ async function adminDeleteTask(taskId,taskTitle){
 function renderAdminSkills(skills){
   var el=document.getElementById('adminSkillsPanel');
   if(!el) return;
+  adminSkillsCache=skills;
   var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.sharedSkills')+' ('+skills.length+')</h3>';
   if(skills.length===0){
     html+='<div class="admin-empty">'+t('admin.noSharedSkills')+'</div>';
   }else{
     for(var i=0;i<skills.length;i++){
       var s=skills[i];
-      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(s.name||s.id)+'</div>'+
+      html+='<div class="admin-card" onclick="openHubSkillDetailFromCache(\\\'admin\\\','+i+')" style="cursor:pointer"><div class="admin-card-header"><div class="admin-card-title">'+esc(s.name||s.id)+'</div>'+
         '<span class="admin-badge '+(s.visibility==='public'?'public':'group')+'">'+esc(s.visibility||'public')+'</span></div>'+
         '<div class="admin-card-meta">'+
           (s.description?esc(s.description)+'<br>':'')+
@@ -2979,7 +2990,7 @@ function renderAdminSkills(skills){
           (s.qualityScore!=null?' \u00B7 '+t('admin.quality')+s.qualityScore:'')+
         '</div>'+
         '<div class="admin-card-actions">'+
-          '<button class="btn btn-sm btn-ghost" onclick="adminDeleteSkill(&quot;'+escAttr(s.id)+'&quot;,&quot;'+escAttr(s.name||s.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
+          '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();adminDeleteSkill(&quot;'+escAttr(s.id)+'&quot;,&quot;'+escAttr(s.name||s.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
         '</div></div>';
     }
   }
@@ -2998,13 +3009,14 @@ async function adminDeleteSkill(skillId,skillName){
 function renderAdminSharedMemories(memories){
   var el=document.getElementById('adminSharedMemoriesPanel');
   if(!el) return;
+  adminMemoriesCache=memories||[];
   var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.sharedMemories')+' ('+(memories||[]).length+')</h3>';
   if(!memories||memories.length===0){
     html+='<div class="admin-empty">'+t('admin.noSharedMemories')+'</div>';
   }else{
     for(var i=0;i<memories.length;i++){
       var m=memories[i];
-      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(m.summary||m.content?.slice(0,80)||m.id)+'</div>'+
+      html+='<div class="admin-card" onclick="openHubMemoryDetail(\\\'admin\\\','+i+')" style="cursor:pointer"><div class="admin-card-header"><div class="admin-card-title">'+esc(m.summary||m.content?.slice(0,80)||m.id)+'</div>'+
         '<span class="admin-badge '+(m.visibility==='public'?'public':'group')+'">'+esc(m.visibility||'public')+'</span></div>'+
         '<div class="admin-card-meta">'+
           t('admin.owner')+esc(m.ownerName||m.sourceUserId||'unknown')+
@@ -3014,7 +3026,7 @@ function renderAdminSharedMemories(memories){
           ' \u00B7 '+t('admin.updated')+new Date(m.updatedAt||m.createdAt).toLocaleDateString()+
         '</div>'+
         '<div class="admin-card-actions">'+
-          '<button class="btn btn-sm btn-ghost" onclick="adminDeleteMemory(&quot;'+escAttr(m.id)+'&quot;,&quot;'+escAttr(m.summary||m.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
+          '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();adminDeleteMemory(&quot;'+escAttr(m.id)+'&quot;,&quot;'+escAttr(m.summary||m.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
         '</div></div>';
     }
   }
@@ -3095,6 +3107,97 @@ function closeSharedMemoryDetail(event){
   document.getElementById('sharedMemoryOverlay').classList.remove('show');
 }
 
+async function openHubMemoryDetail(cacheKey,idx){
+  var arr=cacheKey==='admin'?adminMemoriesCache:hubMemoriesCache;
+  var m=arr[idx];
+  if(!m) return;
+  var overlay=document.getElementById('sharedMemoryOverlay');
+  overlay.classList.add('show');
+  document.getElementById('sharedMemoryTitle').textContent=m.summary||m.content?.slice(0,80)||'(no summary)';
+  var metaHtml='<span class="meta-item">\\u{1F310} Hub</span>'+
+    (m.ownerName?'<span class="meta-item">'+t('admin.owner')+esc(m.ownerName)+'</span>':'')+
+    (m.groupName?'<span class="meta-item">'+t('admin.group')+esc(m.groupName)+'</span>':'')+
+    (m.kind?'<span class="meta-item">Kind: '+esc(m.kind)+'</span>':'')+
+    (m.role?'<span class="meta-item">Role: '+esc(m.role)+'</span>':'')+
+    '<span class="meta-item">visibility: '+esc(m.visibility||'hub')+'</span>'+
+    '<span class="meta-item">'+new Date(m.updatedAt||m.createdAt||0).toLocaleString(dateLoc())+'</span>';
+  document.getElementById('sharedMemoryMeta').innerHTML=metaHtml;
+  document.getElementById('sharedMemorySummary').textContent=m.summary||'';
+  document.getElementById('sharedMemoryContent').textContent=m.content||t('sharing.loading');
+  // try to fetch full content from Hub API
+  var remoteId=m.remoteHitId||m.id;
+  if(remoteId){
+    try{
+      var r=await fetch('/api/sharing/memory-detail',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({remoteHitId:remoteId})});
+      var d=await r.json();
+      if(!d.error&&(d.content||d.summary)){
+        if(d.summary) document.getElementById('sharedMemorySummary').textContent=d.summary;
+        document.getElementById('sharedMemoryContent').textContent=d.content||m.content||'';
+      }
+    }catch(e){}
+  }
+}
+
+function openHubTaskDetailFromCache(cacheKey,idx){
+  var arr=cacheKey==='admin'?adminTasksCache:hubTasksCache;
+  var task=arr[idx];
+  if(!task) return;
+  var overlay=document.getElementById('taskDetailOverlay');
+  overlay.classList.add('show');
+  document.getElementById('taskDetailTitle').textContent=task.title||'(no title)';
+  document.getElementById('taskShareActions').innerHTML='';
+  var meta=[
+    '<span class="meta-item">\\u{1F310} Hub</span>',
+    task.status?'<span class="meta-item"><span class="task-status-badge '+task.status+'">'+esc(task.status)+'</span></span>':'',
+    '<span class="meta-item">'+t('admin.owner')+esc(task.ownerName||'unknown')+'</span>',
+    task.groupName?'<span class="meta-item">'+t('admin.group')+esc(task.groupName)+'</span>':'',
+    '<span class="meta-item">visibility: '+esc(task.visibility||'hub')+'</span>',
+    task.chunkCount!=null?'<span class="meta-item">\\u{1F4DD} '+esc(String(task.chunkCount))+' '+t('tasks.chunks.label')+'</span>':'',
+    task.startedAt?'<span class="meta-item">\\u{1F4C5} '+formatTime(task.startedAt)+'</span>':'',
+    task.endedAt?'<span class="meta-item">\\u2192 '+formatTime(task.endedAt)+'</span>':'',
+    (task.updatedAt||task.createdAt)?'<span class="meta-item">'+t('admin.updated')+new Date(task.updatedAt||task.createdAt).toLocaleString(dateLoc())+'</span>':'',
+    task.sourceTaskId?'<div style="width:100%;margin-top:4px"><span class="meta-item" style="width:100%">'+t('tasks.taskid')+'<span class="task-id-full">'+esc(task.sourceTaskId)+'</span></span></div>':'',
+  ].filter(Boolean);
+  document.getElementById('taskDetailMeta').innerHTML=meta.join('');
+  document.getElementById('taskSkillSection').innerHTML='';
+  document.getElementById('taskSkillSection').className='task-skill-section';
+  document.getElementById('taskDetailSummary').innerHTML=task.summary?renderSummaryHtml(task.summary):'<div style="color:var(--text-muted);font-size:13px">'+t('tasks.nochunks')+'</div>';
+  document.getElementById('taskDetailChunks').innerHTML='<div style="color:var(--text-muted);padding:12px;font-size:13px">'+t('tasks.nochunks')+'</div>';
+}
+
+function openHubSkillDetailFromCache(cacheKey,idx){
+  var arr=cacheKey==='admin'?adminSkillsCache:hubSkillsCache;
+  var skill=arr[idx];
+  if(!skill) return;
+  var overlay=document.getElementById('skillDetailOverlay');
+  overlay.classList.add('show');
+  document.getElementById('skillDetailTitle').textContent='\\u{1F9E0} '+(skill.name||'(no name)');
+  var qs=skill.qualityScore;
+  var qsBadge=(qs!==null&&qs!==undefined)?'<span class="meta-item"><span class="skill-badge quality '+(qs>=7?'high':qs>=5?'mid':'low')+'">\\u2605 '+(+qs).toFixed(1)+'/10</span></span>':'';
+  var meta=[
+    '<span class="meta-item">\\u{1F310} Hub</span>',
+    skill.version!=null?'<span class="meta-item"><span class="skill-badge version">v'+skill.version+'</span></span>':'',
+    skill.status?'<span class="meta-item"><span class="skill-badge status-'+skill.status+'">'+esc(skill.status)+'</span></span>':'',
+    '<span class="meta-item">visibility: '+esc(skill.visibility||'hub')+'</span>',
+    qsBadge,
+    '<span class="meta-item">'+t('admin.owner')+esc(skill.ownerName||'unknown')+'</span>',
+    skill.groupName?'<span class="meta-item">'+t('admin.group')+esc(skill.groupName)+'</span>':'',
+    (skill.updatedAt||skill.createdAt)?'<span class="meta-item">'+t('admin.updated')+new Date(skill.updatedAt||skill.createdAt).toLocaleString(dateLoc())+'</span>':'',
+  ].filter(Boolean);
+  document.getElementById('skillDetailMeta').innerHTML=meta.join('');
+  document.getElementById('skillDetailDesc').textContent=skill.description||'';
+  document.getElementById('skillFilesList').innerHTML='';
+  document.getElementById('skillDetailContent').innerHTML=skill.content?'<pre>'+esc(skill.content)+'</pre>':'';
+  document.getElementById('skillVersionsList').innerHTML='';
+  document.getElementById('skillRelatedTasks').innerHTML='';
+  var visBtn=document.getElementById('skillVisibilityBtn');
+  if(visBtn) visBtn.style.display='none';
+  var dlBtn=document.getElementById('skillDownloadBtn');
+  if(dlBtn) dlBtn.style.display='none';
+  var shareBtn=document.getElementById('skillShareActions');
+  if(shareBtn) shareBtn.innerHTML='';
+}
+
 function escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 function renderTaskShareActions(task){
@@ -3135,6 +3238,45 @@ async function unshareCurrentTask(){
     const d=await r.json();
     if(d.ok||d.unshared){toast(t('toast.taskUnshared'),'success');currentTaskDetail.sharingVisibility=null;renderTaskShareActions(currentTaskDetail);} else {toast(d.error||t('toast.taskUnshareFail'),'error');}
   }catch(e){toast(t('toast.taskUnshareFail')+': '+e.message,'error');}
+}
+
+function renderSkillShareActions(skill){
+  const el=document.getElementById('skillShareActions');
+  if(!el){return;}
+  if(!skill||!skill.id){el.innerHTML='';return;}
+  const current=(skill.sharingVisibility||null);
+  const isShared=!!current;
+  var statusHtml='';
+  if(isShared){
+    var scopeLabel=current==='group'?'Group':'Public';
+    statusHtml='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:#22c55e22;border:1px solid #22c55e44;border-radius:12px;font-size:12px;color:#22c55e">\u2713 '+t('share.alreadyShared')+' ('+scopeLabel+')</span>';
+  }
+  el.innerHTML=statusHtml+
+    '<select id="skillShareScope" class="filter-select" style="min-width:120px">'+
+      '<option value="group"'+(current==='group'?' selected':'')+'>Share to Group</option>'+
+      '<option value="public"'+(current==='public'?' selected':'')+'>Share to Public</option>'+
+    '</select>'+
+    '<button class="btn btn-sm" onclick="shareCurrentSkill()">'+(isShared?t('share.updateBtn'):t('share.shareBtn'))+'</button>'+
+    (isShared?'<button class="btn btn-sm btn-ghost" onclick="unshareCurrentSkill()">'+t('share.unshareBtn')+'</button>':'');
+}
+
+async function shareCurrentSkill(){
+  if(!currentSkillDetail) return;
+  const visibility=document.getElementById('skillShareScope').value||'public';
+  try{
+    const r=await fetch('/api/sharing/skills/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skillId:currentSkillDetail.id,visibility:visibility})});
+    const d=await r.json();
+    if(d.ok){toast(t('toast.skillShared'),'success');currentSkillDetail.sharingVisibility=visibility;renderSkillShareActions(currentSkillDetail);} else {toast(d.error||t('toast.skillShareFail'),'error');}
+  }catch(e){toast(t('toast.skillShareFail')+': '+e.message,'error');}
+}
+
+async function unshareCurrentSkill(){
+  if(!currentSkillDetail) return;
+  try{
+    const r=await fetch('/api/sharing/skills/unshare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skillId:currentSkillDetail.id})});
+    const d=await r.json();
+    if(d.ok){toast(t('toast.skillUnshared'),'success');currentSkillDetail.sharingVisibility=null;renderSkillShareActions(currentSkillDetail);} else {toast(d.error||t('toast.skillUnshareFail'),'error');}
+  }catch(e){toast(t('toast.skillUnshareFail')+': '+e.message,'error');}
 }
 
 async function shareMemoryPrompt(chunkId){
@@ -3473,13 +3615,14 @@ async function loadHubTasks(){
     const r=await fetch('/api/sharing/tasks/list?limit=40');
     const d=await r.json();
     const tasks=Array.isArray(d.tasks)?d.tasks:[];
+    hubTasksCache=tasks;
     document.getElementById('tasksTotalCount').textContent=formatNum(tasks.length);
     if(!tasks.length){
       list.innerHTML='<div class="empty"><div class="icon">\\u{1F310}</div><p>No shared tasks on Hub.</p></div>';
       return;
     }
     list.innerHTML=tasks.map(function(task,idx){
-      return '<div class="hub-hit-card">'+
+      return '<div class="hub-hit-card" onclick="openHubTaskDetailFromCache(\\\'hub\\\',' +idx+')" style="cursor:pointer">'+
         '<div class="summary">'+(idx+1)+'. '+esc(task.title||'(no title)')+'</div>'+
         (task.summary?'<div class="excerpt">'+esc(task.summary)+'</div>':'')+
         '<div class="hub-hit-meta">'+
@@ -3487,7 +3630,7 @@ async function loadHubTasks(){
           (task.groupName?'<span class="meta-chip">group: '+esc(task.groupName)+'</span>':'')+
           '<span class="meta-chip">visibility: '+esc(task.visibility||'hub')+'</span>'+
           '<span class="meta-chip">'+esc(String(task.chunkCount||0))+' chunks</span>'+
-          '<span class="meta-chip">'+new Date((task.updatedAt||task.createdAt||0)*1000).toLocaleDateString()+'</span>'+
+          '<span class="meta-chip">'+new Date(task.updatedAt||task.createdAt||0).toLocaleDateString()+'</span>'+
         '</div>'+
       '</div>';
     }).join('');
@@ -3758,12 +3901,13 @@ async function loadHubSkills(hubList){
     const r=await fetch('/api/sharing/skills/list?limit=40');
     const d=await r.json();
     const skills=Array.isArray(d.skills)?d.skills:[];
+    hubSkillsCache=skills;
     if(!skills.length){
       hubList.innerHTML='<div class="hub-skill-card"><div class="excerpt">No shared skills on Hub.</div></div>';
       return;
     }
-    hubList.innerHTML=skills.map(function(skill){
-      return '<div class="hub-skill-card">'+
+    hubList.innerHTML=skills.map(function(skill,idx){
+      return '<div class="hub-skill-card" onclick="openHubSkillDetailFromCache(\\\'hub\\\',' +idx+')" style="cursor:pointer">'+
         '<div class="summary">'+esc(skill.name)+'</div>'+
         '<div class="excerpt">'+esc(skill.description||'')+'</div>'+
         '<div class="hub-skill-meta">'+
@@ -3772,7 +3916,7 @@ async function loadHubSkills(hubList){
           '<span class="meta-chip">visibility: '+esc(skill.visibility||'hub')+'</span>'+
           (skill.version!=null?'<span class="meta-chip">v'+skill.version+'</span>':'')+
         '</div>'+
-        '<div class="hub-skill-actions"><button class="btn btn-sm" onclick="event.stopPropagation();pullHubSkill(&quot;'+escAttr(skill.sourceSkillId)+'&quot;)">Pull to Local</button></div>'+
+        '<div class="hub-skill-actions"><button class="btn btn-sm" onclick="event.stopPropagation();pullHubSkill(\\''+escAttr(skill.sourceSkillId)+'\\')">Pull to Local</button></div>'+
       '</div>';
     }).join('');
   }catch(e){
@@ -3785,6 +3929,7 @@ function parseTags(tagsStr){
 }
 
 let currentSkillId='';
+let currentSkillDetail=null;
 
 async function openSkillDetail(skillId){
   currentSkillId=skillId;
@@ -3797,6 +3942,8 @@ async function openSkillDetail(skillId){
   document.getElementById('skillDetailContent').innerHTML='<div class="spinner"></div>';
   document.getElementById('skillVersionsList').innerHTML='<div class="spinner"></div>';
   document.getElementById('skillRelatedTasks').innerHTML='';
+  var vb=document.getElementById('skillVisibilityBtn');if(vb)vb.style.display='';
+  var db=document.getElementById('skillDownloadBtn');if(db)db.style.display='';
 
   try{
     const r=await fetch('/api/skill/'+skillId);
@@ -3841,6 +3988,8 @@ async function openSkillDetail(skillId){
     }
 
     document.getElementById('skillDetailDesc').textContent=skill.description;
+    currentSkillDetail=skill;
+    renderSkillShareActions(skill);
 
     if(files.length>0){
       const fileIcons={'skill':'\\u{1F4D6}','script':'\\u{2699}','reference':'\\u{1F4CE}','file':'\\u{1F4C4}'};
@@ -4470,20 +4619,21 @@ async function loadHubMemories(){
     const r=await fetch('/api/sharing/memories/list?limit=40');
     const d=await r.json();
     const memories=Array.isArray(d.memories)?d.memories:[];
+    hubMemoriesCache=memories;
     document.getElementById('sharingSearchMeta').textContent='Hub: '+memories.length+' memories';
     if(!memories.length){
       list.innerHTML='<div class="empty"><div class="icon">\\u{1F310}</div><p>'+t('search.noHub')+'</p></div>';
       return;
     }
     list.innerHTML=memories.map(function(m,idx){
-      return '<div class="hub-hit-card">'+
+      return '<div class="hub-hit-card" onclick="openHubMemoryDetail(\\\'hub\\\',' +idx+')" style="cursor:pointer">'+
         '<div class="summary">'+(idx+1)+'. '+esc(m.summary||'(no summary)')+'</div>'+
         '<div class="hub-hit-meta">'+
           '<span class="meta-chip">owner: '+esc(m.ownerName||'unknown')+'</span>'+
           (m.groupName?'<span class="meta-chip">group: '+esc(m.groupName)+'</span>':'')+
           '<span class="meta-chip">visibility: '+esc(m.visibility||'hub')+'</span>'+
           '<span class="meta-chip">role: '+esc(m.role||'unknown')+'</span>'+
-          '<span class="meta-chip">'+new Date((m.updatedAt||m.createdAt||0)*1000).toLocaleDateString()+'</span>'+
+          '<span class="meta-chip">'+new Date(m.updatedAt||m.createdAt||0).toLocaleDateString()+'</span>'+
         '</div>'+
       '</div>';
     }).join('');
