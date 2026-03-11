@@ -859,6 +859,55 @@ export class SqliteStore {
     return result.changes > 0;
   }
 
+  /**
+   * Find user-role chunks that contain system-injected content that should
+   * have been stripped before storage. Returns chunk IDs and a preview.
+   */
+  findPollutedUserChunks(): Array<{ id: string; preview: string; reason: string }> {
+    const results: Array<{ id: string; preview: string; reason: string }> = [];
+    const patterns: Array<{ sql: string; reason: string }> = [
+      { sql: "content LIKE '%<memory_context>%'", reason: "memory_context injection" },
+      { sql: "content LIKE '%=== MemOS LONG-TERM MEMORY%'", reason: "MemOS legacy injection" },
+      { sql: "content LIKE '%[MemOS Auto-Recall]%'", reason: "MemOS Auto-Recall injection" },
+      { sql: "content LIKE '%## Memory system%No memories were automatically recalled%'", reason: "Memory system no-recall hint" },
+    ];
+    for (const { sql, reason } of patterns) {
+      const rows = this.db.prepare(
+        `SELECT id, substr(content, 1, 120) AS preview FROM chunks WHERE role = 'user' AND ${sql}`,
+      ).all() as Array<{ id: string; preview: string }>;
+      for (const row of rows) {
+        results.push({ id: row.id, preview: row.preview, reason });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Find user chunks where user+assistant content was mixed together
+   * (separated by \n\n---\n), and truncate to keep only the user's part.
+   */
+  fixMixedUserChunks(): number {
+    const rows = this.db.prepare(
+      `SELECT id, content FROM chunks WHERE role = 'user'
+       AND content LIKE '%' || char(10) || char(10) || '---' || char(10) || '%'
+       AND length(content) > 300`,
+    ).all() as Array<{ id: string; content: string }>;
+
+    let fixed = 0;
+    for (const { id, content } of rows) {
+      const dashIdx = content.indexOf("\n\n---\n");
+      if (dashIdx > 5) {
+        const userPart = content.slice(0, dashIdx).trim();
+        if (userPart.length >= 5 && userPart.length < content.length) {
+          this.db.prepare("UPDATE chunks SET content = ?, updated_at = ? WHERE id = ?")
+            .run(userPart, Date.now(), id);
+          fixed++;
+        }
+      }
+    }
+    return fixed;
+  }
+
   // ─── Delete ───
 
   deleteChunk(chunkId: string): boolean {

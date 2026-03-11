@@ -53,6 +53,66 @@ function loadOpenClawFallbackConfig(log: Logger): SummarizerConfig | undefined {
   }
 }
 
+// ─── Model Health Tracking ───
+
+export interface ModelHealthEntry {
+  role: string;
+  status: "ok" | "degraded" | "error" | "unknown";
+  lastSuccess: number | null;
+  lastError: number | null;
+  lastErrorMessage: string | null;
+  consecutiveErrors: number;
+  model: string | null;
+  failedModel: string | null;
+}
+
+class ModelHealthTracker {
+  private state = new Map<string, ModelHealthEntry>();
+  private pendingErrors = new Map<string, { model: string; error: string }>();
+
+  recordSuccess(role: string, model: string): void {
+    const entry = this.getOrCreate(role);
+    const pending = this.pendingErrors.get(role);
+    if (pending) {
+      entry.status = "degraded";
+      entry.lastError = Date.now();
+      entry.lastErrorMessage = pending.error.length > 300 ? pending.error.slice(0, 300) + "..." : pending.error;
+      entry.failedModel = pending.model;
+      this.pendingErrors.delete(role);
+    } else {
+      entry.status = "ok";
+    }
+    entry.lastSuccess = Date.now();
+    entry.consecutiveErrors = 0;
+    entry.model = model;
+  }
+
+  recordError(role: string, model: string, error: string): void {
+    const entry = this.getOrCreate(role);
+    entry.lastError = Date.now();
+    entry.lastErrorMessage = error.length > 300 ? error.slice(0, 300) + "..." : error;
+    entry.consecutiveErrors++;
+    entry.failedModel = model;
+    entry.status = "error";
+    this.pendingErrors.set(role, { model, error: entry.lastErrorMessage });
+  }
+
+  getAll(): ModelHealthEntry[] {
+    return [...this.state.values()];
+  }
+
+  private getOrCreate(role: string): ModelHealthEntry {
+    let entry = this.state.get(role);
+    if (!entry) {
+      entry = { role, status: "unknown", lastSuccess: null, lastError: null, lastErrorMessage: null, consecutiveErrors: 0, model: null, failedModel: null };
+      this.state.set(role, entry);
+    }
+    return entry;
+  }
+}
+
+export const modelHealth = new ModelHealthTracker();
+
 export class Summarizer {
   private strongCfg: SummarizerConfig | undefined;
   private fallbackCfg: SummarizerConfig | undefined;
@@ -88,12 +148,15 @@ export class Summarizer {
   ): Promise<T | undefined> {
     const chain = this.getConfigChain();
     for (let i = 0; i < chain.length; i++) {
+      const modelInfo = `${chain[i].provider}/${chain[i].model ?? "?"}`;
       try {
-        return await fn(chain[i]);
+        const result = await fn(chain[i]);
+        modelHealth.recordSuccess(label, modelInfo);
+        return result;
       } catch (err) {
         const level = i < chain.length - 1 ? "warn" : "error";
-        const modelInfo = `${chain[i].provider}/${chain[i].model ?? "?"}`;
         this.log[level](`${label} failed (${modelInfo}), ${i < chain.length - 1 ? "trying next" : "no more fallbacks"}: ${err}`);
+        modelHealth.recordError(label, modelInfo, String(err));
       }
     }
     return undefined;
@@ -105,7 +168,29 @@ export class Summarizer {
     }
 
     const result = await this.tryChain("summarize", (cfg) => callSummarize(cfg, text, this.log));
-    return result ?? ruleFallback(text);
+
+    if (result && result.length < text.length) {
+      return result;
+    }
+
+    if (result) {
+      this.log.warn(`summarize: result (${result.length} chars) >= input (${text.length} chars), retrying with fallback`);
+    }
+
+    const fallback = this.fallbackCfg ?? this.cfg;
+    if (fallback) {
+      try {
+        const retry = await callSummarize(fallback, text, this.log);
+        if (retry && retry.length < text.length) {
+          modelHealth.recordSuccess("summarize", `${fallback.provider}/${fallback.model ?? "?"}`);
+          return retry;
+        }
+      } catch (err) {
+        this.log.warn(`summarize fallback retry failed: ${err}`);
+      }
+    }
+
+    return ruleFallback(text);
   }
 
   async summarizeTask(text: string): Promise<string> {
@@ -118,10 +203,25 @@ export class Summarizer {
   }
 
   async judgeNewTopic(currentContext: string, newMessage: string): Promise<boolean | null> {
-    if (!this.cfg && !this.fallbackCfg) return null;
+    const chain: SummarizerConfig[] = [];
+    if (this.strongCfg) chain.push(this.strongCfg);
+    if (this.fallbackCfg) chain.push(this.fallbackCfg);
+    if (chain.length === 0 && this.cfg) chain.push(this.cfg);
+    if (chain.length === 0) return null;
 
-    const result = await this.tryChain("judgeNewTopic", (cfg) => callTopicJudge(cfg, currentContext, newMessage, this.log));
-    return result ?? null;
+    for (let i = 0; i < chain.length; i++) {
+      const modelInfo = `${chain[i].provider}/${chain[i].model ?? "?"}`;
+      try {
+        const result = await callTopicJudge(chain[i], currentContext, newMessage, this.log);
+        modelHealth.recordSuccess("judgeNewTopic", modelInfo);
+        return result;
+      } catch (err) {
+        const level = i < chain.length - 1 ? "warn" : "error";
+        this.log[level](`judgeNewTopic failed (${modelInfo}), ${i < chain.length - 1 ? "trying next" : "no more fallbacks"}: ${err}`);
+        modelHealth.recordError("judgeNewTopic", modelInfo, String(err));
+      }
+    }
+    return null;
   }
 
   async filterRelevant(
@@ -257,9 +357,12 @@ function ruleFallback(text: string): string {
     }
   }
 
-  let summary = first.length > 120 ? first.slice(0, 117) + "..." : first;
+  const maxLen = Math.min(120, text.length - 1);
+  if (maxLen <= 0) return text;
+  let summary = first.length > maxLen ? first.slice(0, maxLen - 3) + "..." : first;
   if (entities.length > 0) {
-    summary += ` (${entities.join(", ")})`;
+    const suffix = ` (${entities.join(", ")})`;
+    if (summary.length + suffix.length <= maxLen) summary += suffix;
   }
-  return summary.slice(0, 200);
+  return summary.slice(0, maxLen);
 }

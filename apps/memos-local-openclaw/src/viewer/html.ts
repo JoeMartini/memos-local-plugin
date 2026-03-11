@@ -526,6 +526,28 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 [data-theme="light"] .settings-actions .btn-primary:hover{background:rgba(79,70,229,.1);border-color:#4f46e5}
 .settings-saved{display:inline-flex;align-items:center;gap:6px;color:var(--green);font-size:12px;font-weight:600;opacity:0;transition:opacity .3s}
 .settings-saved.show{opacity:1}
+.model-health-bar{margin-bottom:20px;border-radius:var(--radius-lg);overflow:hidden}
+.mh-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.mh-table th{text-align:left;padding:6px 12px;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;background:var(--bg);border-bottom:1px solid var(--border)}
+.mh-table td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.mh-table tr:last-child td{border-bottom:none}
+.mh-table tr:hover td{background:rgba(99,102,241,.025)}
+.mh-table .mh-cell-name{display:flex;align-items:center;gap:8px;font-weight:500;color:var(--text)}
+.mh-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+.mh-dot.ok{background:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.15)}
+.mh-dot.degraded{background:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.15)}
+.mh-dot.error{background:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.15);animation:healthPulse 2s ease infinite}
+.mh-dot.unknown{background:#94a3b8;box-shadow:0 0 0 2px rgba(148,163,184,.15)}
+.mh-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;letter-spacing:.02em}
+.mh-badge.ok{background:rgba(34,197,94,.1);color:#16a34a}
+.mh-badge.degraded{background:rgba(245,158,11,.1);color:#d97706}
+.mh-badge.error{background:rgba(239,68,68,.1);color:#dc2626}
+.mh-badge.unknown{background:rgba(148,163,184,.1);color:#64748b}
+.mh-model-name{color:var(--text-muted);font-size:11px;font-family:var(--font-mono,'SFMono-Regular',Consolas,monospace)}
+.mh-err-text{font-size:11px;color:var(--rose);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help}
+.mh-time{font-size:10px;color:var(--text-muted);white-space:nowrap}
+.mh-empty{padding:16px;font-size:12px;color:var(--text-muted);text-align:center}
+@keyframes healthPulse{0%,100%{opacity:1}50%{opacity:.4}}
 .migrate-log-item{display:flex;align-items:flex-start;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border);animation:migrateFadeIn .3s ease}
 .migrate-log-item:last-child{border-bottom:none}
 .migrate-log-item .log-icon{flex-shrink:0;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;margin-top:2px}
@@ -940,6 +962,9 @@ input,textarea,select{font-family:inherit;font-size:inherit}
     <div class="settings-view" id="settingsView">
       <div class="settings-group" id="settingsModelConfig">
         <h2 class="settings-group-title"><span data-i18n="settings.modelconfig">Model Configuration</span></h2>
+        <div class="model-health-bar" id="modelHealthBar">
+          <div style="font-size:12px;color:var(--text-muted);width:100%">Loading model status...</div>
+        </div>
       <div class="settings-section">
         <h3><span class="icon">\u{1F4E1}</span> <span data-i18n="settings.embedding">Embedding Model</span></h3>
         <div class="settings-grid">
@@ -1615,7 +1640,10 @@ const I18N={
     'skill.cancel':'Cancel',
     'skill.delete.confirm':'Are you sure you want to delete this skill? This will also remove all associated files and cannot be undone.',
     'skill.delete.error':'Failed to delete skill: ',
-    'skill.save.error':'Failed to save skill: '
+    'skill.save.error':'Failed to save skill: ',
+    'update.available':'New version available',
+    'update.run':'Run',
+    'update.dismiss':'Dismiss'
   },
   zh:{
     'title':'OpenClaw 记忆',
@@ -1921,7 +1949,10 @@ const I18N={
     'skill.cancel':'取消',
     'skill.delete.confirm':'确定要删除此技能吗？关联的文件也会被删除，此操作不可撤销。',
     'skill.delete.error':'删除技能失败：',
-    'skill.save.error':'保存技能失败：'
+    'skill.save.error':'保存技能失败：',
+    'update.available':'发现新版本',
+    'update.run':'执行命令',
+    'update.dismiss':'关闭'
   }
 };
 const LANG_KEY='memos-viewer-lang';
@@ -2059,6 +2090,7 @@ function switchView(view){
   } else if(view==='settings'){
     settingsView.classList.add('show');
     loadConfig();
+    loadModelHealth();
   } else if(view==='import'){
     migrateView.classList.add('show');
     if(!window._migrateRunning) migrateScan();
@@ -2740,6 +2772,93 @@ async function toggleSkillPublic(id,setPublic){
   }
 }
 
+/* ─── Model Health Status ─── */
+
+const HEALTH_ROLE_LABELS={
+  'embedding':'Embedding',
+  'summarize':'Summarizer',
+  'filterRelevant':'Memory Filter',
+  'judgeDedup':'Dedup Judge',
+  'summarizeTask':'Task Summarizer',
+  'judgeNewTopic':'Topic Judge'
+};
+
+function classifyError(msg){
+  if(!msg) return '';
+  if(msg.indexOf('\u989D\u5EA6\u5DF2\u7528\u5C3D')>=0||msg.indexOf('quota')>=0||msg.indexOf('RemainQuota')>=0) return 'API quota exhausted';
+  if(msg.indexOf('401')>=0||msg.indexOf('Unauthorized')>=0) return 'Auth failed (401)';
+  if(msg.indexOf('timeout')>=0||msg.indexOf('Timeout')>=0) return 'Request timed out';
+  if(msg.indexOf('429')>=0) return 'Rate limited (429)';
+  if(msg.indexOf('ECONNREFUSED')>=0) return 'Connection refused';
+  if(msg.indexOf('ENOTFOUND')>=0) return 'DNS resolution failed';
+  if(msg.indexOf('403')>=0) return 'Forbidden (403)';
+  return msg.length>50?msg.slice(0,47)+'...':msg;
+}
+
+function shortenModel(s){return s?s.replace('openai_compatible/','').replace('openai/',''):'\u2014';}
+
+async function loadModelHealth(){
+  var bar=document.getElementById('modelHealthBar');
+  if(!bar) return;
+  try{
+    var r=await fetch('/api/model-health');
+    if(!r.ok){bar.innerHTML='<div class="mh-empty">Health data unavailable</div>';return;}
+    var d=await r.json();
+    var models=d.models||[];
+    if(models.length===0){
+      bar.innerHTML='<div class="mh-empty">No model calls recorded yet</div>';
+      return;
+    }
+    var order=['embedding','summarize','filterRelevant','judgeDedup','summarizeTask','judgeNewTopic'];
+    models.sort(function(a,b){var ai=order.indexOf(a.role),bi=order.indexOf(b.role);if(ai<0)ai=99;if(bi<0)bi=99;return ai-bi;});
+
+    var h='<table class="mh-table"><thead><tr>';
+    h+='<th style="width:30px"></th><th>Role</th><th>Status</th><th>Model</th><th>Issue</th><th style="text-align:right">Updated</th>';
+    h+='</tr></thead><tbody>';
+
+    for(var i=0;i<models.length;i++){
+      var m=models[i];
+      var st=m.status||'unknown';
+      var label=HEALTH_ROLE_LABELS[m.role]||m.role;
+      var badgeText=st==='ok'?'OK':st==='degraded'?'Degraded':st==='error'?'Error':'\u2014';
+      var ago='';
+      if(st==='ok'&&m.lastSuccess) ago=timeAgo(m.lastSuccess);
+      else if(m.lastError) ago=timeAgo(m.lastError);
+
+      h+='<tr>';
+      h+='<td><span class="mh-dot '+st+'"></span></td>';
+      h+='<td><span style="font-weight:500">'+escapeHtml(label)+'</span></td>';
+      h+='<td><span class="mh-badge '+st+'">'+badgeText+'</span></td>';
+      h+='<td><span class="mh-model-name">'+escapeHtml(shortenModel(m.model))+'</span></td>';
+
+      var issue='';
+      if((st==='error'||st==='degraded')&&m.lastErrorMessage){
+        var shortErr=classifyError(m.lastErrorMessage);
+        if(m.failedModel&&m.failedModel!==m.model) issue=shortenModel(m.failedModel)+': ';
+        issue+=shortErr;
+        if(m.consecutiveErrors>1) issue+=' ('+m.consecutiveErrors+'x)';
+      }
+      if(issue) h+='<td><span class="mh-err-text" title="'+escapeHtml(m.lastErrorMessage||'')+'">'+escapeHtml(issue)+'</span></td>';
+      else h+='<td><span style="color:var(--text-muted);font-size:11px">\u2014</span></td>';
+
+      h+='<td style="text-align:right"><span class="mh-time">'+(ago||'\u2014')+'</span></td>';
+      h+='</tr>';
+    }
+    h+='</tbody></table>';
+    bar.innerHTML=h;
+  }catch(e){
+    bar.innerHTML='<div class="mh-empty">Failed to load model health</div>';
+  }
+}
+
+function timeAgo(ts){
+  var diff=Date.now()-ts;
+  if(diff<60000) return 'just now';
+  if(diff<3600000) return Math.floor(diff/60000)+'m ago';
+  if(diff<86400000) return Math.floor(diff/3600000)+'h ago';
+  return Math.floor(diff/86400000)+'d ago';
+}
+
 /* ─── Settings / Config ─── */
 async function loadConfig(){
   try{
@@ -3277,6 +3396,7 @@ async function loadAll(){
   await Promise.all([loadStats(),loadMemories()]);
   checkMigrateStatus();
   connectPPSSE();
+  checkForUpdate();
 }
 
 async function loadStats(){
@@ -4212,6 +4332,22 @@ const VIEWER_THEME_KEY='memos-viewer-theme';
 function initViewerTheme(){const s=localStorage.getItem(VIEWER_THEME_KEY);const theme=(s==='light'||s==='dark')?s:'dark';document.documentElement.setAttribute('data-theme',theme);}
 function toggleViewerTheme(){const el=document.documentElement;const cur=el.getAttribute('data-theme')||'dark';const next=cur==='dark'?'light':'dark';el.setAttribute('data-theme',next);localStorage.setItem(VIEWER_THEME_KEY,next);}
 initViewerTheme();
+
+/* ─── Update check ─── */
+async function checkForUpdate(){
+  try{
+    const r=await fetch('/api/update-check');
+    if(!r.ok)return;
+    const d=await r.json();
+    if(!d.updateAvailable)return;
+    const banner=document.createElement('div');
+    banner.id='updateBanner';
+    banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+    banner.innerHTML='<span>🔔 '+t('update.available')+': <b>v'+esc(d.current)+'</b> → <b>v'+esc(d.latest)+'</b> — '+t('update.run')+': <code style="background:rgba(0,0,0,.2);padding:2px 8px;border-radius:4px;margin:0 4px">openclaw plugins install '+esc(d.packageName)+'</code></span><button onclick="this.parentElement.remove();document.body.style.paddingTop=\\'\\';" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px">&times;</button>';
+    document.body.prepend(banner);
+    document.body.style.paddingTop='48px';
+  }catch(e){}
+}
 
 /* ─── Init ─── */
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target.id==='modalOverlay')closeModal()});

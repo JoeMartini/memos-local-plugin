@@ -19,8 +19,7 @@ export class IngestWorker {
     private embedder: Embedder,
     private ctx: PluginContext,
   ) {
-    const strongCfg = ctx.config.skillEvolution?.summarizer;
-    this.summarizer = new Summarizer(ctx.config.summarizer, ctx.log, strongCfg);
+    this.summarizer = new Summarizer(ctx.config.summarizer, ctx.log);
     this.taskProcessor = new TaskProcessor(store, ctx);
   }
 
@@ -60,32 +59,32 @@ export class IngestWorker {
         let duplicated = 0;
         let errors = 0;
         const resultLines: string[] = [];
-        const inputLines: string[] = [];
 
         while (this.queue.length > 0) {
           const msg = this.queue.shift()!;
-          inputLines.push(`[${msg.role}] ${msg.content}`);
           try {
             const result = await this.ingestMessage(msg);
             lastSessionKey = msg.sessionKey;
             lastOwner = msg.owner ?? "agent:main";
             lastTimestamp = Math.max(lastTimestamp, msg.timestamp);
+            const brief = (s: string) => s.length > 80 ? s.slice(0, 80) + "…" : s;
             if (result === "skipped") {
               skipped++;
-              resultLines.push(`[${msg.role}] ⏭ exact-dup → ${msg.content}`);
+              resultLines.push(`[${msg.role}] ⏭ exact-dup → ${brief(msg.content)}`);
             } else if (result.action === "stored") {
               stored++;
-              resultLines.push(`[${msg.role}] ✅ stored → ${result.summary ?? msg.content}`);
+              resultLines.push(`[${msg.role}] ✅ stored → ${brief(result.summary ?? msg.content)}`);
             } else if (result.action === "duplicate") {
               duplicated++;
-              resultLines.push(`[${msg.role}] 🔁 dedup(${result.reason ?? "similar"}) → ${msg.content}`);
+              resultLines.push(`[${msg.role}] 🔁 dedup(${result.reason ?? "similar"}) → ${brief(msg.content)}`);
             } else if (result.action === "merged") {
               merged++;
-              resultLines.push(`[${msg.role}] 🔀 merged → ${msg.content}`);
+              resultLines.push(`[${msg.role}] 🔀 merged → ${brief(msg.content)}`);
             }
           } catch (err) {
             errors++;
-            resultLines.push(`[${msg.role}] ❌ error → ${msg.content}`);
+            const brief = (s: string) => s.length > 80 ? s.slice(0, 80) + "…" : s;
+            resultLines.push(`[${msg.role}] ❌ error → ${brief(msg.content)}`);
             this.ctx.log.error(`Failed to ingest message turn=${msg.turnId}: ${err}`);
           }
         }
@@ -98,7 +97,6 @@ export class IngestWorker {
             const inputInfo = {
               session: lastSessionKey,
               messages: batchSize,
-              details: inputLines,
             };
             const stats = [`stored=${stored}`, skipped > 0 ? `skipped=${skipped}` : null, duplicated > 0 ? `dedup=${duplicated}` : null, merged > 0 ? `merged=${merged}` : null, errors > 0 ? `errors=${errors}` : null].filter(Boolean).join(", ");
             this.store.recordApiLog("memory_add", inputInfo, `${stats}\n${resultLines.join("\n")}`, dur, errors === 0);
@@ -124,11 +122,6 @@ export class IngestWorker {
   private async ingestMessage(msg: ConversationMessage): Promise<
     "skipped" | { action: "stored" | "duplicate" | "merged"; summary?: string; reason?: string }
   > {
-    if (this.store.chunkExistsByContent(msg.sessionKey, msg.role, msg.content)) {
-      this.ctx.log.debug(`Exact-dup (same session+role+hash), skipping: session=${msg.sessionKey} role=${msg.role} len=${msg.content.length}`);
-      return "skipped";
-    }
-
     const kind = msg.role === "tool" ? "tool_result" : "paragraph";
     return await this.storeChunk(msg, msg.content, kind, 0);
   }

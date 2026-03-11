@@ -101,7 +101,8 @@ export function captureMessages(
  * Also strips the envelope timestamp prefix like "[Tue 2026-03-03 21:58 GMT+8] "
  */
 export function stripInboundMetadata(text: string): string {
-  let cleaned = stripEnvelopePrefix(text);
+  let cleaned = stripMemoryInjection(text);
+  cleaned = stripEnvelopePrefix(cleaned);
 
   // Strip OpenClaw envelope tags: [message_id: ...], [[reply_to_current]], etc.
   cleaned = cleaned.replace(/\[message_id:\s*[a-f0-9-]+\]/gi, "");
@@ -150,6 +151,60 @@ export function stripInboundMetadata(text: string): string {
 
 function stripEnvelopePrefix(text: string): string {
   return text.replace(ENVELOPE_PREFIX_RE, "");
+}
+
+/**
+ * Strip memory-system injections that get prepended to user messages:
+ * - <memory_context>...</memory_context>
+ * - === MemOS LONG-TERM MEMORY ... ===\n...MANDATORY...
+ * - [MemOS Auto-Recall] Found N relevant memories:...
+ * - ## Memory system\n\nNo memories were automatically recalled...
+ */
+function stripMemoryInjection(text: string): string {
+  let cleaned = text;
+
+  // <memory_context>...</memory_context>
+  const mcStart = cleaned.indexOf("<memory_context>");
+  if (mcStart !== -1) {
+    const mcEnd = cleaned.indexOf("</memory_context>");
+    if (mcEnd !== -1) {
+      cleaned = cleaned.slice(0, mcStart) + cleaned.slice(mcEnd + "</memory_context>".length);
+    } else {
+      cleaned = cleaned.slice(0, mcStart);
+    }
+    cleaned = cleaned.trim();
+  }
+
+  // === MemOS LONG-TERM MEMORY (retrieved from past conversations) ===\n...\nMANDATORY...
+  cleaned = cleaned.replace(
+    /=== MemOS LONG-TERM MEMORY[\s\S]*?(?:MANDATORY[^\n]*\n?|(?=\n{2,}))/gi,
+    "",
+  ).trim();
+
+  // [MemOS Auto-Recall] Found N relevant memories:\n...
+  cleaned = cleaned.replace(
+    /\[MemOS Auto-Recall\][^\n]*\n(?:(?:\d+\.\s+\[(?:USER|ASSISTANT)[^\n]*\n?)*)/gi,
+    "",
+  ).trim();
+
+  // ## Memory system\n\nNo memories were automatically recalled...
+  cleaned = cleaned.replace(
+    /## Memory system\n+No memories were automatically recalled[^\n]*(?:\n[^\n]*memory_search[^\n]*)*/gi,
+    "",
+  ).trim();
+
+  // Mixed user+assistant content: "user question\n\n---\n\nassistant reply"
+  // Some older plugins merged entire turns into a single user message.
+  // Keep only the first segment (user's actual input).
+  const dashSep = cleaned.indexOf("\n\n---\n");
+  if (dashSep !== -1 && dashSep > 5) {
+    const firstPart = cleaned.slice(0, dashSep).trim();
+    if (firstPart.length >= 5) {
+      cleaned = firstPart;
+    }
+  }
+
+  return cleaned;
 }
 
 function stripEvidenceWrappers(text: string, evidenceTag: string): string {

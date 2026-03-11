@@ -6,7 +6,7 @@ import path from "node:path";
 import readline from "node:readline";
 import type { SqliteStore } from "../storage/sqlite";
 import type { Embedder } from "../embedding";
-import { Summarizer } from "../ingest/providers";
+import { Summarizer, modelHealth } from "../ingest/providers";
 import { findTopSimilar } from "../ingest/dedup";
 import { stripInboundMetadata } from "../capture";
 import { vectorSearch } from "../storage/vector";
@@ -16,6 +16,11 @@ import { SkillEvolver } from "../skill/evolver";
 import type { Logger, Chunk, PluginContext } from "../types";
 import { viewerHTML } from "./html";
 import { v4 as uuid } from "uuid";
+
+function normalizeTimestamp(ts: number): number {
+  if (ts < 1e12) return ts * 1000;
+  return ts;
+}
 
 export interface ViewerServerOptions {
   store: SqliteStore;
@@ -93,9 +98,26 @@ export class ViewerServer {
       this.server.listen(this.port, "127.0.0.1", () => {
         const addr = this.server!.address();
         const actualPort = typeof addr === "object" && addr ? addr.port : this.port;
+        this.autoCleanupPolluted();
         resolve(`http://127.0.0.1:${actualPort}`);
       });
     });
+  }
+
+  private autoCleanupPolluted(): void {
+    try {
+      const polluted = this.store.findPollutedUserChunks();
+      let deleted = 0;
+      for (const { id } of polluted) {
+        if (this.store.deleteChunk(id)) deleted++;
+      }
+      const fixed = this.store.fixMixedUserChunks();
+      if (deleted > 0 || fixed > 0) {
+        this.log.info(`Auto-cleanup: removed ${deleted} polluted chunks, fixed ${fixed} mixed user+assistant chunks`);
+      }
+    } catch (err) {
+      this.log.warn(`Auto-cleanup failed: ${err}`);
+    }
   }
 
   stop(): void {
@@ -216,8 +238,11 @@ export class ViewerServer {
       else if (p === "/api/config" && req.method === "GET") this.serveConfig(res);
       else if (p === "/api/config" && req.method === "PUT") this.handleSaveConfig(req, res);
       else if (p === "/api/test-model" && req.method === "POST") this.handleTestModel(req, res);
+      else if (p === "/api/model-health" && req.method === "GET") this.serveModelHealth(res);
       else if (p === "/api/fallback-model" && req.method === "GET") this.serveFallbackModel(res);
+      else if (p === "/api/update-check" && req.method === "GET") this.handleUpdateCheck(res);
       else if (p === "/api/auth/logout" && req.method === "POST") this.handleLogout(req, res);
+      else if (p === "/api/cleanup-polluted" && req.method === "POST") this.handleCleanupPolluted(res);
       else if (p === "/api/migrate/scan" && req.method === "GET") this.handleMigrateScan(res);
       else if (p === "/api/migrate/start" && req.method === "POST") this.handleMigrateStart(req, res);
       else if (p === "/api/migrate/status" && req.method === "GET") this.handleMigrateStatus(res);
@@ -484,7 +509,15 @@ export class ViewerServer {
       const total = db.prepare("SELECT COUNT(*) as count FROM chunks").get() as any;
       const sessions = db.prepare("SELECT COUNT(DISTINCT session_key) as count FROM chunks").get() as any;
       const roles = db.prepare("SELECT role, COUNT(*) as count FROM chunks GROUP BY role").all() as any[];
-      const timeRange = db.prepare("SELECT MIN(created_at) as earliest, MAX(created_at) as latest FROM chunks").get() as any;
+      const timeRange = db.prepare("SELECT MIN(created_at) as earliest, MAX(created_at) as latest FROM chunks WHERE dedup_status = 'active'").get() as any;
+      const MIN_VALID_TS = 1704067200000; // 2024-01-01
+      if (timeRange.earliest != null && timeRange.earliest < MIN_VALID_TS) {
+        timeRange.earliest = db.prepare("SELECT MIN(created_at) as v FROM chunks WHERE dedup_status = 'active' AND created_at >= ?").get(MIN_VALID_TS) as any;
+        timeRange.earliest = timeRange.earliest?.v ?? null;
+      }
+      if (timeRange.latest != null && timeRange.latest < MIN_VALID_TS) {
+        timeRange.latest = null;
+      }
       let embCount = 0;
       try { embCount = (db.prepare("SELECT COUNT(*) as count FROM embeddings").get() as any).count; } catch { /* table may not exist */ }
       const kinds = db.prepare("SELECT kind, COUNT(*) as count FROM chunks GROUP BY kind").all() as any[];
@@ -969,11 +1002,13 @@ export class ViewerServer {
       const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
       const entries = raw?.plugins?.entries ?? {};
       const pluginEntry = entries["memos-local-openclaw-plugin"]?.config
+        ?? entries["memos-local"]?.config
         ?? entries["memos-lite-openclaw-plugin"]?.config
         ?? entries["memos-lite"]?.config
         ?? {};
       const result: Record<string, unknown> = { ...pluginEntry };
       const topEntry = entries["memos-local-openclaw-plugin"]
+        ?? entries["memos-local"]
         ?? entries["memos-lite-openclaw-plugin"]
         ?? entries["memos-lite"]
         ?? {};
@@ -1002,6 +1037,7 @@ export class ViewerServer {
         if (!plugins.entries) plugins.entries = {};
         const entries = plugins.entries as Record<string, unknown>;
         const entryKey = entries["memos-local-openclaw-plugin"] ? "memos-local-openclaw-plugin"
+          : entries["memos-local"] ? "memos-local"
           : entries["memos-lite-openclaw-plugin"] ? "memos-lite-openclaw-plugin"
           : entries["memos-lite"] ? "memos-lite"
           : "memos-local-openclaw-plugin";
@@ -1037,8 +1073,8 @@ export class ViewerServer {
           return;
         }
         if (type === "embedding") {
-          await this.testEmbeddingModel(provider, model, endpoint, apiKey);
-          this.jsonResponse(res, { ok: true, detail: `${provider}/${model}` });
+          const dims = await this.testEmbeddingModel(provider, model, endpoint, apiKey);
+          this.jsonResponse(res, { ok: true, detail: `${provider}/${model}`, dimensions: dims });
         } else {
           await this.testChatModel(provider, model, endpoint, apiKey);
           this.jsonResponse(res, { ok: true, detail: `${provider}/${model}` });
@@ -1049,6 +1085,10 @@ export class ViewerServer {
         this.jsonResponse(res, { ok: false, error: msg });
       }
     });
+  }
+
+  private serveModelHealth(res: http.ServerResponse): void {
+    this.jsonResponse(res, { models: modelHealth.getAll() });
   }
 
   private serveFallbackModel(res: http.ServerResponse): void {
@@ -1080,9 +1120,59 @@ export class ViewerServer {
     }
   }
 
-  private async testEmbeddingModel(provider: string, model: string, endpoint: string, apiKey: string): Promise<void> {
+  private findPluginPackageJson(): string | null {
+    let dir = __dirname;
+    for (let i = 0; i < 6; i++) {
+      const candidate = path.join(dir, "package.json");
+      if (fs.existsSync(candidate)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(candidate, "utf-8"));
+          if (pkg.name && pkg.name.includes("memos-local")) return candidate;
+        } catch { /* skip */ }
+      }
+      dir = path.dirname(dir);
+    }
+    return null;
+  }
+
+  private async handleUpdateCheck(res: http.ServerResponse): Promise<void> {
+    try {
+      const pkgPath = this.findPluginPackageJson();
+      if (!pkgPath) {
+        this.jsonResponse(res, { updateAvailable: false, error: "package.json not found" });
+        return;
+      }
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      const current = pkg.version as string;
+      const name = pkg.name as string;
+      if (!current || !name) {
+        this.jsonResponse(res, { updateAvailable: false, current });
+        return;
+      }
+      const npmResp = await fetch(`https://registry.npmjs.org/${name}/latest`, {
+        signal: AbortSignal.timeout(6_000),
+      });
+      if (!npmResp.ok) {
+        this.jsonResponse(res, { updateAvailable: false, current });
+        return;
+      }
+      const data = await npmResp.json() as { version?: string };
+      const latest = data.version ?? current;
+      this.jsonResponse(res, {
+        updateAvailable: latest !== current,
+        current,
+        latest,
+        packageName: name,
+      });
+    } catch (e) {
+      this.log.warn(`handleUpdateCheck error: ${e}`);
+      this.jsonResponse(res, { updateAvailable: false, error: String(e) });
+    }
+  }
+
+  private async testEmbeddingModel(provider: string, model: string, endpoint: string, apiKey: string): Promise<number | undefined> {
     if (provider === "local") {
-      return;
+      return 384;
     }
     const baseUrl = (endpoint || "https://api.openai.com/v1").replace(/\/+$/, "");
     const embUrl = baseUrl.endsWith("/embeddings") ? baseUrl : `${baseUrl}/embeddings`;
@@ -1095,39 +1185,59 @@ export class ViewerServer {
       const resp = await fetch(baseUrl.replace(/\/v\d+.*/, "/v2/embed"), {
         method: "POST",
         headers,
-        body: JSON.stringify({ texts: ["test"], model: model || "embed-english-v3.0", input_type: "search_query", embedding_types: ["float"] }),
+        body: JSON.stringify({ texts: ["test embedding vector"], model: model || "embed-english-v3.0", input_type: "search_query", embedding_types: ["float"] }),
         signal: AbortSignal.timeout(15_000),
       });
       if (!resp.ok) {
         const txt = await resp.text();
         throw new Error(`Cohere embed ${resp.status}: ${txt}`);
       }
-      return;
+      const json = await resp.json() as any;
+      const vecs = json?.embeddings?.float;
+      if (!Array.isArray(vecs) || vecs.length === 0 || !Array.isArray(vecs[0]) || vecs[0].length === 0) {
+        throw new Error("Cohere returned empty embedding vector");
+      }
+      return vecs[0].length;
     }
     if (provider === "gemini") {
       const url = `https://generativelanguage.googleapis.com/v1/models/${model || "text-embedding-004"}:embedContent?key=${apiKey}`;
       const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: { parts: [{ text: "test" }] } }),
+        body: JSON.stringify({ content: { parts: [{ text: "test embedding vector" }] } }),
         signal: AbortSignal.timeout(15_000),
       });
       if (!resp.ok) {
         const txt = await resp.text();
         throw new Error(`Gemini embed ${resp.status}: ${txt}`);
       }
-      return;
+      const json = await resp.json() as any;
+      const vec = json?.embedding?.values;
+      if (!Array.isArray(vec) || vec.length === 0) {
+        throw new Error("Gemini returned empty embedding vector");
+      }
+      return vec.length;
     }
     const resp = await fetch(embUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify({ input: ["test"], model: model || "text-embedding-3-small" }),
+      body: JSON.stringify({ input: ["test embedding vector"], model: model || "text-embedding-3-small" }),
       signal: AbortSignal.timeout(15_000),
     });
     if (!resp.ok) {
       const txt = await resp.text();
       throw new Error(`${resp.status}: ${txt}`);
     }
+    const json = await resp.json() as any;
+    const data = json?.data;
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error("API returned no embedding data");
+    }
+    const vec = data[0]?.embedding;
+    if (!Array.isArray(vec) || vec.length === 0) {
+      throw new Error(`API returned empty embedding vector (got ${JSON.stringify(vec)?.slice(0, 100)})`);
+    }
+    return vec.length;
   }
 
   private async testChatModel(provider: string, model: string, endpoint: string, apiKey: string): Promise<void> {
@@ -1202,6 +1312,28 @@ export class ViewerServer {
     return path.join(home, ".openclaw");
   }
 
+  private handleCleanupPolluted(res: http.ServerResponse): void {
+    try {
+      const polluted = this.store.findPollutedUserChunks();
+      let deleted = 0;
+      for (const { id, reason } of polluted) {
+        if (this.store.deleteChunk(id)) {
+          deleted++;
+          this.log.info(`Cleaned polluted chunk ${id}: ${reason}`);
+        }
+      }
+      const fixed = this.store.fixMixedUserChunks();
+      this.log.info(`Cleanup: removed ${deleted} polluted, fixed ${fixed} mixed chunks`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ deleted, fixed, total: polluted.length }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.log.error(`handleCleanupPolluted error: ${msg}`);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: msg }));
+    }
+  }
+
   private handleMigrateScan(res: http.ServerResponse): void {
     try {
       const ocHome = this.getOpenClawHome();
@@ -1260,8 +1392,9 @@ export class ViewerServer {
         try {
           const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
           const pluginCfg = raw?.plugins?.entries?.["memos-local-openclaw-plugin"]?.config ??
-                            raw?.plugins?.entries?.["memos-lite"]?.config ??
-                            raw?.plugins?.entries?.["memos-lite-openclaw-plugin"]?.config ?? {};
+                            raw?.plugins?.entries?.["memos-local"]?.config ??
+                            raw?.plugins?.entries?.["memos-lite-openclaw-plugin"]?.config ??
+                            raw?.plugins?.entries?.["memos-lite"]?.config ?? {};
           const emb = pluginCfg.embedding;
           hasEmbedding = !!(emb && emb.provider);
           const sum = pluginCfg.summarizer;
@@ -1444,17 +1577,16 @@ export class ViewerServer {
 
     const cfgPath = this.getOpenClawConfigPath();
     let summarizerCfg: any;
-    let strongCfg: any;
     try {
       const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
       const pluginCfg = raw?.plugins?.entries?.["memos-local-openclaw-plugin"]?.config ??
-                        raw?.plugins?.entries?.["memos-lite"]?.config ??
-                        raw?.plugins?.entries?.["memos-lite-openclaw-plugin"]?.config ?? {};
+                        raw?.plugins?.entries?.["memos-local"]?.config ??
+                        raw?.plugins?.entries?.["memos-lite-openclaw-plugin"]?.config ??
+                        raw?.plugins?.entries?.["memos-lite"]?.config ?? {};
       summarizerCfg = pluginCfg.summarizer;
-      strongCfg = pluginCfg.skillEvolution?.summarizer;
     } catch { /* no config */ }
 
-    const summarizer = new Summarizer(summarizerCfg, this.log, strongCfg);
+    const summarizer = new Summarizer(summarizerCfg, this.log);
 
     // Phase 1: Import SQLite memory chunks
     if (importSqlite) {
@@ -1580,8 +1712,8 @@ export class ViewerServer {
                   mergeCount: 0,
                   lastHitAt: null,
                   mergeHistory: "[]",
-                  createdAt: row.updated_at * 1000,
-                  updatedAt: row.updated_at * 1000,
+                  createdAt: normalizeTimestamp(row.updated_at),
+                  updatedAt: normalizeTimestamp(row.updated_at),
                 };
 
                 this.store.insertChunk(chunk);
