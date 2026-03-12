@@ -88,4 +88,13 @@ This skill describes how to use the MemOS memory tools so you can reliably searc
 - Use **concrete terms**: names, topics, tools, or decisions (e.g. "preferred editor", "deploy script", "API key setup").
 - If the user's message is long, **derive one or two sub-queries** rather than pasting the whole message.
 - Use \`role='user'\` when you specifically want to find what the user said (e.g. preferences, past questions).
+
+## Memory ownership and agent isolation
+
+Each memory is tagged with an \`owner\` (e.g. \`agent:main\`, \`agent:sales-bot\`). This is handled **automatically** — you do not need to pass any owner parameter.
+
+- **Your memories:** All tools (\`memory_search\`, \`memory_get\`, \`memory_timeline\`) automatically scope queries to your agent's own memories.
+- **Public memories:** Memories marked as \`public\` are visible to all agents. Use \`memory_write_public\` to write shared knowledge.
+- **Cross-agent isolation:** You cannot see memories owned by other agents (unless they are public).
+- **How it works:** The system identifies your agent ID from the OpenClaw runtime context and applies owner filtering automatically on every search, recall, and retrieval.
 `;

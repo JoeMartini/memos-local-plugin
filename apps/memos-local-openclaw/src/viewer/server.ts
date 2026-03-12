@@ -571,44 +571,71 @@ export class ViewerServer {
 
     const role = url.searchParams.get("role") ?? undefined;
     const kind = url.searchParams.get("kind") ?? undefined;
+    const session = url.searchParams.get("session") ?? undefined;
+    const owner = url.searchParams.get("owner") ?? undefined;
     const dateFrom = url.searchParams.get("dateFrom") ?? undefined;
     const dateTo = url.searchParams.get("dateTo") ?? undefined;
 
     const passesFilter = (r: any): boolean => {
       if (role && r.role !== role) return false;
       if (kind && r.kind !== kind) return false;
+      if (session && r.session_key !== session) return false;
+      if (owner && r.owner !== owner) return false;
       if (dateFrom && r.created_at < new Date(dateFrom).getTime()) return false;
       if (dateTo && r.created_at > new Date(dateTo).getTime()) return false;
       return true;
     };
 
+    const ftsFilters: string[] = [];
+    const likeFilters: string[] = [];
+    const sqlParams: any[] = [];
+    if (session) { ftsFilters.push("c.session_key = ?"); likeFilters.push("session_key = ?"); sqlParams.push(session); }
+    if (owner) { ftsFilters.push("c.owner = ?"); likeFilters.push("owner = ?"); sqlParams.push(owner); }
+    const ftsWhere = ftsFilters.length > 0 ? " AND " + ftsFilters.join(" AND ") : "";
+    const likeWhere = likeFilters.length > 0 ? " AND " + likeFilters.join(" AND ") : "";
+
     const db = (this.store as any).db;
     let ftsResults: any[] = [];
     try {
       ftsResults = db.prepare(
-        "SELECT c.* FROM chunks_fts f JOIN chunks c ON f.rowid = c.rowid WHERE chunks_fts MATCH ? ORDER BY rank LIMIT 100",
-      ).all(q).filter(passesFilter);
+        `SELECT c.* FROM chunks_fts f JOIN chunks c ON f.rowid = c.rowid WHERE chunks_fts MATCH ?${ftsWhere} ORDER BY rank LIMIT 100`,
+      ).all(q, ...sqlParams).filter(passesFilter);
     } catch { /* FTS syntax error, fall through */ }
     if (ftsResults.length === 0) {
-      ftsResults = db.prepare(
-        "SELECT * FROM chunks WHERE content LIKE ? OR summary LIKE ? ORDER BY created_at DESC LIMIT 100",
-      ).all(`%${q}%`, `%${q}%`).filter(passesFilter);
+      try {
+        ftsResults = db.prepare(
+          `SELECT * FROM chunks WHERE (content LIKE ? OR summary LIKE ?)${likeWhere} ORDER BY created_at DESC LIMIT 100`,
+        ).all(`%${q}%`, `%${q}%`, ...sqlParams).filter(passesFilter);
+      } catch (err) {
+        this.log.warn(`LIKE search failed: ${err}`);
+      }
     }
 
     const SEMANTIC_THRESHOLD = 0.64;
+    const VECTOR_TIMEOUT_MS = 8000;
     let vectorResults: any[] = [];
     let scoreMap = new Map<string, number>();
     try {
-      const queryVec = await this.embedder.embedQuery(q);
-      const hits = vectorSearch(this.store, queryVec, 40);
-      scoreMap = new Map(hits.map(h => [h.chunkId, h.score]));
-      const hitIds = new Set(hits.filter(h => h.score >= SEMANTIC_THRESHOLD).map(h => h.chunkId));
-      if (hitIds.size > 0) {
-        const placeholders = [...hitIds].map(() => "?").join(",");
-        const rows = db.prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})`).all(...hitIds).filter(passesFilter);
-        rows.forEach((r: any) => { r._vscore = scoreMap.get(r.id) ?? 0; });
-        rows.sort((a: any, b: any) => (b._vscore ?? 0) - (a._vscore ?? 0));
-        vectorResults = rows;
+      const vecPromise = (async () => {
+        const queryVec = await this.embedder.embedQuery(q);
+        return vectorSearch(this.store, queryVec, 40);
+      })();
+      const hits = await Promise.race([
+        vecPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), VECTOR_TIMEOUT_MS)),
+      ]);
+      if (hits) {
+        scoreMap = new Map(hits.map(h => [h.chunkId, h.score]));
+        const hitIds = new Set(hits.filter(h => h.score >= SEMANTIC_THRESHOLD).map(h => h.chunkId));
+        if (hitIds.size > 0) {
+          const placeholders = [...hitIds].map(() => "?").join(",");
+          const rows = db.prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})${likeWhere}`).all(...hitIds, ...sqlParams).filter(passesFilter);
+          rows.forEach((r: any) => { r._vscore = scoreMap.get(r.id) ?? 0; });
+          rows.sort((a: any, b: any) => (b._vscore ?? 0) - (a._vscore ?? 0));
+          vectorResults = rows;
+        }
+      } else {
+        this.log.warn("Vector search timed out, returning FTS results only");
       }
     } catch (err) {
       this.log.warn(`Vector search failed (falling back to FTS only): ${err}`);

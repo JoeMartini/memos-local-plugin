@@ -84,7 +84,7 @@ export async function summarizeTaskAnthropic(
   return json.content.find((c) => c.type === "text")?.text?.trim() ?? "";
 }
 
-const TOPIC_JUDGE_PROMPT = `You are a conversation topic boundary detector. Given the CURRENT task context (may include opening topic + recent exchanges) and a single NEW user message, decide if the new message belongs to the SAME task or starts a NEW one.
+const TOPIC_JUDGE_PROMPT = `You are a conversation topic boundary detector. Given the CURRENT task context and a NEW user message, decide if the new message belongs to the SAME task or starts a NEW one.
 
 Answer ONLY "NEW" or "SAME".
 
@@ -92,22 +92,21 @@ SAME — the new message:
 - Continues, follows up on, refines, or corrects the same subject/project/task
 - Asks a clarification or next-step question about what was just discussed
 - Reports a result, error, or feedback about the current task
-- Discusses different tools, methods, or approaches for the SAME goal (e.g., learning English via BBC → via ChatGPT → via AI tools = all SAME "learning English" task)
-- Mentions a related technology or platform in the context of the current goal
-- Is a short acknowledgment (ok, thanks, 好的, 嗯) in direct response to the current flow
+- Discusses different tools or approaches for the SAME goal (e.g., learning English via BBC → via ChatGPT = SAME)
+- Is a short acknowledgment (ok, thanks, 好的) in response to the current flow
 
 NEW — the new message:
-- Introduces a clearly UNRELATED subject with NO logical connection to the current task
-- The topic has ZERO overlap with any aspect of the current conversation (e.g., from "learning English" to "what's the weather tomorrow")
-- Starts a request about a completely different domain or life area
+- Introduces a subject from a DIFFERENT domain than the current task (e.g., tech → cooking, work → personal life, database → travel)
+- Has NO logical connection to what was being discussed
+- Starts a request about a different project, system, or life area
 - Begins with a new greeting/reset followed by a different topic
 
 Key principles:
-- STRONGLY lean toward SAME — only mark NEW for obvious, unambiguous topic shifts
-- Different aspects, tools, or methods related to the same overall goal are SAME
-- If the new message could reasonably be interpreted as part of the ongoing discussion, choose SAME
-- Only choose NEW when there is absolutely no thematic connection to the current task
-- Examples: "学英语" → "用AI工具学英语" = SAME; "学英语" → "明天天气" = NEW
+- If the topic domain clearly changed (e.g., server config → recipe, code review → vacation plan), choose NEW
+- Different aspects of the SAME project/system are SAME (e.g., Nginx SSL → Nginx gzip = SAME)
+- Different unrelated technologies discussed independently are NEW (e.g., Redis config → cooking recipe = NEW)
+- When unsure, lean toward SAME for closely related topics, but do NOT hesitate to mark NEW for obvious domain shifts
+- Examples: "配置Nginx" → "加gzip压缩" = SAME; "配置Nginx" → "做红烧肉" = NEW; "MySQL配置" → "K8s部署" in same infra project = SAME; "部署服务器" → "年会安排" = NEW
 
 Output exactly one word: NEW or SAME`;
 

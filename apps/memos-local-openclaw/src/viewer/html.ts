@@ -120,7 +120,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .main-content{display:flex;flex:1;max-width:1400px;margin:0 auto;width:100%;padding:28px 32px;gap:28px}
 
 /* ─── Sidebar ─── */
-.sidebar{width:260px;flex-shrink:0}
+.sidebar{width:260px;min-width:260px;flex-shrink:0}
 .sidebar .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px}
 .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;transition:all .2s}
 .stat-card:hover{border-color:var(--border-glow);background:var(--bg-card-hover)}
@@ -245,6 +245,16 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:28px}
 
 /* ─── Toast ─── */
+.emb-banner{display:flex;align-items:center;gap:10px;padding:12px 20px;font-size:13px;font-weight:500;border-radius:10px;margin:0 32px 0;animation:slideIn .3s ease}
+.emb-banner.warning{background:rgba(245,158,11,.1);color:#d97706;border:1px solid rgba(245,158,11,.25)}
+.emb-banner.error{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.25)}
+[data-theme="light"] .emb-banner.warning{background:rgba(245,158,11,.08);color:#b45309}
+[data-theme="light"] .emb-banner.error{background:rgba(239,68,68,.08);color:#dc2626}
+.emb-banner span{flex:1}
+.emb-banner-btn{background:none;border:1px solid currentColor;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600;color:inherit;cursor:pointer;white-space:nowrap;opacity:.85;transition:opacity .15s}
+.emb-banner-btn:hover{opacity:1}
+.emb-banner-close{background:none;border:none;font-size:18px;color:inherit;cursor:pointer;opacity:.5;padding:0 4px;line-height:1}
+.emb-banner-close:hover{opacity:1}
 .toast-container{position:fixed;top:80px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:8px}
 .toast{padding:14px 20px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);animation:slideIn .3s ease;display:flex;align-items:center;gap:10px;max-width:360px;border:1px solid}
 .toast.success{background:var(--green-bg);color:var(--green);border-color:rgba(16,185,129,.3)}
@@ -429,6 +439,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 [data-theme="light"] .nav-tabs .tab.active{background:#fff;border-color:rgba(0,0,0,.1);box-shadow:0 1px 3px rgba(0,0,0,.08);color:var(--text)}
 .analytics-view,.settings-view,.logs-view,.migrate-view{display:none;flex:1;min-width:0;flex-direction:column;gap:20px}
 .analytics-view.show,.settings-view.show,.logs-view.show,.migrate-view.show{display:flex}
+.feed-wrap,.tasks-view,.skills-view,.analytics-view,.settings-view,.logs-view,.migrate-view{max-width:960px}
 
 /* ─── Logs ─── */
 .logs-toolbar{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
@@ -576,18 +587,19 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 @keyframes migrateFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .feed-wrap{flex:1;min-width:0;display:flex;flex-direction:column}
 .feed-wrap.hide{display:none}
+.analytics-view{flex-direction:column;gap:20px}
 .analytics-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.analytics-card{position:relative;overflow:hidden;border-radius:var(--radius-lg);padding:22px 20px;transition:all .2s ease;border:1px solid var(--border);background:var(--bg-card)}
+.analytics-card{position:relative;overflow:hidden;border-radius:var(--radius-lg);padding:18px 16px;transition:all .2s ease;border:1px solid var(--border);background:var(--bg-card)}
 .analytics-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--pri);opacity:.5}
 .analytics-card::after{display:none}
 .analytics-card:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--border-glow)}
 .analytics-card.green::before{background:var(--green)}
 .analytics-card.amber::before{background:var(--amber)}
-.analytics-card .ac-value{font-size:28px;font-weight:700;letter-spacing:-.03em;color:var(--text);line-height:1;-webkit-text-fill-color:unset;background:none}
+.analytics-card .ac-value{font-size:24px;font-weight:700;letter-spacing:-.03em;color:var(--text);line-height:1;-webkit-text-fill-color:unset;background:none}
 .analytics-card.green .ac-value{color:var(--green);background:none}
 .analytics-card.amber .ac-value{color:var(--amber);background:none}
 .analytics-card .ac-label{font-size:11px;color:var(--text-muted);margin-top:6px;font-weight:500;text-transform:uppercase;letter-spacing:.06em}
-.analytics-section{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 24px;position:relative;overflow:hidden}
+.analytics-section{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;position:relative;overflow:hidden}
 .analytics-section::before{display:none}
 .analytics-section h3{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px;display:flex;align-items:center;gap:8px}
 .analytics-section h3 .icon{font-size:14px;opacity:.6}
@@ -776,10 +788,12 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <div class="stat-card amber"><div class="stat-value" id="statEmbeddings">-</div><div class="stat-label" data-i18n="stat.embeddings">Embeddings</div></div>
         <div class="stat-card rose"><div class="stat-value" id="statTimeSpan">-</div><div class="stat-label" data-i18n="stat.days">Days</div></div>
       </div>
-      <div id="embeddingStatus"></div>
-      <div class="section-title" data-i18n="sidebar.sessions">Sessions</div>
-      <div class="session-list" id="sessionList"></div>
-      <button class="btn btn-sm btn-ghost" style="width:100%;margin-top:20px;justify-content:center;color:var(--text-muted);font-size:11px" onclick="clearAll()" data-i18n="sidebar.clear">\u{1F5D1} Clear All Data</button>
+      <div id="sidebarSessionSection">
+        <div id="embeddingStatus"></div>
+        <div class="section-title" data-i18n="sidebar.sessions">Sessions</div>
+        <div class="session-list" id="sessionList"></div>
+        <button class="btn btn-sm btn-ghost" style="width:100%;margin-top:20px;justify-content:center;color:var(--text-muted);font-size:11px" onclick="clearAll()" data-i18n="sidebar.clear">\u{1F5D1} Clear All Data</button>
+      </div>
     </div>
 
     <div class="feed-wrap" id="feedWrap">
@@ -905,7 +919,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
       </div>
     </div>
     <div class="analytics-view" id="analyticsView">
-      <div class="metrics-toolbar">
+      <div class="metrics-toolbar" style="margin-bottom:0">
         <span style="font-size:12px;color:var(--text-sec);font-weight:600" data-i18n="range">Range</span>
         <button class="range-btn" data-days="7" onclick="setMetricsDays(7)">7 <span data-i18n="range.days">days</span></button>
         <button class="range-btn active" data-days="30" onclick="setMetricsDays(30)">30 <span data-i18n="range.days">days</span></button>
@@ -937,7 +951,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <div id="toolAggTable" style="margin-top:20px"></div>
       </div>
 
-      <div class="breakdown-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div class="breakdown-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="analytics-section">
           <h3><span class="icon">\u{1F464}</span> <span data-i18n="breakdown.role">By Role</span></h3>
           <div id="breakdownRole"></div>
@@ -1344,6 +1358,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 
 <script>
 let activeSession=null,activeRole='',editingId=null,searchTimer=null,memoryCache={},currentPage=1,totalPages=1,totalCount=0,PAGE_SIZE=40,metricsDays=30;
+let _embeddingWarningShown=false;
 
 /* ─── i18n ─── */
 const I18N={
@@ -1497,6 +1512,9 @@ const I18N={
     'confirm.clearall2':'Are you absolutely sure?',
     'embed.on':'Embedding: ',
     'embed.off':'No embedding model',
+    'embed.warn.local':'Using built-in mini model (384d). Search quality is limited — configure an embedding model in Settings for best results.',
+    'embed.err.fail':'Embedding model error detected. Check Settings → Model Health.',
+    'embed.banner.goto':'Go to Settings',
     'lang.switch':'中',
     'tab.logs':'\u{1F4DD} Logs',
     'logs.allTools':'All Tools',
@@ -1809,6 +1827,9 @@ const I18N={
     'confirm.clearall2':'你真的确定吗？',
     'embed.on':'嵌入模型：',
     'embed.off':'无嵌入模型',
+    'embed.warn.local':'当前使用内置迷你模型（384维），搜索效果有限。强烈建议在「设置」中配置专用 Embedding 模型以获得最佳效果。',
+    'embed.err.fail':'Embedding 模型调用异常，请前往「设置 → 模型健康」检查。',
+    'embed.banner.goto':'前往设置',
     'lang.switch':'EN',
     'tab.logs':'\u{1F4DD} 日志',
     'logs.allTools':'全部工具',
@@ -2085,6 +2106,7 @@ function switchView(view){
   const logsView=document.getElementById('logsView');
   const settingsView=document.getElementById('settingsView');
   const migrateView=document.getElementById('migrateView');
+  const sidebar=document.getElementById('sidebar');
   feedWrap.classList.add('hide');
   analyticsView.classList.remove('show');
   tasksView.classList.remove('show');
@@ -2092,27 +2114,33 @@ function switchView(view){
   logsView.classList.remove('show');
   settingsView.classList.remove('show');
   migrateView.classList.remove('show');
-  if(view==='analytics'){
-    analyticsView.classList.add('show');
-    loadMetrics();
-  } else if(view==='tasks'){
-    tasksView.classList.add('show');
-    loadTasks();
-  } else if(view==='skills'){
-    skillsView.classList.add('show');
-    loadSkills();
-  } else if(view==='logs'){
-    logsView.classList.add('show');
-    loadLogs();
-  } else if(view==='settings'){
-    settingsView.classList.add('show');
-    loadConfig();
-    loadModelHealth();
-  } else if(view==='import'){
-    migrateView.classList.add('show');
-    if(!window._migrateRunning) migrateScan();
-  } else {
+  const sessionSection=document.getElementById('sidebarSessionSection');
+  if(view==='memories'){
     feedWrap.classList.remove('hide');
+    sessionSection.style.visibility='';
+    sessionSection.style.pointerEvents='';
+  } else if(view==='tasks'||view==='skills'){
+    sessionSection.style.visibility='hidden';
+    sessionSection.style.pointerEvents='none';
+    if(view==='tasks'){tasksView.classList.add('show');loadTasks();}
+    else{skillsView.classList.add('show');loadSkills();}
+  } else {
+    sessionSection.style.visibility='hidden';
+    sessionSection.style.pointerEvents='none';
+    if(view==='analytics'){
+      analyticsView.classList.add('show');
+      loadMetrics();
+    } else if(view==='logs'){
+      logsView.classList.add('show');
+      loadLogs();
+    } else if(view==='settings'){
+      settingsView.classList.add('show');
+      loadConfig();
+      loadModelHealth();
+    } else if(view==='import'){
+      migrateView.classList.add('show');
+      if(!window._migrateRunning) migrateScan();
+    }
   }
 }
 
@@ -3483,6 +3511,20 @@ async function loadStats(){
     provEl.innerHTML='<div class="provider-badge offline"><span>\\u26A0</span> '+t('embed.off')+'</div>';
   }
 
+  if(!_embeddingWarningShown){
+    _embeddingWarningShown=true;
+    if(!d.embeddingProvider||d.embeddingProvider==='local'||d.embeddingProvider==='none'){
+      showEmbeddingBanner(t('embed.warn.local'),'warning');
+    }
+    fetch('/api/model-health').then(r=>r.json()).then(mh=>{
+      var models=mh.models||[];
+      var embModel=models.find(m=>m.role==='embedding');
+      if(embModel&&embModel.status==='error'){
+        showEmbeddingBanner(t('embed.err.fail'),'error');
+      }
+    }).catch(()=>{});
+  }
+
   const sl=document.getElementById('sessionList');
   sl.innerHTML='<div class="session-item'+(activeSession===null?' active':'')+'" onclick="filterSession(null)"><span>'+t('sidebar.allsessions')+'</span><span class="count">'+tm+'</span></div>';
   (d.sessions||[]).forEach(s=>{
@@ -3546,17 +3588,24 @@ async function doSearch(q){
   if(!q.trim()){currentPage=1;loadMemories();return}
   const list=document.getElementById('memoryList');
   list.innerHTML='<div class="spinner"></div>';
-  const p=getFilterParams();
-  p.set('q',q);
-  const r=await fetch('/api/search?'+p.toString());
-  const d=await r.json();
-  const meta=[];
-  if(d.vectorCount>0) meta.push(d.vectorCount+t('search.meta.semantic'));
-  if(d.ftsCount>0) meta.push(d.ftsCount+t('search.meta.text'));
-  meta.push(d.total+t('search.meta.results'));
-  document.getElementById('searchMeta').textContent=meta.join(' \\u00B7 ');
-  renderMemories(d.results||[]);
-  document.getElementById('pagination').innerHTML='';
+  try{
+    const p=getFilterParams();
+    p.set('q',q);
+    const r=await fetch('/api/search?'+p.toString());
+    const d=await r.json();
+    const total=d.total||0;
+    const meta=[];
+    if(d.vectorCount>0) meta.push(d.vectorCount+t('search.meta.semantic'));
+    if(d.ftsCount>0) meta.push(d.ftsCount+t('search.meta.text'));
+    meta.push(total+t('search.meta.results'));
+    document.getElementById('searchMeta').textContent=meta.join(' \\u00B7 ');
+    renderMemories(d.results||[]);
+    document.getElementById('pagination').innerHTML='';
+  }catch(e){
+    document.getElementById('searchMeta').textContent='0'+t('search.meta.results');
+    renderMemories([]);
+    document.getElementById('pagination').innerHTML='';
+  }
 }
 
 function debounceSearch(){
@@ -4361,6 +4410,21 @@ function ppDone(wasStopped,wasFailed,skipReload){
     document.getElementById('ppBar').style.background='linear-gradient(90deg,#22c55e,#16a34a)';
   }
   if(!skipReload) loadAll();
+}
+
+/* ─── Embedding Banner ─── */
+function showEmbeddingBanner(msg,type){
+  if(document.getElementById('embBanner')) return;
+  var cls=type==='error'?'emb-banner error':'emb-banner warning';
+  var icon=type==='error'?'\\u274C':'\\u26A0\\uFE0F';
+  var btn='<button class="emb-banner-btn" onclick="switchView(\\'settings\\');this.parentElement.remove()">'+t('embed.banner.goto')+'</button>';
+  var close='<button class="emb-banner-close" onclick="this.parentElement.remove()">&times;</button>';
+  var el=document.createElement('div');
+  el.id='embBanner';
+  el.className=cls;
+  el.innerHTML=icon+' <span>'+esc(msg)+'</span>'+btn+close;
+  var mc=document.querySelector('.main-content');
+  if(mc) mc.parentElement.insertBefore(el,mc);
 }
 
 /* ─── Toast ─── */
