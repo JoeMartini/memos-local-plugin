@@ -20,6 +20,9 @@
     "extensions": [
       "./index.ts"
     ],
+    "skills": [
+      "skill/memos-memory-guide"
+    ],
     "installDependencies": true
   },
   "scripts": {

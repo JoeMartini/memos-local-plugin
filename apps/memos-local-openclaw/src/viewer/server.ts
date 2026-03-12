@@ -235,7 +235,6 @@ export class ViewerServer {
       else if (p.startsWith("/api/skill/") && req.method === "DELETE") this.handleSkillDelete(res, p);
       else if (p.startsWith("/api/skill/") && req.method === "PUT") this.handleSkillUpdate(req, res, p);
       else if (p.startsWith("/api/skill/") && req.method === "GET") this.serveSkillDetail(res, p);
-      else if (p === "/api/memory" && req.method === "POST") this.handleCreate(req, res);
       else if (p.startsWith("/api/memory/") && req.method === "GET") this.serveMemoryDetail(res, p);
       else if (p.startsWith("/api/memory/") && req.method === "PUT") this.handleUpdate(req, res, p);
       else if (p.startsWith("/api/memory/") && req.method === "DELETE") this.handleDelete(res, p);
@@ -383,7 +382,6 @@ export class ViewerServer {
     const offset = (page - 1) * limit;
     const session = url.searchParams.get("session") ?? undefined;
     const role = url.searchParams.get("role") ?? undefined;
-    const kind = url.searchParams.get("kind") ?? undefined;
     const dateFrom = url.searchParams.get("dateFrom") ?? undefined;
     const dateTo = url.searchParams.get("dateTo") ?? undefined;
     const owner = url.searchParams.get("owner") ?? undefined;
@@ -394,7 +392,6 @@ export class ViewerServer {
     const params: any[] = [];
     if (session) { conditions.push("session_key = ?"); params.push(session); }
     if (role) { conditions.push("role = ?"); params.push(role); }
-    if (kind) { conditions.push("kind = ?"); params.push(kind); }
     if (owner) { conditions.push("owner = ?"); params.push(owner); }
     if (dateFrom) { conditions.push("created_at >= ?"); params.push(new Date(dateFrom).getTime()); }
     if (dateTo) { conditions.push("created_at <= ?"); params.push(new Date(dateTo).getTime()); }
@@ -402,9 +399,14 @@ export class ViewerServer {
     const where = conditions.length > 0 ? " WHERE " + conditions.join(" AND ") : "";
     const totalRow = db.prepare("SELECT COUNT(*) as count FROM chunks" + where).get(...params) as any;
     const rawMemories = db.prepare("SELECT * FROM chunks" + where + ` ORDER BY created_at ${sortBy} LIMIT ? OFFSET ?`).all(...params, limit, offset);
+    const findMergeSources = db.prepare("SELECT id, summary, role FROM chunks WHERE dedup_target = ? AND (dedup_status = 'merged' OR dedup_status = 'duplicate')");
     const memories = rawMemories.map((m: any) => {
       if (m.role === "user" && m.content) {
-        return { ...m, content: stripInboundMetadata(m.content) };
+        m = { ...m, content: stripInboundMetadata(m.content) };
+      }
+      if (m.merge_count > 0) {
+        const sources = findMergeSources.all(m.id) as Array<{ id: string; summary: string; role: string }>;
+        m.merge_sources = sources;
       }
       return m;
     });
@@ -442,7 +444,7 @@ export class ViewerServer {
         id: t.id,
         sessionKey: t.sessionKey,
         title: t.title,
-        summary: t.summary ? (t.summary.length > 300 ? t.summary.slice(0, 297) + "..." : t.summary) : "",
+        summary: t.summary ?? "",
         status: t.status,
         startedAt: t.startedAt,
         endedAt: t.endedAt,
@@ -465,8 +467,7 @@ export class ViewerServer {
 
     const chunks = this.store.getChunksByTask(taskId);
     const chunkItems = chunks.map((c) => {
-      let text = c.role === "user" ? stripInboundMetadata(c.content) : c.content;
-      if (text.length > 500) text = text.slice(0, 497) + "...";
+      const text = c.role === "user" ? stripInboundMetadata(c.content) : c.content;
       return { id: c.id, role: c.role, content: text, summary: c.summary, createdAt: c.createdAt };
     });
 
@@ -503,7 +504,7 @@ export class ViewerServer {
     const emptyStats = {
       totalMemories: 0, totalSessions: 0, totalEmbeddings: 0, totalSkills: 0,
       embeddingProvider: this.embedder?.provider ?? "none",
-      roleBreakdown: {}, kindBreakdown: {}, dedupBreakdown: {},
+      dedupBreakdown: {},
       timeRange: { earliest: null, latest: null },
       sessions: [],
     };
@@ -517,7 +518,6 @@ export class ViewerServer {
       const db = (this.store as any).db;
       const total = db.prepare("SELECT COUNT(*) as count FROM chunks").get() as any;
       const sessions = db.prepare("SELECT COUNT(DISTINCT session_key) as count FROM chunks").get() as any;
-      const roles = db.prepare("SELECT role, COUNT(*) as count FROM chunks GROUP BY role").all() as any[];
       const timeRange = db.prepare("SELECT MIN(created_at) as earliest, MAX(created_at) as latest FROM chunks WHERE dedup_status = 'active'").get() as any;
       const MIN_VALID_TS = 1704067200000; // 2024-01-01
       if (timeRange.earliest != null && timeRange.earliest < MIN_VALID_TS) {
@@ -529,7 +529,6 @@ export class ViewerServer {
       }
       let embCount = 0;
       try { embCount = (db.prepare("SELECT COUNT(*) as count FROM embeddings").get() as any).count; } catch { /* table may not exist */ }
-      const kinds = db.prepare("SELECT kind, COUNT(*) as count FROM chunks GROUP BY kind").all() as any[];
       const sessionList = db.prepare(
         "SELECT session_key, COUNT(*) as count, MIN(created_at) as earliest, MAX(created_at) as latest FROM chunks GROUP BY session_key ORDER BY latest DESC",
       ).all() as any[];
@@ -553,8 +552,6 @@ export class ViewerServer {
         totalMemories: total.count, totalSessions: sessions.count, totalEmbeddings: embCount,
         totalSkills: skillCount,
         embeddingProvider: this.embedder.provider,
-        roleBreakdown: Object.fromEntries(roles.map((r: any) => [r.role, r.count])),
-        kindBreakdown: Object.fromEntries(kinds.map((k: any) => [k.kind, k.count])),
         dedupBreakdown,
         timeRange: { earliest: timeRange.earliest, latest: timeRange.latest },
         sessions: sessionList,
@@ -571,7 +568,6 @@ export class ViewerServer {
     if (!q.trim()) { this.jsonResponse(res, { results: [], query: q }); return; }
 
     const role = url.searchParams.get("role") ?? undefined;
-    const kind = url.searchParams.get("kind") ?? undefined;
     const session = url.searchParams.get("session") ?? undefined;
     const owner = url.searchParams.get("owner") ?? undefined;
     const dateFrom = url.searchParams.get("dateFrom") ?? undefined;
@@ -579,7 +575,6 @@ export class ViewerServer {
 
     const passesFilter = (r: any): boolean => {
       if (role && r.role !== role) return false;
-      if (kind && r.kind !== kind) return false;
       if (session && r.session_key !== session) return false;
       if (owner && r.owner !== owner) return false;
       if (dateFrom && r.created_at < new Date(dateFrom).getTime()) return false;
@@ -921,35 +916,6 @@ export class ViewerServer {
 
   // ─── CRUD ───
 
-  private handleCreate(req: http.IncomingMessage, res: http.ServerResponse): void {
-    this.readBody(req, (body) => {
-      try {
-        const data = JSON.parse(body);
-        if (!data.content || typeof data.content !== "string" || !data.content.trim()) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "content is required and must be a non-empty string" }));
-          return;
-        }
-        const { v4: uuidv4 } = require("uuid");
-        const id = uuidv4();
-        const now = Date.now();
-        this.store.insertChunk({
-          id, sessionKey: data.session_key || "manual", turnId: `manual-${now}`, seq: 0,
-          role: data.role || "user", content: data.content, kind: data.kind || "paragraph",
-          summary: data.summary || data.content.slice(0, 100),
-          taskId: null, skillId: null, owner: data.owner || "agent:main",
-          dedupStatus: "active", dedupTarget: null, dedupReason: null,
-          mergeCount: 0, lastHitAt: null, mergeHistory: "[]",
-          createdAt: now, updatedAt: now, embedding: null,
-        });
-        this.jsonResponse(res, { ok: true, id, message: "Memory created" });
-      } catch (err) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(err) }));
-      }
-    });
-  }
-
   private serveMemoryDetail(res: http.ServerResponse, urlPath: string): void {
     const chunkId = urlPath.replace("/api/memory/", "");
     const chunk = this.store.getChunk(chunkId);
@@ -974,7 +940,7 @@ export class ViewerServer {
           res.end(JSON.stringify({ error: "content must be a non-empty string" }));
           return;
         }
-        const ok = this.store.updateChunk(chunkId, { summary: data.summary, content: data.content, role: data.role, kind: data.kind, owner: data.owner });
+        const ok = this.store.updateChunk(chunkId, { summary: data.summary, content: data.content, role: data.role, owner: data.owner });
         if (ok) this.jsonResponse(res, { ok: true, message: "Memory updated" });
         else { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Not found" })); }
       } catch (err) {

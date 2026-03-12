@@ -270,10 +270,77 @@ try {
 }
 
 /* ═══════════════════════════════════════════════════════════
- *  Phase 2: Verify better-sqlite3 native module
+ *  Phase 2: Install bundled skill (memos-memory-guide)
  * ═══════════════════════════════════════════════════════════ */
 
-phase(2, "检查 better-sqlite3 原生模块 / Check native module");
+function installBundledSkill() {
+  phase(2, "安装记忆技能 / Install memory skill");
+
+  const home = process.env.HOME || process.env.USERPROFILE || "";
+  if (!home) { warn("Cannot determine HOME directory, skipping skill install."); return; }
+
+  const skillSrc = path.join(pluginDir, "skill", "memos-memory-guide", "SKILL.md");
+  if (!fs.existsSync(skillSrc)) {
+    warn("Bundled SKILL.md not found, skipping skill install.");
+    return;
+  }
+
+  let pluginVersion = "0.0.0";
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(pluginDir, "package.json"), "utf-8"));
+    pluginVersion = pkg.version || pluginVersion;
+  } catch { /* ignore */ }
+
+  const skillContent = fs.readFileSync(skillSrc, "utf-8");
+  const targets = [
+    path.join(home, ".openclaw", "workspace", "skills", "memos-memory-guide"),
+    path.join(home, ".openclaw", "skills", "memos-memory-guide"),
+  ];
+
+  const meta = JSON.stringify({ ownerId: "memos-local-openclaw-plugin", slug: "memos-memory-guide", version: pluginVersion, publishedAt: Date.now() });
+  const origin = JSON.stringify({ version: 1, registry: "memos-local-openclaw-plugin", slug: "memos-memory-guide", installedVersion: pluginVersion, installedAt: Date.now() });
+
+  for (const dest of targets) {
+    try {
+      fs.mkdirSync(dest, { recursive: true });
+      fs.writeFileSync(path.join(dest, "SKILL.md"), skillContent, "utf-8");
+      fs.writeFileSync(path.join(dest, "_meta.json"), meta, "utf-8");
+      const clawHubDir = path.join(dest, ".clawhub");
+      fs.mkdirSync(clawHubDir, { recursive: true });
+      fs.writeFileSync(path.join(clawHubDir, "origin.json"), origin, "utf-8");
+      ok(`Skill installed → ${DIM}${dest}${RESET}`);
+    } catch (e) {
+      warn(`Could not install skill to ${dest}: ${e.message}`);
+    }
+  }
+
+  // Register in skills-lock.json so OpenClaw Dashboard can discover it
+  const lockPath = path.join(home, ".openclaw", "workspace", "skills-lock.json");
+  try {
+    let lockData = { version: 1, skills: {} };
+    if (fs.existsSync(lockPath)) {
+      lockData = JSON.parse(fs.readFileSync(lockPath, "utf-8"));
+    }
+    if (!lockData.skills) lockData.skills = {};
+    lockData.skills["memos-memory-guide"] = { source: "memos-local-openclaw-plugin", sourceType: "plugin", computedHash: "" };
+    fs.writeFileSync(lockPath, JSON.stringify(lockData, null, 2) + "\n", "utf-8");
+    ok("Registered in skills-lock.json");
+  } catch (e) {
+    warn(`Could not update skills-lock.json: ${e.message}`);
+  }
+}
+
+try {
+  installBundledSkill();
+} catch (e) {
+  warn(`Skill install error: ${e.message}`);
+}
+
+/* ═══════════════════════════════════════════════════════════
+ *  Phase 3: Verify better-sqlite3 native module
+ * ═══════════════════════════════════════════════════════════ */
+
+phase(3, "检查 better-sqlite3 原生模块 / Check native module");
 
 const sqliteModulePath = path.join(pluginDir, "node_modules", "better-sqlite3");
 

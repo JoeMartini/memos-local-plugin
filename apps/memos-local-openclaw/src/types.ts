@@ -55,14 +55,7 @@ export interface Task {
   updatedAt: number;
 }
 
-export type ChunkKind =
-  | "paragraph"
-  | "code_block"
-  | "error_stack"
-  | "command"
-  | "list"
-  | "mixed"
-  | "tool_result";
+export type ChunkKind = "paragraph";
 
 export interface ChunkRef {
   sessionKey: string;
@@ -294,7 +287,7 @@ export const DEFAULTS = {
   mmrLambda: 0.7,
   recencyHalfLifeDays: 14,
   vectorSearchMaxChunks: 0,
-  dedupSimilarityThreshold: 0.60,
+  dedupSimilarityThreshold: 0.80,
   evidenceWrapperTag: "STORED_MEMORY",
   excerptMinChars: 200,
   excerptMaxChars: 500,

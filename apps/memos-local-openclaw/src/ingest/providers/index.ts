@@ -1,12 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { SummarizerConfig, Logger } from "../../types";
-import { summarizeOpenAI, summarizeTaskOpenAI, judgeNewTopicOpenAI, filterRelevantOpenAI, judgeDedupOpenAI } from "./openai";
+import { summarizeOpenAI, summarizeTaskOpenAI, generateTaskTitleOpenAI, judgeNewTopicOpenAI, filterRelevantOpenAI, judgeDedupOpenAI } from "./openai";
 import type { FilterResult, DedupResult } from "./openai";
 export type { FilterResult, DedupResult } from "./openai";
-import { summarizeAnthropic, summarizeTaskAnthropic, judgeNewTopicAnthropic, filterRelevantAnthropic, judgeDedupAnthropic } from "./anthropic";
-import { summarizeGemini, summarizeTaskGemini, judgeNewTopicGemini, filterRelevantGemini, judgeDedupGemini } from "./gemini";
-import { summarizeBedrock, summarizeTaskBedrock, judgeNewTopicBedrock, filterRelevantBedrock, judgeDedupBedrock } from "./bedrock";
+import { summarizeAnthropic, summarizeTaskAnthropic, generateTaskTitleAnthropic, judgeNewTopicAnthropic, filterRelevantAnthropic, judgeDedupAnthropic } from "./anthropic";
+import { summarizeGemini, summarizeTaskGemini, generateTaskTitleGemini, judgeNewTopicGemini, filterRelevantGemini, judgeDedupGemini } from "./gemini";
+import { summarizeBedrock, summarizeTaskBedrock, generateTaskTitleBedrock, judgeNewTopicBedrock, filterRelevantBedrock, judgeDedupBedrock } from "./bedrock";
 
 /**
  * Build a SummarizerConfig from OpenClaw's native model configuration (openclaw.json).
@@ -163,34 +163,52 @@ export class Summarizer {
   }
 
   async summarize(text: string): Promise<string> {
+    const cleaned = stripMarkdown(text).trim();
+
+    if (wordCount(cleaned) <= 10) {
+      return cleaned;
+    }
+
     if (!this.cfg && !this.fallbackCfg) {
-      return ruleFallback(text);
+      return ruleFallback(cleaned);
     }
 
-    const result = await this.tryChain("summarize", (cfg) => callSummarize(cfg, text, this.log));
+    const accept = (s: string | undefined): s is string =>
+      !!s && s.length > 0 && s.length < cleaned.length;
 
-    if (result && result.length < text.length) {
-      return result;
-    }
+    let llmCalled = false;
+    try {
+      const result = await this.tryChain("summarize", (cfg) => callSummarize(cfg, text, this.log));
+      llmCalled = true;
+      const resultCleaned = result ? stripMarkdown(result).trim() : undefined;
 
-    if (result) {
-      this.log.warn(`summarize: result (${result.length} chars) >= input (${text.length} chars), retrying with fallback`);
+      if (accept(resultCleaned)) {
+        return resultCleaned;
+      }
+
+      if (resultCleaned) {
+        this.log.warn(`summarize: result (${resultCleaned.length}) >= input (${cleaned.length}), retrying`);
+      }
+    } catch (err) {
+      this.log.warn(`summarize primary failed: ${err}`);
     }
 
     const fallback = this.fallbackCfg ?? this.cfg;
     if (fallback) {
       try {
         const retry = await callSummarize(fallback, text, this.log);
-        if (retry && retry.length < text.length) {
+        llmCalled = true;
+        const retryCleaned = retry ? stripMarkdown(retry).trim() : undefined;
+        if (accept(retryCleaned)) {
           modelHealth.recordSuccess("summarize", `${fallback.provider}/${fallback.model ?? "?"}`);
-          return retry;
+          return retryCleaned;
         }
       } catch (err) {
         this.log.warn(`summarize fallback retry failed: ${err}`);
       }
     }
 
-    return ruleFallback(text);
+    return llmCalled ? cleaned : ruleFallback(cleaned);
   }
 
   async summarizeTask(text: string): Promise<string> {
@@ -200,6 +218,12 @@ export class Summarizer {
 
     const result = await this.tryChain("summarizeTask", (cfg) => callSummarizeTask(cfg, text, this.log));
     return result ?? taskFallback(text);
+  }
+
+  async generateTaskTitle(text: string): Promise<string> {
+    if (!this.cfg && !this.fallbackCfg) return "";
+    const result = await this.tryChain("generateTaskTitle", (cfg) => callGenerateTaskTitle(cfg, text, this.log));
+    return result ?? "";
   }
 
   async judgeNewTopic(currentContext: string, newMessage: string): Promise<boolean | null> {
@@ -226,7 +250,7 @@ export class Summarizer {
 
   async filterRelevant(
     query: string,
-    candidates: Array<{ index: number; summary: string; role: string }>,
+    candidates: Array<{ index: number; role: string; content: string; time?: string }>,
   ): Promise<FilterResult | null> {
     if (!this.cfg && !this.fallbackCfg) return null;
     if (candidates.length === 0) return { relevant: [], sufficient: true };
@@ -287,6 +311,23 @@ function callSummarizeTask(cfg: SummarizerConfig, text: string, log: Logger): Pr
   }
 }
 
+function callGenerateTaskTitle(cfg: SummarizerConfig, text: string, log: Logger): Promise<string> {
+  switch (cfg.provider) {
+    case "openai":
+    case "openai_compatible":
+    case "azure_openai":
+      return generateTaskTitleOpenAI(text, cfg, log);
+    case "anthropic":
+      return generateTaskTitleAnthropic(text, cfg, log);
+    case "gemini":
+      return generateTaskTitleGemini(text, cfg, log);
+    case "bedrock":
+      return generateTaskTitleBedrock(text, cfg, log);
+    default:
+      throw new Error(`Unknown summarizer provider: ${cfg.provider}`);
+  }
+}
+
 function callTopicJudge(cfg: SummarizerConfig, currentContext: string, newMessage: string, log: Logger): Promise<boolean> {
   switch (cfg.provider) {
     case "openai":
@@ -304,7 +345,7 @@ function callTopicJudge(cfg: SummarizerConfig, currentContext: string, newMessag
   }
 }
 
-function callFilterRelevant(cfg: SummarizerConfig, query: string, candidates: Array<{ index: number; summary: string; role: string }>, log: Logger): Promise<FilterResult> {
+function callFilterRelevant(cfg: SummarizerConfig, query: string, candidates: Array<{ index: number; role: string; content: string; time?: string }>, log: Logger): Promise<FilterResult> {
   switch (cfg.provider) {
     case "openai":
     case "openai_compatible":
@@ -340,29 +381,34 @@ function callJudgeDedup(cfg: SummarizerConfig, newSummary: string, candidates: A
 
 // ─── Fallbacks ───
 
+function ruleFallback(text: string): string {
+  const lines = text.split("\n").filter((l) => l.trim().length > 5);
+  return (lines[0] ?? text).trim();
+}
+
 function taskFallback(text: string): string {
   const lines = text.split("\n").filter((l) => l.trim().length > 10);
   return lines.slice(0, 30).join("\n").slice(0, 2000);
 }
 
-function ruleFallback(text: string): string {
-  const lines = text.split("\n").filter((l) => l.trim().length > 10);
-  const first = (lines[0] ?? text).trim();
-
-  const entityRe = [/`[^`]+`/g, /\b(?:error|Error|ERROR)\s*[:：]\s*.{5,60}/g];
-  const entities: string[] = [];
-  for (const re of entityRe) {
-    for (const m of text.matchAll(re)) {
-      if (entities.length < 3) entities.push(m[0].slice(0, 50));
-    }
-  }
-
-  const maxLen = Math.min(120, text.length - 1);
-  if (maxLen <= 0) return text;
-  let summary = first.length > maxLen ? first.slice(0, maxLen - 3) + "..." : first;
-  if (entities.length > 0) {
-    const suffix = ` (${entities.join(", ")})`;
-    if (summary.length + suffix.length <= maxLen) summary += suffix;
-  }
-  return summary.slice(0, maxLen);
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .trim();
 }
+
+/** Count "words": CJK characters count as 1 word each, latin words separated by spaces. */
+function wordCount(text: string): number {
+  let count = 0;
+  const cjk = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g;
+  const cjkMatches = text.match(cjk);
+  if (cjkMatches) count += cjkMatches.length;
+  const noCjk = text.replace(cjk, " ").trim();
+  if (noCjk) count += noCjk.split(/\s+/).filter(Boolean).length;
+  return count;
+}
+

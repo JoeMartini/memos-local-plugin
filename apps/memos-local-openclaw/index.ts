@@ -23,43 +23,6 @@ import { Summarizer } from "./src/ingest/providers";
 import { MEMORY_GUIDE_SKILL_MD } from "./src/skill/bundled-memory-guide";
 import { Telemetry } from "./src/telemetry";
 
-async function checkForUpdate(log: { info: (m: string) => void; warn: (m: string) => void }, pluginDir: string): Promise<void> {
-  try {
-    const pkgPath = path.join(pluginDir, "package.json");
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-    const currentVersion = pkg.version;
-    const packageName = pkg.name;
-    if (!currentVersion || !packageName) return;
-
-    const { computeUpdateCheck } = await import("./src/update-check");
-    const result = await computeUpdateCheck(packageName, currentVersion, fetch, 8_000);
-    if (!result) return;
-
-    if (result.updateAvailable) {
-      const msg = [
-        "",
-        "╔══════════════════════════════════════════════════════════════╗",
-        "║  MemOS Local Memory — New version available!               ║",
-        "╠══════════════════════════════════════════════════════════════╣",
-        `║  Current: ${result.current.padEnd(12)}  Latest (${result.channel}): ${result.latest.padEnd(10)}   ║`,
-        "║                                                            ║",
-        "║  Update:                                                   ║",
-        `║  ${result.installCommand.padEnd(58)}║`,
-        "║                                                            ║",
-        "╚══════════════════════════════════════════════════════════════╝",
-        "",
-      ].join("\n");
-      log.warn(`memos-local: ${msg}`);
-    } else {
-      log.info(`memos-local: version ${currentVersion} is up to date (${result.channel})`);
-      if (result.stableChannel) {
-        log.info(`memos-local: stable channel is v${result.stableChannel.version} — switch: ${result.stableChannel.installCommand}`);
-      }
-    }
-  } catch {
-    // Silent fail — update check is best-effort
-  }
-}
 
 /** Remove near-duplicate hits based on summary word overlap (>70%). Keeps first (highest-scored) hit. */
 function deduplicateHits<T extends { summary: string }>(hits: T[]): T[] {
@@ -133,44 +96,37 @@ const memosLocalPlugin = {
     sqliteReady = trySqliteLoad();
 
     if (!sqliteReady) {
-      api.logger.warn(`memos-local: better-sqlite3 not found in ${pluginDir}, attempting auto-fix ...`);
+      api.logger.warn(`memos-local: better-sqlite3 not found in ${pluginDir}, attempting auto-rebuild ...`);
 
-      const { spawnSync } = require("child_process");
-      const clearCache = () => {
-        Object.keys(require.cache)
-          .filter(k => k.includes("better-sqlite3") || k.includes("better_sqlite3"))
-          .forEach(k => delete require.cache[k]);
-      };
+      try {
+        const { spawnSync } = require("child_process");
+        const rebuildResult = spawnSync("npm", ["rebuild", "better-sqlite3"], {
+          cwd: pluginDir,
+          stdio: "pipe",
+          shell: true,
+          timeout: 120_000,
+        });
 
-      const strategies = [
-        { label: "npm rebuild better-sqlite3", cmd: ["npm", ["rebuild", "better-sqlite3"]] },
-        { label: "npm install better-sqlite3 --no-save", cmd: ["npm", ["install", "better-sqlite3", "--no-save"]] },
-        { label: "full npm install", cmd: ["npm", ["install", "--omit=dev"]] },
-      ] as const;
+        const stdout = rebuildResult.stdout?.toString() || "";
+        const stderr = rebuildResult.stderr?.toString() || "";
+        if (stdout) api.logger.info(`memos-local: rebuild stdout: ${stdout.slice(0, 500)}`);
+        if (stderr) api.logger.warn(`memos-local: rebuild stderr: ${stderr.slice(0, 500)}`);
 
-      for (const { label, cmd } of strategies) {
-        if (sqliteReady) break;
-        api.logger.info(`memos-local: trying ${label} ...`);
-        try {
-          const r = spawnSync(cmd[0], cmd[1], {
-            cwd: pluginDir, stdio: "pipe", shell: true, timeout: 180_000,
-          });
-          const out = r.stdout?.toString()?.slice(0, 300) || "";
-          const err = r.stderr?.toString()?.slice(0, 300) || "";
-          if (out) api.logger.info(`memos-local: ${label} stdout: ${out}`);
-          if (err && r.status !== 0) api.logger.warn(`memos-local: ${label} stderr: ${err}`);
-          if (r.status === 0) {
-            clearCache();
-            sqliteReady = trySqliteLoad();
-            if (sqliteReady) {
-              api.logger.info(`memos-local: better-sqlite3 fixed via "${label}"`);
-            }
+        if (rebuildResult.status === 0) {
+          Object.keys(require.cache)
+            .filter(k => k.includes("better-sqlite3") || k.includes("better_sqlite3"))
+            .forEach(k => delete require.cache[k]);
+          sqliteReady = trySqliteLoad();
+          if (sqliteReady) {
+            api.logger.info("memos-local: better-sqlite3 auto-rebuild succeeded!");
           } else {
-            api.logger.warn(`memos-local: ${label} exited with code ${r.status}`);
+            api.logger.warn("memos-local: rebuild exited 0 but module still not loadable from plugin dir");
           }
-        } catch (e) {
-          api.logger.warn(`memos-local: ${label} error: ${e}`);
+        } else {
+          api.logger.warn(`memos-local: rebuild exited with code ${rebuildResult.status}`);
         }
+      } catch (rebuildErr) {
+        api.logger.warn(`memos-local: auto-rebuild error: ${rebuildErr}`);
       }
 
       if (!sqliteReady) {
@@ -245,6 +201,29 @@ const memosLocalPlugin = {
       ctx.log.warn(`memos-local: could not write to managed skills dir: ${e}`);
     }
 
+    // Ensure plugin tools are enabled in openclaw.json tools.allow
+    try {
+      const openclawJsonPath = path.join(stateDir, "openclaw.json");
+      if (fs.existsSync(openclawJsonPath)) {
+        const raw = fs.readFileSync(openclawJsonPath, "utf-8");
+        const cfg = JSON.parse(raw);
+        const allow: string[] | undefined = cfg?.tools?.allow;
+        if (Array.isArray(allow) && allow.length > 0 && !allow.includes("group:plugins")) {
+          const lastEntry = JSON.stringify(allow[allow.length - 1]);
+          const patched = raw.replace(
+            new RegExp(`(${lastEntry})(\\s*\\])`),
+            `$1,\n      "group:plugins"$2`,
+          );
+          if (patched !== raw && patched.includes("group:plugins")) {
+            fs.writeFileSync(openclawJsonPath, patched, "utf-8");
+            ctx.log.info("memos-local: added 'group:plugins' to tools.allow in openclaw.json");
+          }
+        }
+      }
+    } catch (e) {
+      ctx.log.warn(`memos-local: could not patch tools.allow: ${e}`);
+    }
+
     worker.getTaskProcessor().onTaskCompleted((task) => {
       skillEvolver.onTaskCompleted(task).catch((err) => {
         ctx.log.warn(`SkillEvolver async error: ${err}`);
@@ -255,8 +234,9 @@ const memosLocalPlugin = {
 
     api.logger.info(`memos-local: initialized (db: ${ctx.config.storage!.dbPath})`);
 
-    // Non-blocking update check
-    checkForUpdate(api.logger, pluginDir).catch(() => {});
+    // Current agent ID — updated by hooks, read by tools for owner isolation.
+    // Falls back to "main" when no hook has fired yet (single-agent setups).
+    let currentAgentId = "main";
 
     const trackTool = (toolName: string, fn: (...args: any[]) => Promise<any>) =>
       async (...args: any[]) => {
@@ -275,8 +255,17 @@ const memosLocalPlugin = {
           store.recordToolCall(toolName, dur, ok);
           telemetry.trackToolCalled(toolName, dur, ok);
           try {
-            const outputText = result?.content?.[0]?.text ?? JSON.stringify(result ?? "");
-            store.recordApiLog(toolName, inputParams, outputText, dur, ok);
+            let outputText: string;
+            const det = result?.details;
+            if (det && Array.isArray(det.candidates)) {
+              outputText = JSON.stringify({
+                candidates: det.candidates,
+                filtered: det.hits ?? det.filtered ?? [],
+              });
+            } else {
+              outputText = result?.content?.[0]?.text ?? JSON.stringify(result ?? "");
+            }
+            store.recordApiLog(toolName, { ...inputParams, type: "tool_call" }, outputText, dur, ok);
           } catch (_) { /* best-effort */ }
         }
       };
@@ -290,33 +279,35 @@ const memosLocalPlugin = {
         description:
           "Search long-term conversation memory for past conversations, user preferences, decisions, and experiences. " +
           "Relevant memories are automatically injected at the start of each turn, but call this tool when you need " +
-          "to search with a different query, narrow by role, or the auto-recalled context is insufficient.\n\n" +
-          "Use role='user' to find what the user actually said.",
+          "to search with a different query or the auto-recalled context is insufficient. " +
+          "Pass only a short natural-language query (2-5 key words).",
         parameters: Type.Object({
-          query: Type.String({ description: "Natural language search query" }),
-          maxResults: Type.Optional(Type.Number({ description: "Max results (default 20, max 20)" })),
-          minScore: Type.Optional(Type.Number({ description: "Min score 0-1 (default 0.45, floor 0.35)" })),
-          role: Type.Optional(Type.String({ description: "Filter by role: 'user', 'assistant', or 'tool'. Use 'user' to find what the user said." })),
+          query: Type.String({ description: "Short natural language search query (2-5 key words)" }),
         }),
         execute: trackTool("memory_search", async (_toolCallId: any, params: any) => {
-          const { query, maxResults, minScore, role } = params as {
-            query: string;
-            maxResults?: number;
-            minScore?: number;
-            role?: string;
-          };
+          const { query } = params as { query: string };
+          const role = undefined;
+          const minScore = undefined;
 
-          const agentId = (params as any).agentId ?? "main";
+          const agentId = currentAgentId;
           const ownerFilter = [`agent:${agentId}`, "public"];
-          const effectiveMaxResults = maxResults ?? 20;
+          const effectiveMaxResults = 10;
           ctx.log.debug(`memory_search query="${query}" maxResults=${effectiveMaxResults} minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId}`);
           const result = await engine.search({ query, maxResults: effectiveMaxResults, minScore, role, ownerFilter });
           ctx.log.debug(`memory_search raw candidates: ${result.hits.length}`);
 
+          const rawCandidates = result.hits.map((h) => ({
+            chunkId: h.ref.chunkId,
+            role: h.source.role,
+            score: h.score,
+            summary: h.summary,
+            original_excerpt: (h.original_excerpt ?? "").slice(0, 200),
+          }));
+
           if (result.hits.length === 0) {
             return {
               content: [{ type: "text", text: result.meta.note ?? "No relevant memories found." }],
-              details: { meta: result.meta },
+              details: { candidates: [], meta: result.meta },
             };
           }
 
@@ -326,8 +317,9 @@ const memosLocalPlugin = {
 
           const candidates = result.hits.map((h, i) => ({
             index: i + 1,
-            summary: h.summary,
             role: h.source.role,
+            content: (h.original_excerpt ?? "").slice(0, 300),
+            time: h.source.ts ? new Date(h.source.ts).toISOString().slice(0, 16) : "",
           }));
 
           const filterResult = await summarizer.filterRelevant(query, candidates);
@@ -340,7 +332,7 @@ const memosLocalPlugin = {
             } else {
               return {
                 content: [{ type: "text", text: "No relevant memories found for this query." }],
-                details: { meta: result.meta },
+                details: { candidates: rawCandidates, filtered: [], meta: result.meta },
               };
             }
           }
@@ -348,7 +340,7 @@ const memosLocalPlugin = {
           if (filteredHits.length === 0) {
             return {
               content: [{ type: "text", text: "No relevant memories found for this query." }],
-              details: { meta: result.meta },
+              details: { candidates: rawCandidates, filtered: [], meta: result.meta },
             };
           }
 
@@ -357,9 +349,7 @@ const memosLocalPlugin = {
           ctx.log.debug(`memory_search dedup: ${beforeDedup} → ${filteredHits.length}`);
 
           const lines = filteredHits.map((h, i) => {
-            const excerpt = h.original_excerpt.length > 300
-              ? h.original_excerpt.slice(0, 297) + "..."
-              : h.original_excerpt;
+            const excerpt = h.original_excerpt;
             const parts = [`${i + 1}. [${h.source.role}]`];
             if (excerpt) parts.push(`   ${excerpt}`);
             parts.push(`   chunkId="${h.ref.chunkId}"`);
@@ -400,6 +390,7 @@ const memosLocalPlugin = {
               },
             ],
             details: {
+              candidates: rawCandidates,
               hits: filteredHits.map((h) => {
                 let effectiveTaskId = h.taskId;
                 if (effectiveTaskId) {
@@ -412,6 +403,8 @@ const memosLocalPlugin = {
                   skillId: h.skillId,
                   role: h.source.role,
                   score: h.score,
+                  summary: h.summary,
+                  original_excerpt: (h.original_excerpt ?? "").slice(0, 200),
                 };
               }),
               meta: result.meta,
@@ -436,13 +429,14 @@ const memosLocalPlugin = {
           window: Type.Optional(Type.Number({ description: "Context window ±N (default 2)" })),
         }),
         execute: trackTool("memory_timeline", async (_toolCallId: any, params: any) => {
-          ctx.log.debug(`memory_timeline called`);
+          ctx.log.debug(`memory_timeline called (agent=${currentAgentId})`);
           const { chunkId, window: win } = params as {
             chunkId: string;
             window?: number;
           };
 
-          const anchorChunk = store.getChunk(chunkId);
+          const ownerFilter = [`agent:${currentAgentId}`, "public"];
+          const anchorChunk = store.getChunkForOwners(chunkId, ownerFilter);
           if (!anchorChunk) {
             return {
               content: [{ type: "text", text: `Chunk not found: ${chunkId}` }],
@@ -451,7 +445,7 @@ const memosLocalPlugin = {
           }
 
           const w = win ?? DEFAULTS.timelineWindowDefault;
-          const neighbors = store.getNeighborChunks(anchorChunk.sessionKey, anchorChunk.turnId, anchorChunk.seq, w);
+          const neighbors = store.getNeighborChunks(anchorChunk.sessionKey, anchorChunk.turnId, anchorChunk.seq, w, ownerFilter);
           const anchorTs = anchorChunk?.createdAt ?? 0;
 
           const entries = neighbors.map((chunk) => {
@@ -462,14 +456,14 @@ const memosLocalPlugin = {
             return {
               relation,
               role: chunk.role,
-              excerpt: chunk.content.slice(0, DEFAULTS.excerptMaxChars),
+              excerpt: chunk.content,
               ts: chunk.createdAt,
             };
           });
 
           const rl = (r: string) => r === "user" ? "USER" : r === "assistant" ? "ASSISTANT" : r.toUpperCase();
           const text = entries
-            .map((e) => `[${e.relation}] ${rl(e.role)}: ${e.excerpt.slice(0, 150)}`)
+            .map((e) => `[${e.relation}] ${rl(e.role)}: ${e.excerpt}`)
             .join("\n");
 
           return {
@@ -499,7 +493,8 @@ const memosLocalPlugin = {
           const { chunkId, maxChars } = params as { chunkId: string; maxChars?: number };
           const limit = Math.min(maxChars ?? DEFAULTS.getMaxCharsDefault, DEFAULTS.getMaxCharsMax);
 
-          const chunk = store.getChunk(chunkId);
+          const ownerFilter = [`agent:${currentAgentId}`, "public"];
+          const chunk = store.getChunkForOwners(chunkId, ownerFilter);
           if (!chunk) {
             return {
               content: [{ type: "text", text: `Chunk not found: ${chunkId}` }],
@@ -507,9 +502,7 @@ const memosLocalPlugin = {
             };
           }
 
-          const content = chunk.content.length > limit
-            ? chunk.content.slice(0, limit) + "\u2026"
-            : chunk.content;
+          const content = chunk.content;
 
           const who = chunk.role === "user" ? "USER said" : chunk.role === "assistant" ? "ASSISTANT replied" : chunk.role === "tool" ? "TOOL returned" : chunk.role.toUpperCase();
 
@@ -766,7 +759,7 @@ const memosLocalPlugin = {
           const { v4: uuidv4 } = require("uuid");
           const now = Date.now();
           const chunkId = uuidv4();
-          const chunkSummary = writeSummary ?? writeContent.slice(0, 200);
+          const chunkSummary = writeSummary ?? writeContent;
 
           store.insertChunk({
             id: chunkId,
@@ -823,8 +816,7 @@ const memosLocalPlugin = {
         execute: trackTool("skill_search", async (_toolCallId: any, params: any) => {
           const { query: skillQuery, scope: rawScope } = params as { query: string; scope?: string };
           const scope = (rawScope === "self" || rawScope === "public") ? rawScope : "mix";
-          const skillAgentId = (params as any).agentId ?? "main";
-          const currentOwner = `agent:${skillAgentId}`;
+          const currentOwner = `agent:${currentAgentId}`;
 
           const hits = await engine.searchSkills(skillQuery, scope as any, currentOwner);
 
@@ -836,7 +828,7 @@ const memosLocalPlugin = {
           }
 
           const text = hits.map((h, i) =>
-            `${i + 1}. [${h.name}] ${h.description.slice(0, 150)}${h.visibility === "public" ? " (public)" : ""}`,
+            `${i + 1}. [${h.name}] ${h.description}${h.visibility === "public" ? " (public)" : ""}`,
           ).join("\n");
 
           return {
@@ -902,17 +894,13 @@ const memosLocalPlugin = {
 
     // ─── Auto-recall: inject relevant memories before agent starts ───
 
-    // Track recalled chunk IDs per turn to avoid re-storing them in agent_end
-    let lastRecalledChunkIds: Set<string> = new Set();
-    let lastRecalledSummaries: string[] = [];
-
-    api.on("before_agent_start", async (event: { prompt?: string; messages?: unknown[]; agentId?: string }) => {
-      lastRecalledChunkIds = new Set();
-      lastRecalledSummaries = [];
+    api.on("before_agent_start", async (event: { prompt?: string; messages?: unknown[] }, hookCtx?: { agentId?: string; sessionKey?: string }) => {
       if (!event.prompt || event.prompt.length < 3) return;
 
-      const recallAgentId = (event as any).agentId ?? "main";
+      const recallAgentId = hookCtx?.agentId ?? "main";
+      currentAgentId = recallAgentId;
       const recallOwnerFilter = [`agent:${recallAgentId}`, "public"];
+      ctx.log.info(`auto-recall: agentId=${recallAgentId} (from hookCtx)`);
 
       const recallT0 = performance.now();
       let recallQuery = "";
@@ -922,10 +910,20 @@ const memosLocalPlugin = {
         ctx.log.debug(`auto-recall: rawPrompt="${rawPrompt.slice(0, 300)}"`);
 
         let query = rawPrompt;
-        const lastDoubleNewline = rawPrompt.lastIndexOf("\n\n");
-        if (lastDoubleNewline > 0 && lastDoubleNewline < rawPrompt.length - 3) {
-          const tail = rawPrompt.slice(lastDoubleNewline + 2).trim();
-          if (tail.length >= 2) query = tail;
+        const senderTag = "Sender (untrusted metadata):";
+        const senderPos = rawPrompt.indexOf(senderTag);
+        if (senderPos !== -1) {
+          const afterSender = rawPrompt.slice(senderPos);
+          const fenceStart = afterSender.indexOf("```json");
+          const fenceEnd = fenceStart >= 0 ? afterSender.indexOf("```\n", fenceStart + 7) : -1;
+          if (fenceEnd > 0) {
+            query = afterSender.slice(fenceEnd + 4).replace(/^\s*\n/, "").trim();
+          } else {
+            const firstDblNl = afterSender.indexOf("\n\n");
+            if (firstDblNl > 0) {
+              query = afterSender.slice(firstDblNl + 2).trim();
+            }
+          }
         }
         query = stripInboundMetadata(query);
         query = query.replace(/<[^>]+>/g, "").trim();
@@ -937,25 +935,28 @@ const memosLocalPlugin = {
         }
         ctx.log.debug(`auto-recall: query="${query.slice(0, 80)}"`);
 
-        const result = await engine.search({ query, maxResults: 20, minScore: 0.45, ownerFilter: recallOwnerFilter });
+        const result = await engine.search({ query, maxResults: 10, minScore: 0.45, ownerFilter: recallOwnerFilter });
         if (result.hits.length === 0) {
           ctx.log.debug("auto-recall: no candidates found");
           const dur = performance.now() - recallT0;
           store.recordToolCall("memory_search", dur, true);
-          store.recordApiLog("memory_search", { query }, "no hits", dur, true);
-          const noRecallHint =
-            "## Memory system\n\nNo memories were automatically recalled for this turn (e.g. the user's message was long, vague, or no matching history). " +
-            "You may still have relevant past context — call the **memory_search** tool with a **short, focused query** you generate yourself " +
-            "(e.g. key topics, names, or a rephrased question) to search the user's conversation history.";
-          return { systemPrompt: noRecallHint };
+          store.recordApiLog("memory_search", { type: "auto_recall", query }, JSON.stringify({ candidates: [], filtered: [] }), dur, true);
+          if (query.length > 50) {
+            const noRecallHint =
+              "## Memory system — ACTION REQUIRED\n\n" +
+              "Auto-recall found no results for a long query. " +
+              "You MUST call `memory_search` now with a shortened query (2-5 key words) before answering. " +
+              "Do NOT skip this step. Do NOT answer without searching first.";
+            return { prependContext: noRecallHint };
+          }
+          return;
         }
-
-        ctx.log.debug(`auto-recall: engine returned ${result.hits.length} hits (scores: ${result.hits.map(h => h.score.toFixed(3)).join(",")})`);
 
         const candidates = result.hits.map((h, i) => ({
           index: i + 1,
-          summary: h.summary,
           role: h.source.role,
+          content: (h.original_excerpt ?? "").slice(0, 300),
+          time: h.source.ts ? new Date(h.source.ts).toISOString().slice(0, 16) : "",
         }));
 
         let filteredHits = result.hits;
@@ -963,7 +964,6 @@ const memosLocalPlugin = {
 
         const filterResult = await summarizer.filterRelevant(query, candidates);
         if (filterResult !== null) {
-          ctx.log.debug(`auto-recall: LLM filter returned relevant=[${filterResult.relevant.join(",")}] sufficient=${filterResult.sufficient} (from ${candidates.length} candidates)`);
           sufficient = filterResult.sufficient;
           if (filterResult.relevant.length > 0) {
             const indexSet = new Set(filterResult.relevant);
@@ -972,30 +972,19 @@ const memosLocalPlugin = {
             ctx.log.debug("auto-recall: LLM filter returned no relevant hits");
             const dur = performance.now() - recallT0;
             store.recordToolCall("memory_search", dur, true);
-            store.recordApiLog("memory_search", { query }, `${result.hits.length} candidates (scores: ${result.hits.map(h => h.score.toFixed(3)).join(",")}) → 0 relevant`, dur, true);
-            const noRecallHint =
-              "## Memory system\n\nNo memories were automatically recalled for this turn (e.g. the user's message was long, vague, or no matching history). " +
-              "You may still have relevant past context — call the **memory_search** tool with a **short, focused query** you generate yourself " +
-              "(e.g. key topics, names, or a rephrased question) to search the user's conversation history.";
-            return { systemPrompt: noRecallHint };
-          }
-        } else {
-          // LLM filter unavailable (all models failed/timed out).
-          // Fallback: only keep top candidates with score >= 0.6 (normalized),
-          // capped at 5 to avoid flooding the context with noise.
-          const FALLBACK_MIN_SCORE = 0.6;
-          const FALLBACK_MAX = 5;
-          filteredHits = result.hits.filter(h => h.score >= FALLBACK_MIN_SCORE).slice(0, FALLBACK_MAX);
-          ctx.log.warn(`auto-recall: LLM filter unavailable, fallback to top ${filteredHits.length} hits (score >= ${FALLBACK_MIN_SCORE})`);
-          if (filteredHits.length === 0) {
-            const dur = performance.now() - recallT0;
-            store.recordToolCall("memory_search", dur, true);
-            store.recordApiLog("memory_search", { query }, `${result.hits.length} candidates → LLM filter unavailable, no high-score fallback`, dur, true);
-            const noRecallHint =
-              "## Memory system\n\nNo memories were automatically recalled for this turn (e.g. the user's message was long, vague, or no matching history). " +
-              "You may still have relevant past context — call the **memory_search** tool with a **short, focused query** you generate yourself " +
-              "(e.g. key topics, names, or a rephrased question) to search the user's conversation history.";
-            return { systemPrompt: noRecallHint };
+            store.recordApiLog("memory_search", { type: "auto_recall", query }, JSON.stringify({
+              candidates: result.hits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt })),
+              filtered: []
+            }), dur, true);
+            if (query.length > 50) {
+              const noRecallHint =
+                "## Memory system — ACTION REQUIRED\n\n" +
+                "Auto-recall found no relevant results for a long query. " +
+                "You MUST call `memory_search` now with a shortened query (2-5 key words) before answering. " +
+                "Do NOT skip this step. Do NOT answer without searching first.";
+              return { prependContext: noRecallHint };
+            }
+            return;
           }
         }
 
@@ -1004,9 +993,7 @@ const memosLocalPlugin = {
         ctx.log.debug(`auto-recall: ${result.hits.length} → ${beforeDedup} relevant → ${filteredHits.length} after dedup, sufficient=${sufficient}`);
 
         const lines = filteredHits.map((h, i) => {
-          const excerpt = h.original_excerpt.length > 300
-            ? h.original_excerpt.slice(0, 297) + "..."
-            : h.original_excerpt;
+          const excerpt = h.original_excerpt;
           const parts: string[] = [`${i + 1}. [${h.source.role}]`];
           if (excerpt) parts.push(`   ${excerpt}`);
           parts.push(`   chunkId="${h.ref.chunkId}"`);
@@ -1019,21 +1006,18 @@ const memosLocalPlugin = {
           return parts.join("\n");
         });
 
-        let tipsText = "";
-        if (!sufficient) {
-          const hasTask = filteredHits.some((h) => {
-            if (!h.taskId) return false;
-            const t = store.getTask(h.taskId);
-            return t && t.status !== "skipped";
-          });
-          const tips: string[] = [];
-          if (hasTask) {
-            tips.push("→ call task_summary(taskId) for full task context");
-            tips.push("→ call skill_get(taskId=...) if the task has a proven experience guide");
-          }
-          tips.push("→ call memory_timeline(chunkId) to expand surrounding conversation");
-          tipsText = "\n\nIf more context is needed:\n" + tips.join("\n");
+        const hasTask = filteredHits.some((h) => {
+          if (!h.taskId) return false;
+          const t = store.getTask(h.taskId);
+          return t && t.status !== "skipped";
+        });
+        const tips: string[] = [];
+        if (hasTask) {
+          tips.push("- A hit has `task_id` → call `task_summary(taskId=\"...\")` to get the full task context (steps, code, results)");
+          tips.push("- A task may have a reusable guide → call `skill_get(taskId=\"...\")` to retrieve the experience/skill");
         }
+        tips.push("- Need more surrounding dialogue → call `memory_timeline(chunkId=\"...\")` to expand context around a hit");
+        const tipsText = "\n\nAvailable follow-up tools:\n" + tips.join("\n");
 
         const contextParts = [
           "## User's conversation history (from memory system)",
@@ -1049,19 +1033,28 @@ const memosLocalPlugin = {
 
         const recallDur = performance.now() - recallT0;
         store.recordToolCall("memory_search", recallDur, true);
-        store.recordApiLog("memory_search", { query }, context, recallDur, true);
+        store.recordApiLog("memory_search", { type: "auto_recall", query }, JSON.stringify({
+          candidates: result.hits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt })),
+          filtered: filteredHits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt }))
+        }), recallDur, true);
         telemetry.trackAutoRecall(filteredHits.length, recallDur);
 
-        lastRecalledChunkIds = new Set(filteredHits.map(h => h.ref.chunkId));
-        lastRecalledSummaries = filteredHits.map(h => h.summary);
+        ctx.log.info(`auto-recall: returning prependContext (${context.length} chars), sufficient=${sufficient}`);
+
+        if (!sufficient) {
+          const searchHint =
+            "\n\nIf these memories don't fully answer the question, " +
+            "call `memory_search` with a shorter or rephrased query to find more.";
+          return { prependContext: context + searchHint };
+        }
 
         return {
-          systemPrompt: context,
+          prependContext: context,
         };
       } catch (err) {
         const dur = performance.now() - recallT0;
         store.recordToolCall("memory_search", dur, false);
-        try { store.recordApiLog("memory_search", { query: recallQuery }, `error: ${String(err)}`, dur, false); } catch (_) { /* best-effort */ }
+        try { store.recordApiLog("memory_search", { type: "auto_recall", query: recallQuery }, `error: ${String(err)}`, dur, false); } catch (_) { /* best-effort */ }
         ctx.log.warn(`auto-recall failed: ${String(err)}`);
       }
     });
@@ -1074,13 +1067,15 @@ const memosLocalPlugin = {
     // already processed before the restart) and only capture future increments.
     const sessionMsgCursor = new Map<string, number>();
 
-    api.on("agent_end", async (event) => {
+    api.on("agent_end", async (event: any, hookCtx?: { agentId?: string; sessionKey?: string; sessionId?: string }) => {
       if (!event.success || !event.messages || event.messages.length === 0) return;
 
       try {
-        const captureAgentId = (event as any).agentId ?? "main";
+        const captureAgentId = hookCtx?.agentId ?? "main";
+        currentAgentId = captureAgentId;
         const captureOwner = `agent:${captureAgentId}`;
-        const sessionKey = (event as any).sessionKey ?? "default";
+        const sessionKey = hookCtx?.sessionKey ?? "default";
+        ctx.log.info(`agent_end: agentId=${captureAgentId} sessionKey=${sessionKey} (from hookCtx)`);
         const cursorKey = `${sessionKey}::${captureAgentId}`;
         const allMessages = event.messages;
 
@@ -1124,18 +1119,6 @@ const memosLocalPlugin = {
               const b = block as Record<string, unknown>;
               if (b.type === "text" && typeof b.text === "string") {
                 text += b.text + "\n";
-              } else if (b.type === "tool_use" || b.type === "tool_call") {
-                const toolName = (b.name ?? b.function ?? "") as string;
-                const toolInput = b.input ?? b.arguments ?? {};
-                const inputStr = typeof toolInput === "string" ? toolInput : JSON.stringify(toolInput, null, 2);
-                const preview = inputStr.length > 500 ? inputStr.slice(0, 500) + "..." : inputStr;
-                text += `[Tool Call: ${toolName}]\n${preview}\n\n`;
-              } else if (b.type === "tool_result") {
-                const toolContent = typeof b.content === "string" ? b.content
-                  : Array.isArray(b.content) ? (b.content as any[]).map((c: any) => c.text ?? "").join("\n")
-                  : JSON.stringify(b.content ?? "");
-                const preview = toolContent.length > 800 ? toolContent.slice(0, 800) + "..." : toolContent;
-                text += `[Tool Result]\n${preview}\n\n`;
               } else if (typeof b.content === "string") {
                 text += b.content + "\n";
               } else if (typeof b.text === "string") {
@@ -1147,8 +1130,37 @@ const memosLocalPlugin = {
           text = text.trim();
           if (!text) continue;
 
+          // Strip injected <memory_context> prefix and OpenClaw metadata wrapper
+          // to store only the user's actual input
           if (role === "user") {
-            text = stripInboundMetadata(text);
+            const mcTag = "<memory_context>";
+            const mcEnd = "</memory_context>";
+            const mcIdx = text.indexOf(mcTag);
+            if (mcIdx !== -1) {
+              const endIdx = text.indexOf(mcEnd);
+              if (endIdx !== -1) {
+                text = text.slice(endIdx + mcEnd.length).trim();
+              }
+            }
+            // Strip OpenClaw metadata envelope:
+            // "Sender (untrusted metadata):\n```json\n{...}\n```\n\n[timestamp] actual message"
+            const senderIdx = text.indexOf("Sender (untrusted metadata):");
+            if (senderIdx !== -1) {
+              const afterSender = text.slice(senderIdx);
+              const fenceEnd = afterSender.indexOf("```\n", afterSender.indexOf("```json"));
+              if (fenceEnd > 0) {
+                const afterFence = afterSender.slice(fenceEnd + 4).replace(/^\s*\n/, "");
+                if (afterFence.trim().length >= 2) text = afterFence.trim();
+              } else {
+                const firstDblNl = afterSender.indexOf("\n\n");
+                if (firstDblNl > 0) {
+                  const tail = afterSender.slice(firstDblNl + 2).trim();
+                  if (tail.length >= 2) text = tail;
+                }
+              }
+            }
+            // Strip timestamp prefix like "[Thu 2026-03-05 15:23 GMT+8] "
+            text = text.replace(/^\[.*?\]\s*/, "").trim();
             if (!text) continue;
           }
 
@@ -1180,12 +1192,9 @@ const memosLocalPlugin = {
         const turnId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const captured = captureMessages(msgs, sessionKey, turnId, evidenceTag, ctx.log, captureOwner);
 
-        lastRecalledChunkIds = new Set();
-        lastRecalledSummaries = [];
-
         if (captured.length > 0) {
           worker.enqueue(captured);
-          telemetry.trackMemoryIngested(captured.length);
+          telemetry.trackMemoryIngested(filteredCaptured.length);
         }
       } catch (err) {
         api.logger.warn(`memos-local: capture failed: ${String(err)}`);

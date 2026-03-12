@@ -66,6 +66,52 @@ function log(msg: string) {
   console.log(`[${t}] ${msg}`);
 }
 
+// ─── Progress tracker ───
+
+class ProgressTracker {
+  private total: number;
+  private done = 0;
+  private startMs = Date.now();
+  private phaseName: string;
+
+  constructor(phaseName: string, total: number) {
+    this.phaseName = phaseName;
+    this.total = total;
+  }
+
+  tick(label: string) {
+    this.done++;
+    const elapsed = Date.now() - this.startMs;
+    const pct = Math.round((this.done / this.total) * 100);
+    const remaining = this.total - this.done;
+    const avgMs = elapsed / this.done;
+    const eta = Math.round(remaining * avgMs);
+
+    const barLen = 30;
+    const filled = Math.round(barLen * this.done / this.total);
+    const bar = "█".repeat(filled) + "░".repeat(barLen - filled);
+
+    log(
+      `  [${bar}] ${this.done}/${this.total} (${pct}%)` +
+      `  elapsed: ${fmtDur(elapsed)}  ETA: ${remaining > 0 ? fmtDur(eta) : "done"}` +
+      `  — ${label}`,
+    );
+  }
+
+  summary(): string {
+    const elapsed = Date.now() - this.startMs;
+    return `${this.phaseName}: ${this.done}/${this.total} in ${fmtDur(elapsed)}`;
+  }
+}
+
+function fmtDur(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}m${sec}s`;
+}
+
 function hitContains(hits: any[], keyword: string): boolean {
   return hits.some(
     (h: any) =>
@@ -522,9 +568,11 @@ function registerSessionsInStore(cases: ConversationCase[]) {
 // ─── Ingest via Gateway ───
 
 async function ingestPhase(cases: ConversationCase[]) {
-  log(`Sending ${cases.length} test conversations through OpenClaw Gateway...`);
+  const totalMsgs = cases.reduce((a, c) => a + c.messages.length, 0);
+  log(`Sending ${cases.length} conversations (${totalMsgs} messages) through OpenClaw Gateway...`);
   log(`(Each message goes through full gateway → plugin pipeline, visible in Viewer)\n`);
 
+  const tracker = new ProgressTracker("Ingest", totalMsgs);
   const buckets: ConversationCase[][] = Array.from({ length: WORKERS }, () => []);
   cases.forEach((c, i) => buckets[i % WORKERS].push(c));
 
@@ -537,11 +585,10 @@ async function ingestPhase(cases: ConversationCase[]) {
         const ok = sendViaGateway(c.sessionId, msg);
         if (ok) {
           successCount++;
-          log(`  [worker-${workerId}] OK: ${c.label}`);
         } else {
           failCount++;
-          log(`  [worker-${workerId}] FAIL: ${c.label}`);
         }
+        tracker.tick(`${ok ? "OK" : "FAIL"} ${c.label}`);
         await new Promise((r) => setTimeout(r, INGEST_DELAY_MS));
       }
     }
@@ -565,7 +612,7 @@ async function ingestPhase(cases: ConversationCase[]) {
 
 // ─── Verify phase ───
 
-async function runSearchTests(plugin: MemosLocalPlugin, cases: SearchCase[]) {
+async function runSearchTests(plugin: MemosLocalPlugin, cases: SearchCase[], tracker: ProgressTracker) {
   const searchTool = plugin.tools.find((t) => t.name === "memory_search")!;
 
   for (const c of cases) {
@@ -613,10 +660,11 @@ async function runSearchTests(plugin: MemosLocalPlugin, cases: SearchCase[]) {
         durationMs: dur,
       });
     }
+    tracker.tick(`${c.category}: ${c.expectKeyword}`);
   }
 }
 
-async function runDedupChecks(plugin: MemosLocalPlugin) {
+async function runDedupChecks(plugin: MemosLocalPlugin, tracker: ProgressTracker) {
   const searchTool = plugin.tools.find((t) => t.name === "memory_search")!;
 
   const t0 = performance.now();
@@ -624,20 +672,23 @@ async function runDedupChecks(plugin: MemosLocalPlugin) {
   const redisHits = (r1.hits ?? []).filter((h: any) => hitContains([h], "Redis") || hitContains([h], "ElastiCache"));
   const exactPass = redisHits.length >= 1 && redisHits.length <= 2;
   results.push({ category: "Dedup", name: "exact dup (Redis x3 → 1-2)", pass: exactPass, detail: `${redisHits.length} active hits (expect 1-2)`, durationMs: Math.round(performance.now() - t0) });
+  tracker.tick("dedup: exact dup (Redis)");
 
   const t1 = performance.now();
   const r2 = (await searchTool.handler({ query: "PostgreSQL RDS PgBouncer 读写分离 WAL", maxResults: 10 })) as any;
   const pgHits = (r2.hits ?? []).filter((h: any) => hitContains([h], "PostgreSQL") || hitContains([h], "PG ") || hitContains([h], "PgBouncer"));
   const semPass = pgHits.length >= 1 && pgHits.length <= 2;
   results.push({ category: "Dedup", name: "semantic dup (PG x2 → 1-2)", pass: semPass, detail: `${pgHits.length} active hits (expect 1-2)`, durationMs: Math.round(performance.now() - t1) });
+  tracker.tick("dedup: semantic dup (PG)");
 
   const t2 = performance.now();
   const r3 = (await searchTool.handler({ query: "前端技术栈 Next.js Shadcn Tailwind Vercel", maxResults: 10 })) as any;
   const hasLatest = hitContains(r3.hits ?? [], "Next.js") || hitContains(r3.hits ?? [], "Shadcn");
   results.push({ category: "Dedup", name: "merge (React/Vite → Next.js/Vercel)", pass: hasLatest, detail: `latest state present: ${hasLatest}`, durationMs: Math.round(performance.now() - t2) });
+  tracker.tick("dedup: merge (Next.js)");
 }
 
-async function runSummaryChecks(plugin: MemosLocalPlugin) {
+async function runSummaryChecks(plugin: MemosLocalPlugin, tracker: ProgressTracker) {
   const searchTool = plugin.tools.find((t) => t.name === "memory_search")!;
 
   const queries = [
@@ -658,10 +709,11 @@ async function runSummaryChecks(plugin: MemosLocalPlugin) {
     } else {
       results.push({ category: "Summary", name: q.label, pass: false, detail: "no hits found", durationMs: dur });
     }
+    tracker.tick(`summary: ${q.label}`);
   }
 }
 
-async function runTopicChecks(plugin: MemosLocalPlugin) {
+async function runTopicChecks(plugin: MemosLocalPlugin, tracker: ProgressTracker) {
   const searchTool = plugin.tools.find((t) => t.name === "memory_search")!;
 
   const t0 = performance.now();
@@ -674,6 +726,7 @@ async function runTopicChecks(plugin: MemosLocalPlugin) {
     detail: `${nginxHits.length} chunks (expect 1-2 merged)`,
     durationMs: Math.round(performance.now() - t0),
   });
+  tracker.tick("topic: same (Nginx)");
 
   const t1 = performance.now();
   const dockerR = (await searchTool.handler({ query: "Dockerfile 多阶段构建 pnpm node:20-alpine", maxResults: 5 })) as any;
@@ -688,6 +741,7 @@ async function runTopicChecks(plugin: MemosLocalPlugin) {
     detail: `Docker found=${dockerFound}, cooking found=${cookFound}`,
     durationMs: Math.round(performance.now() - t1),
   });
+  tracker.tick("topic: switch (Docker→cooking)");
 }
 
 // ─── Report ───
@@ -752,18 +806,21 @@ async function main() {
   log("Initializing plugin for search verification (direct DB access)...");
   const plugin = initPlugin({ stateDir, config });
 
+  const searchCases = buildSearchCases();
+  const verifyTotal = 3 + 2 + searchCases.length + 2; // dedup(3) + topic(2) + search + summary(2)
+  const verifyTracker = new ProgressTracker("Verify", verifyTotal);
+
   log("Running dedup checks...");
-  await runDedupChecks(plugin);
+  await runDedupChecks(plugin, verifyTracker);
 
   log("Running topic boundary checks...");
-  await runTopicChecks(plugin);
+  await runTopicChecks(plugin, verifyTracker);
 
   log("Running search precision & recall tests...");
-  const searchCases = buildSearchCases();
-  await runSearchTests(plugin, searchCases);
+  await runSearchTests(plugin, searchCases, verifyTracker);
 
   log("Running summary quality checks...");
-  await runSummaryChecks(plugin);
+  await runSummaryChecks(plugin, verifyTracker);
 
   const totalMs = Math.round(performance.now() - t0);
   const exitCode = printReport(totalMs, ingestStats);

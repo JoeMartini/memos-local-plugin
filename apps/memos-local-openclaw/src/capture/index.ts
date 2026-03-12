@@ -193,14 +193,58 @@ function stripMemoryInjection(text: string): string {
     "",
   ).trim();
 
-  // Mixed user+assistant content: "user question\n\n---\n\nassistant reply"
-  // Some older plugins merged entire turns into a single user message.
-  // Keep only the first segment (user's actual input).
-  const dashSep = cleaned.indexOf("\n\n---\n");
-  if (dashSep !== -1 && dashSep > 5) {
-    const firstPart = cleaned.slice(0, dashSep).trim();
-    if (firstPart.length >= 5) {
-      cleaned = firstPart;
+  // Old format: ## Retrieved memories from past conversations\n\nCRITICAL INSTRUCTION:...
+  const recallIdx = cleaned.indexOf("## Retrieved memories from past conversations");
+  if (recallIdx !== -1) {
+    const before = cleaned.slice(0, recallIdx);
+    const after = cleaned.slice(recallIdx);
+    const tsMatch = after.match(/\n\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{4}-\d{2}-\d{2}/);
+    if (tsMatch && tsMatch.index != null) {
+      cleaned = (before + after.slice(tsMatch.index)).trim();
+    } else {
+      cleaned = before.trim();
+    }
+  }
+
+  // prependContext format: ## User's conversation history (from memory system)\n...
+  // Ends at last "Current time:" line or last chunkId= line, whichever comes later.
+  const prependIdx = cleaned.indexOf("## User's conversation history (from memory system)");
+  if (prependIdx !== -1) {
+    const before = cleaned.slice(0, prependIdx);
+    const after = cleaned.slice(prependIdx);
+
+    // Find the last anchor line that belongs to the injected block
+    const currentTimeMatch = after.match(/Current time:[^\n]*/g);
+    const chunkIdMatch = after.match(/chunkId="[^"]*"/g);
+    let cutPos = 0;
+    if (currentTimeMatch) {
+      const lastCt = after.lastIndexOf(currentTimeMatch[currentTimeMatch.length - 1]);
+      const lineEnd = after.indexOf("\n", lastCt);
+      cutPos = Math.max(cutPos, lineEnd !== -1 ? lineEnd + 1 : after.length);
+    }
+    if (chunkIdMatch) {
+      const lastCk = after.lastIndexOf(chunkIdMatch[chunkIdMatch.length - 1]);
+      const lineEnd = after.indexOf("\n", lastCk);
+      cutPos = Math.max(cutPos, lineEnd !== -1 ? lineEnd + 1 : after.length);
+    }
+    if (cutPos === 0) {
+      // No anchors found; remove everything from the header onward
+      cleaned = before.trim();
+    } else {
+      cleaned = (before + after.slice(cutPos)).trim();
+    }
+  }
+
+  // New format: <memos_system_instruction>...</memos_system_instruction>\n\n📝 Related memories:...
+  const memosTagIdx = cleaned.indexOf("<memos_system_instruction>");
+  if (memosTagIdx !== -1) {
+    const before = cleaned.slice(0, memosTagIdx);
+    const after = cleaned.slice(memosTagIdx);
+    const tsMatch = after.match(/\n\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{4}-\d{2}-\d{2}/);
+    if (tsMatch && tsMatch.index != null) {
+      cleaned = (before + after.slice(tsMatch.index)).trim();
+    } else {
+      cleaned = before.trim();
     }
   }
 

@@ -34,6 +34,43 @@ function loadProductionConfig(): Partial<MemosLocalConfig> {
   return pluginCfg;
 }
 
+// ─── Progress Tracker ───
+
+const TOTAL_TESTS = 14;
+const startTime = Date.now();
+let completedTests = 0;
+const durations: number[] = [];
+
+function fmtDuration(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m${s % 60}s`;
+}
+
+function printProgress(testName: string) {
+  const now = Date.now();
+  const elapsed = now - startTime;
+  completedTests++;
+  durations.push(elapsed);
+
+  const pct = Math.round((completedTests / TOTAL_TESTS) * 100);
+  const remaining = TOTAL_TESTS - completedTests;
+  const avgPerTest = elapsed / completedTests;
+  const eta = Math.round(remaining * avgPerTest);
+
+  const barLen = 30;
+  const filled = Math.round(barLen * completedTests / TOTAL_TESTS);
+  const bar = "█".repeat(filled) + "░".repeat(barLen - filled);
+
+  console.log(
+    `\n  [${bar}] ${completedTests}/${TOTAL_TESTS} (${pct}%)` +
+    `  elapsed: ${fmtDuration(elapsed)}` +
+    `  ETA: ${remaining > 0 ? fmtDuration(eta) : "done"}` +
+    `  — ${testName}`,
+  );
+}
+
 // ─── Helpers ───
 
 const SESSION_PREFIX = "test-accuracy";
@@ -61,15 +98,17 @@ let plugin: MemosLocalPlugin;
 const stateDir = path.join(process.env.HOME ?? "/tmp", ".openclaw");
 
 beforeAll(async () => {
+  console.log(`\n  MemOS Accuracy Test — ${TOTAL_TESTS} tests to run\n`);
   const config = loadProductionConfig();
   plugin = initPlugin({ stateDir, config });
 }, 30_000);
 
 afterAll(async () => {
-  // Print report
+  const totalElapsed = Date.now() - startTime;
+
   console.log("\n");
   console.log("═".repeat(60));
-  console.log("  MemOS Accuracy Test Report");
+  console.log(`  MemOS Accuracy Test Report  (${fmtDuration(totalElapsed)})`);
   console.log("═".repeat(60));
 
   const categories = [...new Set(results.map((r) => r.category))];
@@ -128,6 +167,7 @@ describe("A. Dedup Accuracy", () => {
     // Should have exactly 1 active hit (deduped copies are not returned by search)
     const pass = redisHits.length >= 1 && redisHits.length <= 2;
     record("Dedup", "A1-A3 exact dup", pass, `found ${redisHits.length} Redis hits (expect 1-2)`);
+    printProgress("A1-A3: exact duplicate detection");
     expect(redisHits.length).toBeGreaterThanOrEqual(1);
   }, 120_000);
 
@@ -156,6 +196,7 @@ describe("A. Dedup Accuracy", () => {
     // With smart dedup, 2nd and 3rd should be deduped → only 1-2 active
     const pass = pgHits.length >= 1 && pgHits.length <= 2;
     record("Dedup", "A4-A6 semantic dup", pass, `found ${pgHits.length} PG hits (expect 1-2)`);
+    printProgress("A4-A6: semantic duplicate detection");
     expect(pgHits.length).toBeGreaterThanOrEqual(1);
   }, 120_000);
 
@@ -186,6 +227,7 @@ describe("A. Dedup Accuracy", () => {
       (h.original_excerpt?.includes("Next.js") || h.summary?.includes("Next.js")),
     );
     record("Dedup", "A7-A9 merge/update", hasLatest, `latest info present: ${hasLatest}, hits: ${frontendHits.length}`);
+    printProgress("A7-A9: merge (UPDATE) detection");
     expect(hasLatest).toBe(true);
   }, 120_000);
 
@@ -213,6 +255,7 @@ describe("A. Dedup Accuracy", () => {
 
     const allFound = r1.hits.length >= 1 && r2.hits.length >= 1 && r3.hits.length >= 1;
     record("Dedup", "A10-A12 no false dup", allFound, `CI/CD=${r1.hits.length}, 年会=${r2.hits.length}, 入职=${r3.hits.length}`);
+    printProgress("A10-A12: unrelated content stays separate");
     expect(allFound).toBe(true);
   }, 120_000);
 });
@@ -253,6 +296,7 @@ describe("B. Topic Boundary", () => {
     // Check they share the same taskId (if available in the response)
     const pass = nginxHits.length >= 2;
     record("Topic", "B1-B4 same topic", pass, `nginx-related hits: ${nginxHits.length}`);
+    printProgress("B1-B4: same topic stays in one task");
     expect(nginxHits.length).toBeGreaterThanOrEqual(2);
   }, 120_000);
 
@@ -293,6 +337,7 @@ describe("B. Topic Boundary", () => {
     const cookFound = cookResult.hits.length >= 1;
     const pass = dockerFound && cookFound;
     record("Topic", "B5-B8 diff topic", pass, `docker=${dockerResult.hits.length}, cooking=${cookResult.hits.length}`);
+    printProgress("B5-B8: different topics create separate tasks");
     expect(pass).toBe(true);
   }, 120_000);
 
@@ -321,6 +366,7 @@ describe("B. Topic Boundary", () => {
     const result = (await searchTool.handler({ query: "Express TypeScript JWT rate limiter", maxResults: 10 })) as any;
     const pass = result.hits.length >= 2;
     record("Topic", "B9-B10 subtask", pass, `Express-related hits: ${result.hits.length}`);
+    printProgress("B9-B10: related subtasks stay in same topic");
     expect(pass).toBe(true);
   }, 120_000);
 });
@@ -372,6 +418,7 @@ describe("C. Search Precision", () => {
       record("Precision", `keyword: ${c.expect}`, !!hit, `top1 contains "${c.expect}": ${!!hit}`);
       expect(hit).toBeTruthy();
     }
+    printProgress("C1-C4: keyword precision");
   }, 120_000);
 
   it("C5-C8: semantic precision", async () => {
@@ -393,6 +440,7 @@ describe("C. Search Precision", () => {
       record("Precision", `semantic: ${c.expect}`, found, `top3 contains "${c.expect}": ${found}`);
       expect(found).toBe(true);
     }
+    printProgress("C5-C8: semantic precision");
   }, 120_000);
 
   it("C9-C12: negative cases (no false positives)", async () => {
@@ -415,6 +463,7 @@ describe("C. Search Precision", () => {
         `false positives: ${falsePositives.length}, total hits: ${result.hits.length}`);
       expect(falsePositives.length).toBe(0);
     }
+    printProgress("C9-C12: negative cases (no false positives)");
   }, 120_000);
 });
 
@@ -456,6 +505,7 @@ describe("D. Search Recall", () => {
       record("Recall", `recall: ${kw}`, hit, hit ? "found" : "missed");
     }
 
+    printProgress("D1-D4: recall all related memories");
     expect(found).toBeGreaterThanOrEqual(2);
   }, 120_000);
 
@@ -490,6 +540,7 @@ describe("D. Search Recall", () => {
     );
     record("Recall", "D7-D8 en→zh recall", enFound, `en query found docker: ${enFound}`);
 
+    printProgress("D5-D8: cross-language recall");
     expect(zhFound || enFound).toBe(true);
   }, 120_000);
 });
@@ -532,6 +583,7 @@ describe("E. Summary Quality", () => {
         record("Summary", `E${i + 1} long text`, false, "no hits found");
       }
     }
+    printProgress("E1-E3: long text summary shorter than original");
   }, 120_000);
 
   it("E4-E6: short text summary not longer than original", async () => {
@@ -567,5 +619,6 @@ describe("E. Summary Quality", () => {
         record("Summary", `E${i + 4} short text`, false, "no hits found");
       }
     }
+    printProgress("E4-E6: short text summary not longer than original");
   }, 120_000);
 });

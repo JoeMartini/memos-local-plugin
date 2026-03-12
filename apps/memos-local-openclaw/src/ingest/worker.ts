@@ -59,32 +59,32 @@ export class IngestWorker {
         let duplicated = 0;
         let errors = 0;
         const resultLines: string[] = [];
+        const inputDetails: Array<{ role: string; content: string }> = [];
 
         while (this.queue.length > 0) {
           const msg = this.queue.shift()!;
+          inputDetails.push({ role: msg.role, content: msg.content });
           try {
             const result = await this.ingestMessage(msg);
             lastSessionKey = msg.sessionKey;
             lastOwner = msg.owner ?? "agent:main";
             lastTimestamp = Math.max(lastTimestamp, msg.timestamp);
-            const brief = (s: string) => s.length > 80 ? s.slice(0, 80) + "…" : s;
             if (result === "skipped") {
               skipped++;
-              resultLines.push(`[${msg.role}] ⏭ exact-dup → ${brief(msg.content)}`);
+              resultLines.push(JSON.stringify({ role: msg.role, action: "exact-dup", summary: "", content: msg.content }));
             } else if (result.action === "stored") {
               stored++;
-              resultLines.push(`[${msg.role}] ✅ stored → ${brief(result.summary ?? msg.content)}`);
+              resultLines.push(JSON.stringify({ role: msg.role, action: "stored", summary: result.summary ?? "", content: msg.content }));
             } else if (result.action === "duplicate") {
               duplicated++;
-              resultLines.push(`[${msg.role}] 🔁 dedup(${result.reason ?? "similar"}) → ${brief(msg.content)}`);
+              resultLines.push(JSON.stringify({ role: msg.role, action: "dedup", reason: result.reason ?? "similar", summary: result.summary ?? "", content: msg.content }));
             } else if (result.action === "merged") {
               merged++;
-              resultLines.push(`[${msg.role}] 🔀 merged → ${brief(msg.content)}`);
+              resultLines.push(JSON.stringify({ role: msg.role, action: "merged", summary: result.summary ?? "", content: msg.content }));
             }
           } catch (err) {
             errors++;
-            const brief = (s: string) => s.length > 80 ? s.slice(0, 80) + "…" : s;
-            resultLines.push(`[${msg.role}] ❌ error → ${brief(msg.content)}`);
+            resultLines.push(JSON.stringify({ role: msg.role, action: "error", summary: "", content: msg.content }));
             this.ctx.log.error(`Failed to ingest message turn=${msg.turnId}: ${err}`);
           }
         }
@@ -97,6 +97,7 @@ export class IngestWorker {
             const inputInfo = {
               session: lastSessionKey,
               messages: batchSize,
+              details: inputDetails,
             };
             const stats = [`stored=${stored}`, skipped > 0 ? `skipped=${skipped}` : null, duplicated > 0 ? `dedup=${duplicated}` : null, merged > 0 ? `merged=${merged}` : null, errors > 0 ? `errors=${errors}` : null].filter(Boolean).join(", ");
             this.store.recordApiLog("memory_add", inputInfo, `${stats}\n${resultLines.join("\n")}`, dur, errors === 0);
@@ -122,8 +123,7 @@ export class IngestWorker {
   private async ingestMessage(msg: ConversationMessage): Promise<
     "skipped" | { action: "stored" | "duplicate" | "merged"; summary?: string; reason?: string }
   > {
-    const kind = msg.role === "tool" ? "tool_result" : "paragraph";
-    return await this.storeChunk(msg, msg.content, kind, 0);
+    return await this.storeChunk(msg, msg.content, "paragraph", 0);
   }
 
   private async storeChunk(
@@ -146,6 +146,8 @@ export class IngestWorker {
     let dedupTarget: string | null = null;
     let dedupReason: string | null = null;
     let mergedFromOld: string | null = null;
+    let mergeCount = 0;
+    let mergeHistory = "[]";
 
     // Fast path: exact content_hash match within same owner (agent dimension)
     const chunkOwner = msg.owner ?? "agent:main";
@@ -160,7 +162,7 @@ export class IngestWorker {
 
     // Smart dedup: find Top-5 similar chunks, then ask LLM to judge
     if (dedupStatus === "active" && embedding) {
-      const similarThreshold = this.ctx.config.dedup?.similarityThreshold ?? 0.60;
+      const similarThreshold = this.ctx.config.dedup?.similarityThreshold ?? 0.80;
       const dedupOwnerFilter = msg.owner ? [msg.owner] : undefined;
       const topSimilar = findTopSimilar(this.store, embedding, similarThreshold, 5, this.ctx.log, dedupOwnerFilter);
 
@@ -208,7 +210,23 @@ export class IngestWorker {
 
               mergedFromOld = targetChunkId;
               dedupReason = dedupResult.reason;
-              this.ctx.log.debug(`Smart dedup: UPDATE → old chunk=${targetChunkId} retired, new chunk=${chunkId} gets merged summary, reason: ${dedupResult.reason}`);
+
+              // Inherit merge history from the old chunk
+              if (oldChunk) {
+                const oldHistory = JSON.parse(oldChunk.mergeHistory || "[]");
+                oldHistory.push({
+                  action: "merge",
+                  at: Date.now(),
+                  reason: dedupResult.reason,
+                  from: oldSummary,
+                  to: dedupResult.mergedSummary,
+                  sourceChunkId: targetChunkId,
+                });
+                mergeHistory = JSON.stringify(oldHistory);
+                mergeCount = (oldChunk.mergeCount || 0) + 1;
+              }
+
+              this.ctx.log.debug(`Smart dedup: UPDATE → old chunk=${targetChunkId} retired, new chunk=${chunkId} gets merged summary (mergeCount=${mergeCount}), reason: ${dedupResult.reason}`);
             }
           }
 
@@ -235,9 +253,9 @@ export class IngestWorker {
       dedupStatus,
       dedupTarget,
       dedupReason,
-      mergeCount: 0,
+      mergeCount: mergeCount,
       lastHitAt: null,
-      mergeHistory: "[]",
+      mergeHistory: mergeHistory,
       createdAt: msg.timestamp,
       updatedAt: msg.timestamp,
     };

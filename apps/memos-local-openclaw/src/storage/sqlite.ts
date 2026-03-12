@@ -46,7 +46,7 @@ export class SqliteStore {
         content,
         content='chunks',
         content_rowid='rowid',
-        tokenize='porter unicode61'
+        tokenize='trigram'
       );
 
       CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
@@ -109,6 +109,7 @@ export class SqliteStore {
     this.migrateOwnerFields();
     this.migrateSkillVisibility();
     this.migrateSkillEmbeddingsAndFts();
+    this.migrateFtsToTrigram();
     this.log.debug("Database schema initialized");
   }
 
@@ -159,7 +160,7 @@ export class SqliteStore {
         description,
         content='skills',
         content_rowid='rowid',
-        tokenize='porter unicode61'
+        tokenize='trigram'
       );
     `);
 
@@ -193,6 +194,81 @@ export class SqliteStore {
         this.log.info(`Migrated: backfilled skills_fts for ${skillCount} skills`);
       }
     } catch { /* best-effort */ }
+  }
+
+  private migrateFtsToTrigram(): void {
+    // Check if chunks_fts still uses the old tokenizer (porter unicode61)
+    try {
+      const row = this.db.prepare(
+        "SELECT sql FROM sqlite_master WHERE name='chunks_fts'"
+      ).get() as { sql: string } | undefined;
+      if (row && row.sql && !row.sql.includes("trigram")) {
+        this.log.info("Migrating chunks_fts from porter/unicode61 to trigram tokenizer...");
+        this.db.exec("DROP TRIGGER IF EXISTS chunks_ai");
+        this.db.exec("DROP TRIGGER IF EXISTS chunks_ad");
+        this.db.exec("DROP TRIGGER IF EXISTS chunks_au");
+        this.db.exec("DROP TABLE IF EXISTS chunks_fts");
+        this.db.exec(`
+          CREATE VIRTUAL TABLE chunks_fts USING fts5(
+            summary, content, content='chunks', content_rowid='rowid',
+            tokenize='trigram'
+          )
+        `);
+        this.db.exec(`
+          CREATE TRIGGER chunks_ai AFTER INSERT ON chunks BEGIN
+            INSERT INTO chunks_fts(rowid, summary, content) VALUES (new.rowid, new.summary, new.content);
+          END;
+          CREATE TRIGGER chunks_ad AFTER DELETE ON chunks BEGIN
+            INSERT INTO chunks_fts(chunks_fts, rowid, summary, content) VALUES ('delete', old.rowid, old.summary, old.content);
+          END;
+          CREATE TRIGGER chunks_au AFTER UPDATE ON chunks BEGIN
+            INSERT INTO chunks_fts(chunks_fts, rowid, summary, content) VALUES ('delete', old.rowid, old.summary, old.content);
+            INSERT INTO chunks_fts(rowid, summary, content) VALUES (new.rowid, new.summary, new.content);
+          END
+        `);
+        this.db.exec("INSERT INTO chunks_fts(rowid, summary, content) SELECT rowid, summary, content FROM chunks");
+        const count = (this.db.prepare("SELECT COUNT(*) as c FROM chunks_fts").get() as { c: number }).c;
+        this.log.info(`Migrated chunks_fts to trigram: ${count} rows indexed`);
+      }
+    } catch (err) {
+      this.log.warn(`Failed to migrate chunks_fts to trigram: ${err}`);
+    }
+
+    // Same for skills_fts
+    try {
+      const row = this.db.prepare(
+        "SELECT sql FROM sqlite_master WHERE name='skills_fts'"
+      ).get() as { sql: string } | undefined;
+      if (row && row.sql && !row.sql.includes("trigram")) {
+        this.log.info("Migrating skills_fts to trigram tokenizer...");
+        this.db.exec("DROP TRIGGER IF EXISTS skills_ai");
+        this.db.exec("DROP TRIGGER IF EXISTS skills_ad");
+        this.db.exec("DROP TRIGGER IF EXISTS skills_au");
+        this.db.exec("DROP TABLE IF EXISTS skills_fts");
+        this.db.exec(`
+          CREATE VIRTUAL TABLE skills_fts USING fts5(
+            name, description, content='skills', content_rowid='rowid',
+            tokenize='trigram'
+          )
+        `);
+        this.db.exec(`
+          CREATE TRIGGER skills_ai AFTER INSERT ON skills BEGIN
+            INSERT INTO skills_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+          END;
+          CREATE TRIGGER skills_ad AFTER DELETE ON skills BEGIN
+            INSERT INTO skills_fts(skills_fts, rowid, name, description) VALUES ('delete', old.rowid, old.name, old.description);
+          END;
+          CREATE TRIGGER skills_au AFTER UPDATE ON skills BEGIN
+            INSERT INTO skills_fts(skills_fts, rowid, name, description) VALUES ('delete', old.rowid, old.name, old.description);
+            INSERT INTO skills_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+          END
+        `);
+        this.db.exec("INSERT INTO skills_fts(rowid, name, description) SELECT rowid, name, description FROM skills");
+        this.log.info("Migrated skills_fts to trigram");
+      }
+    } catch (err) {
+      this.log.warn(`Failed to migrate skills_fts to trigram: ${err}`);
+    }
   }
 
   private migrateTaskId(): void {
@@ -530,8 +606,6 @@ export class SqliteStore {
   getMetrics(days: number): {
     writesPerDay: Array<{ date: string; count: number }>;
     viewerCallsPerDay: Array<{ date: string; list: number; search: number; total: number }>;
-    roleBreakdown: Record<string, number>;
-    kindBreakdown: Record<string, number>;
     totals: { memories: number; sessions: number; embeddings: number; todayWrites: number; todayViewerCalls: number };
   } {
     const since = Date.now() - days * 86400 * 1000;
@@ -566,11 +640,6 @@ export class SqliteStore {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([date, v]) => ({ date, list: v.list, search: v.search, total: v.list + v.search }));
 
-    const roles = this.db.prepare("SELECT role, COUNT(*) as count FROM chunks GROUP BY role").all() as Array<{ role: string; count: number }>;
-    const kinds = this.db.prepare("SELECT kind, COUNT(*) as count FROM chunks GROUP BY kind").all() as Array<{ kind: string; count: number }>;
-    const roleBreakdown = Object.fromEntries(roles.map((r) => [r.role, r.count]));
-    const kindBreakdown = Object.fromEntries(kinds.map((k) => [k.kind, k.count]));
-
     const totalChunks = (this.db.prepare("SELECT COUNT(*) as c FROM chunks").get() as { c: number }).c;
     const totalSessions = (this.db.prepare("SELECT COUNT(DISTINCT session_key) as c FROM chunks").get() as { c: number }).c;
     const totalEmbeddings = (this.db.prepare("SELECT COUNT(*) as c FROM embeddings").get() as { c: number }).c;
@@ -580,8 +649,6 @@ export class SqliteStore {
     return {
       writesPerDay,
       viewerCallsPerDay,
-      roleBreakdown,
-      kindBreakdown,
       totals: {
         memories: totalChunks,
         sessions: totalSessions,
@@ -870,6 +937,10 @@ export class SqliteStore {
       { sql: "content LIKE '%=== MemOS LONG-TERM MEMORY%'", reason: "MemOS legacy injection" },
       { sql: "content LIKE '%[MemOS Auto-Recall]%'", reason: "MemOS Auto-Recall injection" },
       { sql: "content LIKE '%## Memory system%No memories were automatically recalled%'", reason: "Memory system no-recall hint" },
+      { sql: "content LIKE '%## Retrieved memories from past conversations%CRITICAL INSTRUCTION%'", reason: "prependContext recall injection" },
+      { sql: "content LIKE '%VERIFIED facts the user previously shared%'", reason: "VERIFIED facts injection" },
+      { sql: "content LIKE '%<memos_system_instruction>%'", reason: "memos_system_instruction injection" },
+      { sql: "content LIKE '%📝 Related memories:%'", reason: "Related memories injection" },
     ];
     for (const { sql, reason } of patterns) {
       const rows = this.db.prepare(
@@ -1103,14 +1174,16 @@ export class SqliteStore {
    */
   findActiveChunkByHash(content: string, owner?: string): string | null {
     const hash = contentHash(content);
+    // Check ANY existing chunk with the same hash (regardless of dedup_status)
+    // to prevent re-creating duplicates when all prior copies have been marked duplicate/merged.
     if (owner) {
       const row = this.db.prepare(
-        "SELECT id FROM chunks WHERE content_hash = ? AND dedup_status = 'active' AND owner = ? LIMIT 1",
+        "SELECT id FROM chunks WHERE content_hash = ? AND owner = ? ORDER BY CASE dedup_status WHEN 'active' THEN 0 ELSE 1 END LIMIT 1",
       ).get(hash, owner) as { id: string } | undefined;
       return row?.id ?? null;
     }
     const row = this.db.prepare(
-      "SELECT id FROM chunks WHERE content_hash = ? AND dedup_status = 'active' LIMIT 1",
+      "SELECT id FROM chunks WHERE content_hash = ? ORDER BY CASE dedup_status WHEN 'active' THEN 0 ELSE 1 END LIMIT 1",
     ).get(hash) as { id: string } | undefined;
     return row?.id ?? null;
   }
@@ -1365,14 +1438,13 @@ export class SqliteStore {
  * with implicit AND (space-separated) for safe querying.
  */
 function sanitizeFtsQuery(raw: string): string {
-  const tokens = raw
-    .replace(/[."""(){}[\]*:^~!@#$%&\\/<>,;'`]/g, " ")
-    .split(/\s+/)
-    .map((t) => t.trim().replace(/^-+|-+$/g, ""))
-    .filter((t) => t.length > 1)
-    .filter((t) => !FTS_RESERVED.has(t.toUpperCase()));
-
-  return tokens.join(" ");
+  // With trigram tokenizer, the query string is matched as a substring.
+  // Clean special chars but keep the text as-is (trigram needs >= 3 chars).
+  const cleaned = raw
+    .replace(/[."""(){}[\]*:^~!@#$%&\\/<>,;'`?？。，！、：""''（）【】《》]/g, " ")
+    .trim();
+  if (cleaned.length < 3) return "";
+  return cleaned;
 }
 
 const FTS_RESERVED = new Set(["AND", "OR", "NOT", "NEAR"]);

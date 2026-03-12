@@ -41,7 +41,7 @@ return `<!DOCTYPE html>
 [data-theme="light"] .auth-screen{background:linear-gradient(135deg,#f0f4ff 0%,#f8f9fb 50%,#eef2ff 100%)}
 [data-theme="light"] .auth-card{box-shadow:0 25px 50px -12px rgba(0,0,0,.08)}
 [data-theme="light"] .topbar{background:rgba(255,255,255,.92);border-bottom-color:var(--border);backdrop-filter:blur(8px)}
-[data-theme="light"] .session-item .count,[data-theme="light"] .kind-tag,[data-theme="light"] .session-tag{background:rgba(0,0,0,.05)}
+[data-theme="light"] .session-item .count,[data-theme="light"] .session-tag{background:rgba(0,0,0,.05)}
 [data-theme="light"] .card-content pre{background:#f3f4f6;border-color:var(--border)}
 [data-theme="light"] .vscore-badge{background:rgba(79,70,229,.06);color:#4f46e5}
 [data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
@@ -66,10 +66,6 @@ return `<!DOCTYPE html>
 [data-theme="light"] .tool-agg-table td{background:transparent}
 [data-theme="light"] .tool-agg-table tr:hover td{background:rgba(79,70,229,.03)}
 [data-theme="light"] .tool-agg-table th{color:#9ca3af}
-[data-theme="light"] .breakdown-item{background:#f9fafb;border-color:var(--border)}
-[data-theme="light"] .breakdown-item:hover{background:#f3f4f6;border-color:#cbd5e1}
-[data-theme="light"] .breakdown-bar-wrap{background:#e5e7eb}
-[data-theme="light"] .breakdown-bar{background:linear-gradient(90deg,#4f46e5,#6366f1);box-shadow:none}
 [data-theme="light"] .range-btn{background:transparent;border-color:var(--border);color:var(--text-sec)}
 [data-theme="light"] .range-btn.active{background:rgba(79,70,229,.06);color:#4f46e5;border-color:rgba(79,70,229,.2)}
 [data-theme="light"] .range-btn:hover{border-color:#4f46e5;color:#4f46e5}
@@ -164,10 +160,9 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .role-tag.user{background:var(--pri-glow);color:var(--pri);border:1px solid rgba(99,102,241,.12)}
 .role-tag.assistant{background:var(--accent-glow);color:var(--accent);border:1px solid rgba(230,57,70,.2)}
 .role-tag.system{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,158,11,.2)}
-.kind-tag{padding:4px 10px;border-radius:8px;font-size:11px;color:var(--text-sec);background:rgba(0,0,0,.2);font-weight:500}
 .card-time{font-size:12px;color:var(--text-sec);display:flex;align-items:center;gap:8px}
 .session-tag{font-size:11px;font-family:ui-monospace,monospace;color:var(--text-muted);background:rgba(0,0,0,.2);padding:3px 8px;border-radius:6px;cursor:default}
-.card-summary{font-size:15px;font-weight:600;color:var(--text);margin-bottom:10px;line-height:1.5;letter-spacing:-.01em}
+.card-summary{font-size:15px;font-weight:600;color:var(--text);margin-bottom:10px;line-height:1.5;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .card-content{font-size:13px;color:var(--text-sec);line-height:1.65;max-height:0;overflow:hidden;transition:max-height .3s ease}
 .card-content.show{max-height:600px;overflow-y:auto}
 .card-content pre{white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,.25);padding:14px;border-radius:10px;font-size:12px;font-family:ui-monospace,monospace;margin-top:10px;border:1px solid var(--border);color:var(--text-sec)}
@@ -212,6 +207,9 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .modal-meta-row{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--text-sec);padding:8px 0;border-top:1px dashed var(--border)}
 [data-theme="light"] .merge-history{background:rgba(0,0,0,.04)}
 [data-theme="light"] .merge-history-item{border-bottom-color:rgba(0,0,0,.06)}
+.card-merged-info{margin-top:8px;padding:8px 12px;background:rgba(16,185,129,.06);border:1px dashed rgba(16,185,129,.2);border-radius:8px;font-size:12px;line-height:1.6;color:var(--text-sec)}
+.card-merged-label{font-size:10px;font-weight:600;color:#10b981;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+[data-theme="light"] .card-merged-info{background:rgba(16,185,129,.04);border-color:rgba(16,185,129,.15)}
 
 /* ─── Buttons ─── */
 .btn{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:13px;font-weight:500;transition:all .18s ease;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
@@ -479,7 +477,41 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .log-stat-chip.merged{background:rgba(168,85,247,.12);color:#c084fc}
 .log-stat-chip.errors{background:rgba(248,113,113,.12);color:#f87171}
 .log-msg-list{margin-top:8px;display:flex;flex-direction:column;gap:4px}
-.log-msg-item{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;line-height:1.5;padding:4px 10px;border-radius:6px;background:rgba(255,255,255,.02)}
+.log-msg-item{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;line-height:1.5;padding:4px 10px;border-radius:6px;background:rgba(255,255,255,.02);overflow:hidden}
+.log-msg-item.expanded{flex-wrap:wrap}
+.recall-layers{margin-top:8px;display:flex;flex-direction:column;gap:10px}
+.recall-layer-title{font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.recall-layer-title .recall-expand-icon{transition:transform .15s;font-size:9px}
+.recall-layer.expanded .recall-layer-title .recall-expand-icon{transform:rotate(90deg)}
+.recall-count{font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;background:rgba(99,102,241,.1);color:var(--pri)}
+.recall-items{display:none;flex-direction:column;gap:3px}
+.recall-layer.expanded .recall-items{display:flex}
+.recall-item{font-size:11px;line-height:1.4;padding:4px 8px;border-radius:5px;background:rgba(255,255,255,.02);cursor:pointer}
+.recall-item:hover{background:rgba(99,102,241,.06)}
+[data-theme="light"] .recall-item{background:rgba(0,0,0,.02)}
+[data-theme="light"] .recall-item:hover{background:rgba(99,102,241,.06)}
+.recall-item-head{display:flex;gap:6px;align-items:center}
+.recall-idx{flex-shrink:0;font-size:10px;font-weight:600;color:var(--text-muted);min-width:14px;text-align:right}
+.recall-score{flex-shrink:0;font-family:'SF Mono',Consolas,monospace;font-size:10px;font-weight:600;padding:1px 5px;border-radius:4px}
+.recall-score.high{background:rgba(34,197,94,.12);color:#22c55e}
+.recall-score.mid{background:rgba(251,191,36,.12);color:#f59e0b}
+.recall-score.low{background:rgba(248,113,113,.1);color:var(--text-muted)}
+.recall-summary-short{flex:1;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recall-expand-icon{flex-shrink:0;font-size:10px;color:var(--text-muted);transition:transform .15s}
+.recall-item.expanded .recall-expand-icon{transform:rotate(90deg)}
+.recall-summary-full{display:none;margin-top:4px;padding:6px 8px 4px 28px;font-size:11px;line-height:1.5;color:var(--text);word-break:break-word;border-top:1px dashed var(--border)}
+.recall-item.expanded .recall-summary-full{display:block}
+.recall-layer.filtered .recall-layer-title{color:var(--pri)}
+.recall-layer.filtered.empty .recall-layer-title{color:var(--text-muted)}
+.recall-more{font-size:10px;color:var(--text-muted);padding:2px 8px}
+.recall-detail{padding:4px 0}
+.recall-detail-section{margin-bottom:10px}
+.recall-detail-title{font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:6px;padding-bottom:4px;border-bottom:1px dashed var(--border);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
+.recall-detail-title .recall-expand-icon{transition:transform .15s;font-size:9px}
+.recall-detail-section.expanded .recall-detail-title .recall-expand-icon{transform:rotate(90deg)}
+.recall-detail-section .recall-detail-items{display:none;flex-direction:column;gap:3px}
+.recall-detail-section.expanded .recall-detail-items{display:flex}
+.recall-detail-section.filtered .recall-detail-title{color:var(--pri)}
 [data-theme="light"] .log-msg-item{background:rgba(0,0,0,.02)}
 .log-msg-role{flex-shrink:0;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px}
 .log-msg-role.user{background:rgba(59,130,246,.12);color:#60a5fa}
@@ -492,6 +524,15 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .log-msg-action.merged{color:#c084fc}
 .log-msg-action.error{color:#f87171}
 .log-msg-text{color:var(--text);opacity:.85;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.log-msg-text-short{color:var(--text);opacity:.85;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log-msg-text-full{display:none;color:var(--text);opacity:.85;flex:1;min-width:0;word-break:break-word;white-space:pre-wrap}
+.log-msg-item.expanded .log-msg-text-short{display:none}
+.log-msg-item.expanded .log-msg-text-full{display:block}
+.log-msg-item.expanded .recall-expand-icon{transform:rotate(90deg)}
+.log-add-detail{display:flex;flex-direction:column;gap:8px}
+.log-add-msg{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.6}
+.log-add-msg-role{flex-shrink:0;font-size:10px;font-weight:600;text-transform:uppercase;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,.1);color:var(--pri)}
+.log-add-msg-content{flex:1;min-width:0;word-break:break-word;white-space:pre-wrap;color:var(--text)}
 .log-detail{display:none;border-top:1px solid var(--border);padding:0}
 .log-detail.open{display:block}
 .log-expand-btn{font-size:10px;color:var(--text-sec);opacity:.5;margin-left:auto;transition:transform .2s,opacity .15s;display:inline-block}
@@ -645,14 +686,6 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .tool-agg-table .ms-val.slow{color:var(--accent)}
 .chart-legend .dot.violet{background:var(--violet)}
 .chart-legend .dot.green{background:var(--green)}
-.breakdown-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:20px}
-.breakdown-item{display:flex;flex-direction:column;gap:5px;padding:10px 12px;background:rgba(255,255,255,.02);border-radius:8px;border:1px solid var(--border);transition:all .15s}
-.breakdown-item:hover{border-color:var(--border-glow);background:rgba(255,255,255,.04)}
-.breakdown-item .bd-top{display:flex;align-items:center;justify-content:space-between}
-.breakdown-item .label{font-size:12px;color:var(--text-sec);font-weight:500;text-transform:capitalize}
-.breakdown-item .value{font-size:13px;font-weight:600;color:var(--text)}
-.breakdown-bar-wrap{height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
-.breakdown-bar{height:100%;border-radius:2px;background:var(--pri);transition:width .5s ease}
 .metrics-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
 .range-btn{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-sec);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
 .range-btn:hover{border-color:var(--pri);color:var(--pri)}
@@ -809,15 +842,6 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <button class="filter-chip" data-role="assistant" onclick="setRoleFilter(this,'assistant')">Assistant</button>
         <button class="filter-chip" data-role="system" onclick="setRoleFilter(this,'system')">System</button>
         <span class="filter-sep"></span>
-        <select id="filterKind" class="filter-select" onchange="applyFilters()">
-          <option value="" data-i18n="filter.allkinds">All kinds</option>
-          <option value="paragraph" data-i18n="filter.paragraph">Paragraph</option>
-          <option value="code_block" data-i18n="filter.code">Code</option>
-          <option value="dialog" data-i18n="filter.dialog">Dialog</option>
-          <option value="list" data-i18n="filter.list">List</option>
-          <option value="error_stack" data-i18n="filter.error">Error</option>
-          <option value="command" data-i18n="filter.command">Command</option>
-        </select>
         <select id="filterSort" class="filter-select" onchange="applyFilters()">
           <option value="newest" data-i18n="filter.newest">Newest first</option>
           <option value="oldest" data-i18n="filter.oldest">Oldest first</option>
@@ -951,16 +975,6 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <div id="toolAggTable" style="margin-top:20px"></div>
       </div>
 
-      <div class="breakdown-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div class="analytics-section">
-          <h3><span class="icon">\u{1F464}</span> <span data-i18n="breakdown.role">By Role</span></h3>
-          <div id="breakdownRole"></div>
-        </div>
-        <div class="analytics-section">
-          <h3><span class="icon">\u{1F4DD}</span> <span data-i18n="breakdown.kind">By Kind</span></h3>
-          <div id="breakdownKind"></div>
-        </div>
-      </div>
     </div>
 
     <!-- ─── Logs View ─── -->
@@ -1341,14 +1355,13 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 <!-- ─── Memory Modal ─── -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
-    <h2 id="modalTitle" data-i18n="modal.new">New Memory</h2>
+    <h2 id="modalTitle" data-i18n="modal.edit">Edit Memory</h2>
     <div class="form-group"><label data-i18n="modal.role">Role</label><select id="mRole"><option value="user">User</option><option value="assistant">Assistant</option><option value="system">System</option></select></div>
     <div class="form-group"><label data-i18n="modal.content">Content</label><textarea id="mContent" rows="4" data-i18n-ph="modal.content.ph" placeholder="Memory content..."></textarea></div>
     <div class="form-group"><label data-i18n="modal.summary">Summary</label><input type="text" id="mSummary" data-i18n-ph="modal.summary.ph" placeholder="Brief summary (optional)"></div>
-    <div class="form-group"><label data-i18n="modal.kind">Kind</label><select id="mKind"><option value="paragraph" data-i18n="filter.paragraph">Paragraph</option><option value="code" data-i18n="filter.code">Code</option><option value="dialog" data-i18n="filter.dialog">Dialog</option></select></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()" data-i18n="modal.cancel">Cancel</button>
-      <button class="btn btn-primary" id="modalSubmit" onclick="submitModal()" data-i18n="modal.create">Create</button>
+      <button class="btn btn-primary" id="modalSubmit" onclick="submitModal()" data-i18n="modal.save">Save</button>
     </div>
   </div>
 </div>
@@ -1438,13 +1451,6 @@ const I18N={
     'search.meta.text':' text',
     'search.meta.results':' results',
     'filter.all':'All',
-    'filter.allkinds':'All kinds',
-    'filter.paragraph':'Paragraph',
-    'filter.code':'Code',
-    'filter.dialog':'Dialog',
-    'filter.list':'List',
-    'filter.error':'Error',
-    'filter.command':'Command',
     'filter.newest':'Newest first',
     'filter.oldest':'Oldest first',
     'filter.allowners':'All owners',
@@ -1460,6 +1466,8 @@ const I18N={
     'card.delete':'Delete',
     'card.evolved':'Evolved',
     'card.times':'times',
+    'card.newMessage':'New message',
+    'card.mergedInfo':'Merged memory',
     'card.updated':'updated',
     'card.evolveHistory':'Evolution History',
     'card.oldSummary':'Old',
@@ -1483,21 +1491,15 @@ const I18N={
     'chart.toolperf':'Tool Response Time',
     'chart.list':'List',
     'chart.search':'Search',
-    'breakdown.role':'By Role',
-    'breakdown.kind':'By Kind',
-    'modal.new':'New Memory',
     'modal.edit':'Edit Memory',
     'modal.role':'Role',
     'modal.content':'Content',
     'modal.content.ph':'Memory content...',
     'modal.summary':'Summary',
     'modal.summary.ph':'Brief summary (optional)',
-    'modal.kind':'Kind',
     'modal.cancel':'Cancel',
-    'modal.create':'Create',
     'modal.save':'Save',
     'modal.err.empty':'Please enter content',
-    'toast.created':'Memory created',
     'toast.updated':'Memory updated',
     'toast.deleted':'Memory deleted',
     'toast.opfail':'Operation failed',
@@ -1524,6 +1526,11 @@ const I18N={
     'logs.output':'OUTPUT',
     'logs.empty':'No logs yet. Logs will appear here when tools are called.',
     'logs.ago':'ago',
+    'logs.recall.initial':'Initial Retrieval',
+    'logs.recall.filtered':'LLM Filtered',
+    'logs.recall.noHits':'No matching memories',
+    'logs.recall.noneRelevant':'LLM filter: none relevant',
+    'logs.recall.more':'{n} more...',
     'tab.import':'\u{1F4E5} Import',
     'tab.settings':'\u2699 Settings',
     'settings.modelconfig':'Model Configuration',
@@ -1552,6 +1559,7 @@ const I18N={
     'settings.test.loading':'Testing...',
     'settings.test.ok':'Connected',
     'settings.test.fail':'Failed',
+    'settings.session.expired':'Session expired, please refresh the page to log in again',
     'settings.save':'Save Settings',
     'settings.reset':'Reset',
     'settings.saved':'Saved',
@@ -1764,13 +1772,6 @@ const I18N={
     'search.meta.text':' 文本',
     'search.meta.results':' 条结果',
     'filter.all':'全部',
-    'filter.allkinds':'所有类型',
-    'filter.paragraph':'段落',
-    'filter.code':'代码',
-    'filter.dialog':'对话',
-    'filter.list':'列表',
-    'filter.error':'错误',
-    'filter.command':'命令',
     'filter.newest':'最新优先',
     'filter.oldest':'最早优先',
     'filter.allowners':'所有归属',
@@ -1786,6 +1787,8 @@ const I18N={
     'card.delete':'删除',
     'card.evolved':'已演化',
     'card.times':'次',
+    'card.newMessage':'新消息',
+    'card.mergedInfo':'合并记忆',
     'card.updated':'更新于',
     'card.evolveHistory':'演化记录',
     'card.oldSummary':'旧摘要',
@@ -1809,21 +1812,15 @@ const I18N={
     'chart.toolperf':'工具响应耗时',
     'chart.list':'列表',
     'chart.search':'搜索',
-    'breakdown.role':'按角色',
-    'breakdown.kind':'按类型',
-    'modal.new':'新建记忆',
     'modal.edit':'编辑记忆',
     'modal.role':'角色',
     'modal.content':'内容',
     'modal.content.ph':'记忆内容...',
     'modal.summary':'摘要',
     'modal.summary.ph':'简要摘要（可选）',
-    'modal.kind':'类型',
     'modal.cancel':'取消',
-    'modal.create':'创建',
     'modal.save':'保存',
     'modal.err.empty':'请输入内容',
-    'toast.created':'记忆已创建',
     'toast.updated':'记忆已更新',
     'toast.deleted':'记忆已删除',
     'toast.opfail':'操作失败',
@@ -1850,6 +1847,11 @@ const I18N={
     'logs.output':'输出',
     'logs.empty':'暂无日志。当工具被调用时日志会显示在这里。',
     'logs.ago':'前',
+    'logs.recall.initial':'初始检索',
+    'logs.recall.filtered':'LLM 过滤后',
+    'logs.recall.noHits':'未匹配到记忆',
+    'logs.recall.noneRelevant':'LLM 过滤：无相关记忆',
+    'logs.recall.more':'还有 {n} 条...',
     'tab.import':'\u{1F4E5} 导入',
     'tab.settings':'\u2699 设置',
     'settings.modelconfig':'模型配置',
@@ -1878,6 +1880,7 @@ const I18N={
     'settings.test.loading':'测试中...',
     'settings.test.ok':'连接成功',
     'settings.test.fail':'连接失败',
+    'settings.session.expired':'登录已过期，请刷新页面重新登录',
     'settings.save':'保存设置',
     'settings.reset':'重置',
     'settings.saved':'已保存',
@@ -2229,6 +2232,39 @@ function formatLogTime(ts){
   return y+'-'+m+'-'+day+' '+time;
 }
 
+function parseMemoryAddEntries(out){
+  var lines=out.split('\\n');
+  var results=[];
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i].trim();
+    if(!line) continue;
+    if(line.startsWith('{')){
+      try{
+        var obj=JSON.parse(line);
+        if(obj.role&&obj.action){results.push({role:obj.role,action:obj.action,summary:obj.summary||'',content:obj.content||'',reason:obj.reason||''});continue;}
+      }catch(e){}
+    }
+    var rm=line.match(/^\\[(\\w+)\\]\\s*([^\u2192]+)\u2192/);
+    if(rm){
+      var role=rm[1],actionRaw=rm[2].trim();
+      var action='stored';
+      if(actionRaw.indexOf('exact-dup')>=0||actionRaw.indexOf('\u23ED')>=0) action='exact-dup';
+      else if(actionRaw.indexOf('dedup')>=0||actionRaw.indexOf('\uD83D\uDD01')>=0) action='dedup';
+      else if(actionRaw.indexOf('merged')>=0||actionRaw.indexOf('\uD83D\uDD00')>=0) action='merged';
+      else if(actionRaw.indexOf('error')>=0||actionRaw.indexOf('\u274C')>=0) action='error';
+      var afterArrow=line.replace(/^\\[\\w+\\]\\s*[^\u2192]+\u2192\\s*/,'');
+      var contentLines=[afterArrow];
+      while(i+1<lines.length&&!lines[i+1].trim().startsWith('[')&&!lines[i+1].trim().startsWith('{')){
+        i++;
+        if(lines[i].trim()) contentLines.push(lines[i]);
+        else contentLines.push('');
+      }
+      results.push({role:role,action:action,summary:'',content:contentLines.join('\\n'),reason:''});
+    }
+  }
+  return results;
+}
+
 function buildLogSummary(lg){
   let inputObj=null;
   try{inputObj=JSON.parse(lg.input);}catch(_){}
@@ -2236,11 +2272,54 @@ function buildLogSummary(lg){
   const tn=lg.toolName;
   if(tn==='memory_search'&&inputObj){
     const q=inputObj.query||'';
-    if(q) html+='<div class="log-summary-query">'+escapeHtml(q.length>200?q.slice(0,200)+'...':q)+'</div>';
-    const outLines=(lg.output||'').split('\\n');
-    const memCount=outLines.filter(l=>l.match(/^\\d+\\.\\s*\\[/)).length;
-    if(memCount>0) html+='<div style="margin-top:4px;font-size:11px;color:var(--text-sec)">\u{1F4CE} '+memCount+' memories retrieved</div>';
-    else if(lg.output&&lg.output.includes('no hits')) html+='<div style="margin-top:4px;font-size:11px;color:var(--text-sec)">\u2205 No matching memories</div>';
+    if(q) html+='<div class="log-summary-query">'+escapeHtml(q)+'</div>';
+    var recallData=null;
+    try{recallData=JSON.parse(lg.output);}catch(_){}
+    if(recallData&&recallData.candidates){
+      var cands=recallData.candidates||[];
+      var filtered=recallData.filtered||[];
+      if(cands.length===0){
+        html+='<div style="margin-top:4px;font-size:11px;color:var(--text-sec)">\u2205 '+t('logs.recall.noHits')+'</div>';
+      }else{
+        html+='<div class="recall-layers">';
+        html+='<div class="recall-layer" onclick="this.classList.toggle(\\\'expanded\\\')">';
+        html+='<div class="recall-layer-title"><span class="recall-expand-icon">\u25B6</span>\u{1F50D} '+t('logs.recall.initial')+' <span class="recall-count">'+cands.length+'</span></div>';
+        html+='<div class="recall-items">';
+        cands.forEach(function(c,i){
+          var scoreClass=c.score>=0.7?'high':c.score>=0.5?'mid':'low';
+          var shortText=escapeHtml(c.summary||c.content||c.original_excerpt||'');
+          var fullText=escapeHtml(c.content||c.original_excerpt||c.summary||'');
+          html+='<div class="recall-item" onclick="event.stopPropagation();this.classList.toggle(\\\'expanded\\\')">';
+          html+='<div class="recall-item-head"><span class="recall-score '+scoreClass+'">'+c.score.toFixed(2)+'</span><span class="log-msg-role '+(c.role||'user')+'">'+(c.role||'user')+'</span><span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
+          html+='<div class="recall-summary-full">'+fullText+'</div>';
+          html+='</div>';
+        });
+        html+='</div></div>';
+        if(filtered.length>0){
+          html+='<div class="recall-layer filtered" onclick="this.classList.toggle(\\\'expanded\\\')">';
+          html+='<div class="recall-layer-title"><span class="recall-expand-icon">\u25B6</span>\u2705 '+t('logs.recall.filtered')+' <span class="recall-count">'+filtered.length+'</span></div>';
+          html+='<div class="recall-items">';
+          filtered.forEach(function(f){
+            var scoreClass=f.score>=0.7?'high':f.score>=0.5?'mid':'low';
+            var shortText=escapeHtml(f.summary||f.content||f.original_excerpt||'');
+            var fullText=escapeHtml(f.content||f.original_excerpt||f.summary||'');
+            html+='<div class="recall-item" onclick="event.stopPropagation();this.classList.toggle(\\\'expanded\\\')">';
+            html+='<div class="recall-item-head"><span class="recall-score '+scoreClass+'">'+f.score.toFixed(2)+'</span><span class="log-msg-role '+(f.role||'user')+'">'+(f.role||'user')+'</span><span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
+            html+='<div class="recall-summary-full">'+fullText+'</div>';
+            html+='</div>';
+          });
+          html+='</div></div>';
+        }else{
+          html+='<div style="font-size:10px;color:var(--text-muted);margin-top:2px">\u26A0 '+t('logs.recall.noneRelevant')+'</div>';
+        }
+        html+='</div>';
+      }
+    }else{
+      var outLines=(lg.output||'').split('\\n');
+      var memCount=outLines.filter(function(l){return l.match(/^\\d+\\.\\s*\\[/)}).length;
+      if(memCount>0) html+='<div style="margin-top:4px;font-size:11px;color:var(--text-sec)">\u{1F4CE} '+memCount+' memories retrieved</div>';
+      else if(lg.output&&lg.output.includes('no hits')) html+='<div style="margin-top:4px;font-size:11px;color:var(--text-sec)">\u2205 No matching memories</div>';
+    }
   }else if(tn==='memory_add'&&inputObj){
     const out=lg.output||'';
     const statsMatch=out.match(/^([^\\n]+)/);
@@ -2253,39 +2332,18 @@ function buildLogSummary(lg){
       });
       html+='</div>';
     }
-    const outLines=out.split('\\n').filter(l=>l.startsWith('['));
-    if(outLines.length>0){
+    var parsed=parseMemoryAddEntries(out);
+    if(parsed.length>0){
       html+='<div class="log-msg-list">';
-      outLines.forEach(function(l){
-        var rm=l.match(/^\\[(\\w+)\\]\\s*([^\u2192]+)\u2192\\s*(.*)/);
-        if(rm){
-          var role=rm[1],actionRaw=rm[2].trim(),text=rm[3].trim();
-          var actionCls='stored';
-          if(actionRaw.indexOf('exact-dup')>=0||actionRaw.indexOf('\u23ED')>=0) actionCls='exact-dup';
-          else if(actionRaw.indexOf('dedup')>=0||actionRaw.indexOf('\uD83D\uDD01')>=0) actionCls='dedup';
-          else if(actionRaw.indexOf('merged')>=0||actionRaw.indexOf('\uD83D\uDD00')>=0) actionCls='merged';
-          else if(actionRaw.indexOf('error')>=0||actionRaw.indexOf('\u274C')>=0) actionCls='error';
-          var actionLabel={'stored':'\u2713 stored','exact-dup':'\u23ED skip','dedup':'\uD83D\uDD01 dedup','merged':'\uD83D\uDD00 merged','error':'\u2717 error'}[actionCls]||actionCls;
-          html+='<div class="log-msg-item">'+
-            '<span class="log-msg-role '+role+'">'+role+'</span>'+
-            '<span class="log-msg-action '+actionCls+'">'+actionLabel+'</span>'+
-            '<span class="log-msg-text">'+escapeHtml(text.length>150?text.slice(0,150)+'...':text)+'</span>'+
-          '</div>';
-        }else{
-          html+='<div class="log-msg-item"><span class="log-msg-text">'+escapeHtml(l.length>200?l.slice(0,200)+'...':l)+'</span></div>';
-        }
-      });
-      html+='</div>';
-    }else if(inputObj.details&&Array.isArray(inputObj.details)&&inputObj.details.length>0){
-      html+='<div class="log-msg-list">';
-      inputObj.details.forEach(function(d){
-        var s=typeof d==='string'?d:String(d);
-        var dm=s.match(/^\\[(\\w+)\\]\\s*(.*)/);
-        if(dm){
-          html+='<div class="log-msg-item"><span class="log-msg-role '+dm[1]+'">'+dm[1]+'</span><span class="log-msg-text">'+escapeHtml(dm[2].length>150?dm[2].slice(0,150)+'...':dm[2])+'</span></div>';
-        }else{
-          html+='<div class="log-msg-item"><span class="log-msg-text">'+escapeHtml(s.length>150?s.slice(0,150)+'...':s)+'</span></div>';
-        }
+      parsed.forEach(function(e){
+        var actionCls=e.action==='exact-dup'?'exact-dup':e.action==='dedup'?'dedup':e.action==='merged'?'merged':e.action==='error'?'error':'stored';
+        var actionLabel={'stored':'\u2713 stored','exact-dup':'\u23ED skip','dedup':'\uD83D\uDD01 dedup','merged':'\uD83D\uDD00 merged','error':'\u2717 error'}[actionCls]||actionCls;
+        var displayText=e.content.split('\\n')[0].trim();
+        html+='<div class="log-msg-item">'+
+          '<span class="log-msg-role '+e.role+'">'+e.role+'</span>'+
+          '<span class="log-msg-action '+actionCls+'">'+actionLabel+'</span>'+
+          '<span class="log-msg-text">'+escapeHtml(displayText)+'</span>'+
+        '</div>';
       });
       html+='</div>';
     }
@@ -2293,9 +2351,51 @@ function buildLogSummary(lg){
     const keys=Object.keys(inputObj);
     keys.slice(0,4).forEach(k=>{
       const v=String(inputObj[k]);
-      html+='<span class="log-summary-kv"><span class="kv-label">'+escapeHtml(k)+':</span><span class="kv-val">'+escapeHtml(v.length>60?v.slice(0,60)+'...':v)+'</span></span>';
+      html+='<span class="log-summary-kv"><span class="kv-label">'+escapeHtml(k)+':</span><span class="kv-val">'+escapeHtml(v)+'</span></span>';
     });
   }
+  return html;
+}
+function buildRecallDetailHtml(rd){
+  var html='<div class="recall-detail">';
+  var cands=rd.candidates||[];
+  var filtered=rd.filtered||[];
+  if(cands.length>0){
+    html+='<div class="recall-detail-section" onclick="this.classList.toggle(\\\'expanded\\\')">';
+    html+='<div class="recall-detail-title"><span class="recall-expand-icon">\u25B6</span>\u{1F50D} '+t('logs.recall.initial')+' ('+cands.length+')</div>';
+    html+='<div class="recall-detail-items">';
+    cands.forEach(function(c,i){
+      var scoreClass=c.score>=0.7?'high':c.score>=0.5?'mid':'low';
+      var shortText=escapeHtml(c.summary||c.content||c.original_excerpt||'');
+      var fullText=escapeHtml(c.content||c.original_excerpt||c.summary||'');
+      html+='<div class="recall-item" onclick="event.stopPropagation();this.classList.toggle(\\\'expanded\\\')">';
+      html+='<div class="recall-item-head"><span class="recall-idx">'+(i+1)+'</span><span class="recall-score '+scoreClass+'">'+c.score.toFixed(3)+'</span><span class="log-msg-role '+(c.role||'user')+'">'+(c.role||'user')+'</span><span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
+      html+='<div class="recall-summary-full">'+fullText+'</div>';
+      html+='</div>';
+    });
+    html+='</div></div>';
+  }
+  if(filtered.length>0){
+    html+='<div class="recall-detail-section filtered" onclick="this.classList.toggle(\\\'expanded\\\')">';
+    html+='<div class="recall-detail-title"><span class="recall-expand-icon">\u25B6</span>\u2705 '+t('logs.recall.filtered')+' ('+filtered.length+')</div>';
+    html+='<div class="recall-detail-items">';
+    filtered.forEach(function(f,i){
+      var scoreClass=f.score>=0.7?'high':f.score>=0.5?'mid':'low';
+      var shortText=escapeHtml(f.summary||f.content||f.original_excerpt||'');
+      var fullText=escapeHtml(f.content||f.original_excerpt||f.summary||'');
+      html+='<div class="recall-item" onclick="event.stopPropagation();this.classList.toggle(\\\'expanded\\\')">';
+      html+='<div class="recall-item-head"><span class="recall-idx">'+(i+1)+'</span><span class="recall-score '+scoreClass+'">'+f.score.toFixed(3)+'</span><span class="log-msg-role '+(f.role||'user')+'">'+(f.role||'user')+'</span><span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
+      html+='<div class="recall-summary-full">'+fullText+'</div>';
+      html+='</div>';
+    });
+    html+='</div></div>';
+  }else if(cands.length>0){
+    html+='<div style="font-size:10px;color:var(--text-muted);margin-top:4px">\u26A0 '+t('logs.recall.noneRelevant')+'</div>';
+  }
+  if(rd.status==='error'&&rd.error){
+    html+='<div style="margin-top:8px;color:var(--accent);font-size:12px">\u274C '+escapeHtml(rd.error)+'</div>';
+  }
+  html+='</div>';
   return html;
 }
 function renderLogs(logs){
@@ -2310,7 +2410,29 @@ function renderLogs(logs){
     const toolCls=lg.toolName.replace(/[^a-zA-Z0-9_]/g,'_');
     const dur=lg.durationMs<1000?Math.round(lg.durationMs)+'ms':(lg.durationMs/1000).toFixed(1)+'s';
     let inputDisplay='';
-    try{const parsed=JSON.parse(lg.input);inputDisplay=JSON.stringify(parsed,null,2);}catch(_){inputDisplay=lg.input;}
+    let inputHtml='';
+    let outputHtml='';
+    try{
+      const parsed=JSON.parse(lg.input);
+      if(lg.toolName==='memory_add'){
+        var addEntries=parseMemoryAddEntries(lg.output||'');
+        if(addEntries.length>0){
+          inputHtml='<div class="log-add-detail">';
+          addEntries.forEach(function(e){
+            inputHtml+='<div class="log-add-msg"><div class="log-add-msg-role">'+escapeHtml(e.role)+'</div><div class="log-add-msg-content">'+escapeHtml(e.content).replace(/\\n/g,'<br>')+'</div></div>';
+          });
+          inputHtml+='</div>';
+        }
+      }else if(parsed.type==='auto_recall'||parsed.type==='tool_call'){
+        inputDisplay=JSON.stringify({query:parsed.query},null,2);
+      }else{
+        inputDisplay=JSON.stringify(parsed,null,2);
+      }
+    }catch(_){inputDisplay=lg.input;}
+    try{
+      var rd2=null;try{rd2=JSON.parse(lg.output);}catch(_e){}
+      if(rd2&&rd2.candidates){outputHtml=buildRecallDetailHtml(rd2);}
+    }catch(_){}
     const summary=buildLogSummary(lg);
     return '<div class="log-entry" id="log-'+i+'">'+
       '<div class="log-header" onclick="toggleLog('+i+')">'+
@@ -2324,11 +2446,11 @@ function renderLogs(logs){
       '<div class="log-detail" id="log-detail-'+i+'">'+
         '<div class="log-io-section">'+
           '<div class="log-io-label">\u25B6 '+t('logs.input')+'</div>'+
-          '<pre class="log-io-content">'+escapeHtml(inputDisplay)+'</pre>'+
+          (inputHtml?inputHtml:'<pre class="log-io-content">'+escapeHtml(inputDisplay)+'</pre>')+
         '</div>'+
         '<div class="log-io-section">'+
           '<div class="log-io-label">\u25C0 '+t('logs.output')+'</div>'+
-          '<pre class="log-io-content">'+escapeHtml(lg.output)+'</pre>'+
+          (outputHtml?outputHtml:'<pre class="log-io-content">'+escapeHtml(lg.output)+'</pre>')+
         '</div>'+
       '</div>'+
     '</div>';
@@ -2371,8 +2493,6 @@ async function loadMetrics(){
   document.getElementById('mSessions').textContent=formatNum(d.totals.sessions);
   document.getElementById('mEmbeddings').textContent=formatNum(d.totals.embeddings);
   renderChartWrites(d.writesPerDay);
-  renderBreakdown(d.roleBreakdown,'breakdownRole');
-  renderBreakdown(d.kindBreakdown,'breakdownKind');
   loadToolMetrics();
 }
 
@@ -2888,7 +3008,7 @@ function classifyError(msg){
   if(msg.indexOf('ECONNREFUSED')>=0) return 'Connection refused';
   if(msg.indexOf('ENOTFOUND')>=0) return 'DNS resolution failed';
   if(msg.indexOf('403')>=0) return 'Forbidden (403)';
-  return msg.length>50?msg.slice(0,47)+'...':msg;
+  return msg;
 }
 
 function shortenModel(s){return s?s.replace('openai_compatible/','').replace('openai/',''):'\u2014';}
@@ -3077,6 +3197,7 @@ async function saveConfig(){
   // 2) Test embedding
   try{
     var er=await fetch('/api/test-model',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'embedding',provider:cfg.embedding.provider,model:cfg.embedding.model||'',endpoint:cfg.embedding.endpoint||'',apiKey:cfg.embedding.apiKey||''})});
+    if(er.status===401){done();toast(t('settings.session.expired'),'error');return;}
     var ed=await er.json();
     if(!ed.ok){done();toast(t('settings.save.emb.fail')+': '+ed.error,'error');document.getElementById('testEmbResult').className='test-result fail';document.getElementById('testEmbResult').innerHTML='\\u274C '+ed.error;return;}
     document.getElementById('testEmbResult').className='test-result ok';document.getElementById('testEmbResult').innerHTML='\\u2705 '+t('settings.test.ok');
@@ -3086,6 +3207,7 @@ async function saveConfig(){
   if(hasSumConfig&&cfg.summarizer){
     try{
       var sr=await fetch('/api/test-model',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'summarizer',provider:cfg.summarizer.provider,model:cfg.summarizer.model||'',endpoint:cfg.summarizer.endpoint||'',apiKey:cfg.summarizer.apiKey||''})});
+      if(sr.status===401){done();toast(t('settings.session.expired'),'error');return;}
       var sd=await sr.json();
       if(!sd.ok){done();toast(t('settings.save.sum.fail')+': '+sd.error,'error');document.getElementById('testSumResult').className='test-result fail';document.getElementById('testSumResult').innerHTML='\\u274C '+sd.error;return;}
       document.getElementById('testSumResult').className='test-result ok';document.getElementById('testSumResult').innerHTML='\\u2705 '+t('settings.test.ok');
@@ -3096,6 +3218,7 @@ async function saveConfig(){
   if(hasSkillConfig&&cfg.skillEvolution.summarizer){
     try{
       var kr=await fetch('/api/test-model',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'summarizer',provider:cfg.skillEvolution.summarizer.provider,model:cfg.skillEvolution.summarizer.model||'',endpoint:cfg.skillEvolution.summarizer.endpoint||'',apiKey:cfg.skillEvolution.summarizer.apiKey||''})});
+      if(kr.status===401){done();toast(t('settings.session.expired'),'error');return;}
       var kd=await kr.json();
       if(!kd.ok){done();toast(t('settings.save.skill.fail')+': '+kd.error,'error');document.getElementById('testSkillResult').className='test-result fail';document.getElementById('testSkillResult').innerHTML='\\u274C '+kd.error;return;}
       document.getElementById('testSkillResult').className='test-result ok';document.getElementById('testSkillResult').innerHTML='\\u2705 '+t('settings.test.ok');
@@ -3153,6 +3276,7 @@ async function testModel(type){
   try{
     var body={type:type,provider:provider,model:model,endpoint:endpoint,apiKey:apiKey};
     var r=await fetch('/api/test-model',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.status===401){resultEl.className='test-result fail';resultEl.innerHTML='\\u274C '+t('settings.session.expired');btn.disabled=false;return;}
     var d=await r.json();
     if(d.ok){
       resultEl.className='test-result ok';
@@ -3477,17 +3601,6 @@ function renderToolAgg(data){
     '</tbody></table>';
 }
 
-function renderBreakdown(obj,containerId){
-  const el=document.getElementById(containerId);
-  if(!el)return;
-  const entries=Object.entries(obj||{}).sort((a,b)=>b[1]-a[1]);
-  const total=entries.reduce((s,[,v])=>s+v,0)||1;
-  el.innerHTML=entries.map(([label,value])=>{
-    const pct=Math.round((value/total)*100);
-    return '<div class="breakdown-item"><div class="bd-top"><span class="label">'+esc(label)+'</span><span class="value">'+value+' <span style="font-size:11px;font-weight:500;color:var(--text-muted)">('+pct+'%)</span></span></div><div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:'+pct+'%"></div></div></div>';
-  }).join('');
-}
-
 /* ─── Data loading ─── */
 async function loadAll(){
   await Promise.all([loadStats(),loadMemories()]);
@@ -3570,8 +3683,6 @@ function getFilterParams(){
   const p=new URLSearchParams();
   if(activeSession) p.set('session',activeSession);
   if(activeRole) p.set('role',activeRole);
-  const kind=document.getElementById('filterKind').value;
-  if(kind) p.set('kind',kind);
   const df=document.getElementById('dateFrom').value;
   if(df) p.set('dateFrom',df);
   const dt=document.getElementById('dateTo').value;
@@ -3675,18 +3786,19 @@ function renderMemories(items){
   list.innerHTML=items.map(m=>{
     const time=m.created_at?new Date(typeof m.created_at==='number'?m.created_at:m.created_at).toLocaleString('zh-CN'):'';
     const role=m.role||'user';
-    const kind=m.kind||'paragraph';
-    const summary=esc(m.summary||m.content?.slice(0,120)||'');
-    const content=esc(m.content||'');
+    const rawSummary=m.summary||'';
+    const rawContent=m.content||'';
+    const content=esc(rawContent);
     const id=m.id;
     const vscore=m._vscore?'<span class="vscore-badge">'+Math.round(m._vscore*100)+'%</span>':'';
     const sid=m.session_key||'';
     const sidShort=sid.length>18?sid.slice(0,6)+'..'+sid.slice(-6):sid;
     const mc=m.merge_count||0;
+    const cardTitle=esc(rawSummary||rawContent||'');
     const mergeBadge=mc>0?'<span class="merge-badge">\\u{1F504} '+t('card.evolved')+' '+mc+t('card.times')+'</span>':'';
     const updatedAt=(m.updated_at&&m.updated_at>m.created_at)?'<span class="card-updated">'+t('card.updated')+' '+new Date(m.updated_at).toLocaleString('zh-CN')+'</span>':'';
     const ds=m.dedup_status||'active';
-    const isInactive=ds==='duplicate'||ds==='merged';
+    const isInactive=ds==='merged';
     const dedupBadge=ds==='duplicate'?'<span class="dedup-badge duplicate">'+t('card.dedupDuplicate')+'</span>':ds==='merged'?'<span class="dedup-badge merged">'+t('card.dedupMerged')+'</span>':'';
     const isImported=sid.startsWith('openclaw-import-')||sid.startsWith('openclaw-session-');
     const importBadge=isImported?'<span class="import-badge">\u{1F990} '+t('card.imported')+'</span>':'';
@@ -3694,7 +3806,7 @@ function renderMemories(items){
     const isPublicMem=ownerVal==='public';
     const ownerBadge=isPublicMem?'<span class="owner-badge public">\\u{1F310} '+t('filter.public')+'</span>':'<span class="owner-badge agent">\\u{1F512} '+t('filter.private')+'</span>';
     let dedupInfo='';
-    if(isInactive){
+    if(ds==='duplicate'||ds==='merged'){
       const reason=m.dedup_reason?'<span style="font-size:11px;color:var(--text-muted)">'+t('card.dedupReason')+esc(m.dedup_reason)+'</span>':'';
       const target=m.dedup_target?'<span class="dedup-target-link" onclick="scrollToMemory(\\''+m.dedup_target+'\\')">'+t('card.dedupTarget')+m.dedup_target.slice(0,8)+'...</span>':'';
       dedupInfo='<div style="margin-top:6px;font-size:11px">'+target+' '+reason+'</div>';
@@ -3717,8 +3829,23 @@ function renderMemories(items){
       }catch(e){}
     }
     return '<div class="memory-card'+(isInactive?' dedup-inactive':'')+'">'+
-      '<div class="card-header"><div class="meta"><span class="role-tag '+role+'">'+role+'</span><span class="kind-tag">'+kind+'</span>'+ownerBadge+importBadge+dedupBadge+mergeBadge+'</div><span class="card-time"><span class="session-tag" title="'+esc(sid)+'">'+esc(sidShort)+'</span> '+time+updatedAt+'</span></div>'+
-      '<div class="card-summary">'+summary+'</div>'+
+      '<div class="card-header"><div class="meta"><span class="role-tag '+role+'">'+role+'</span>'+ownerBadge+importBadge+dedupBadge+mergeBadge+'</div><span class="card-time"><span class="session-tag" title="'+esc(sid)+'">'+esc(sidShort)+'</span> '+time+updatedAt+'</span></div>'+
+      '<div class="card-summary">'+cardTitle+'</div>'+
+      (function(){
+        if(mc<=0) return '';
+        var mergeHtml='<div class="card-merged-info">';
+        mergeHtml+='<div class="card-merged-label">\\u{1F504} '+t('card.mergedInfo')+' ('+mc+t('card.times')+')</div>';
+        var sources=m.merge_sources||[];
+        if(sources.length>0){
+          mergeHtml+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
+          sources.forEach(function(s){
+            mergeHtml+='<span class="dedup-target-link" onclick="scrollToMemory(\\''+s.id+'\\')">\\u{1F517} '+s.id.slice(0,8)+'...</span>';
+          });
+          mergeHtml+='</div>';
+        }
+        mergeHtml+='</div>';
+        return mergeHtml;
+      })()+
       dedupInfo+
       '<div class="card-content" id="content-'+id+'"><pre>'+content+'</pre></div>'+
       historyHtml+
@@ -3797,12 +3924,11 @@ async function showMemoryModal(chunkId){
     const m=data.memory;
     const role=(m.role||'unknown').toUpperCase();
     const roleCls=(m.role||'').toLowerCase();
-    const kind=m.kind||'paragraph';
     const ds=m.dedup_status||'active';
     const time=new Date(m.created_at).toLocaleString('zh-CN');
     const updated=m.updated_at?new Date(m.updated_at).toLocaleString('zh-CN'):'';
     let html='<div class="modal-memory-card">';
-    html+='<div class="modal-header-row"><span class="role-tag '+roleCls+'">'+role+'</span><span class="kind-tag">'+kind+'</span>';
+    html+='<div class="modal-header-row"><span class="role-tag '+roleCls+'">'+role+'</span>';
     if(ds!=='active') html+='<span class="dedup-badge '+(ds==='duplicate'?'duplicate':'merged')+'">'+ds+'</span>';
     html+='</div>';
     html+='<div class="modal-field"><div class="modal-field-label">ID</div><div class="modal-field-val" style="font-family:monospace;font-size:11px">'+esc(m.id)+'</div></div>';
@@ -3860,17 +3986,6 @@ function renderSummaryHtml(raw){
 }
 
 /* ─── CRUD ─── */
-function openCreateModal(){
-  editingId=null;
-  document.getElementById('modalTitle').textContent=t('modal.new');
-  document.getElementById('modalSubmit').textContent=t('modal.create');
-  document.getElementById('mRole').value='user';
-  document.getElementById('mContent').value='';
-  document.getElementById('mSummary').value='';
-  document.getElementById('mKind').value='paragraph';
-  document.getElementById('modalOverlay').classList.add('show');
-}
-
 function openEditModal(id){
   const m=memoryCache[id];
   if(!m){toast(t('toast.notfound'),'error');return}
@@ -3880,7 +3995,6 @@ function openEditModal(id){
   document.getElementById('mRole').value=m.role||'user';
   document.getElementById('mContent').value=m.content||'';
   document.getElementById('mSummary').value=m.summary||'';
-  document.getElementById('mKind').value=m.kind||'paragraph';
   document.getElementById('modalOverlay').classList.add('show');
 }
 
@@ -3889,21 +4003,16 @@ function closeModal(){
 }
 
 async function submitModal(){
+  if(!editingId)return;
   const data={
     role:document.getElementById('mRole').value,
     content:document.getElementById('mContent').value,
     summary:document.getElementById('mSummary').value,
-    kind:document.getElementById('mKind').value,
   };
   if(!data.content.trim()){toast(t('modal.err.empty'),'error');return}
-  let r;
-  if(editingId){
-    r=await fetch('/api/memory/'+editingId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  } else {
-    r=await fetch('/api/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  }
+  const r=await fetch('/api/memory/'+editingId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   const d=await r.json();
-  if(d.ok){toast(editingId?t('toast.updated'):t('toast.created'),'success');closeModal();loadAll();}
+  if(d.ok){toast(t('toast.updated'),'success');closeModal();loadAll();}
   else{toast(d.error||t('toast.opfail'),'error')}
 }
 
@@ -3926,12 +4035,15 @@ async function toggleMemoryPublic(id,setPublic){
 }
 
 async function clearAll(){
-  if(!confirm(t('confirm.clearall')))return;
-  if(!confirm(t('confirm.clearall2')))return;
-  const r=await fetch('/api/memories',{method:'DELETE'});
-  const d=await r.json();
-  if(d.ok){toast(t('toast.cleared'),'success');loadAll();}
-  else{toast(t('toast.clearfail'),'error')}
+  try{
+    if(!confirm(t('confirm.clearall')))return;
+    if(!confirm(t('confirm.clearall2')))return;
+    const r=await fetch('/api/memories',{method:'DELETE'});
+    if(r.status===401){toast(t('settings.session.expired'),'error');return;}
+    const d=await r.json();
+    if(d.ok){toast(t('toast.cleared'),'success');loadAll();}
+    else{toast(t('toast.clearfail'),'error')}
+  }catch(e){toast('Error: '+e.message,'error')}
 }
 
 /* ─── Migration ─── */
