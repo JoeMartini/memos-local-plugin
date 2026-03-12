@@ -330,8 +330,12 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .task-chunk-role.user{color:var(--pri)}
 .task-chunk-role.assistant{color:var(--green)}
 .task-chunk-role.tool{color:var(--amber)}
-.task-chunk-bubble{padding:12px 16px;border-radius:16px;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow:hidden;position:relative;transition:all .2s}
-.task-chunk-bubble.expanded{max-height:none}
+.task-chunk-bubble{padding:12px 16px;border-radius:16px;white-space:pre-wrap;word-break:break-word;max-height:none;overflow:hidden;position:relative;transition:all .2s}
+.task-chunk-bubble.collapsed{max-height:200px}
+.task-chunk-expand{display:none;align-items:center;justify-content:center;gap:4px;margin-top:4px;padding:4px 12px;font-size:12px;font-weight:600;color:var(--text-sec);cursor:pointer;user-select:none;border-radius:8px;transition:all .15s}
+.task-chunk-expand:hover{color:var(--pri);background:rgba(99,102,241,.08)}
+.task-chunk-expand .expand-arrow{display:inline-block;font-size:10px;transition:transform .2s}
+.task-chunk-expand.is-expanded .expand-arrow{transform:rotate(180deg)}
 .role-user .task-chunk-bubble{background:var(--pri);color:#000;border-bottom-right-radius:4px}
 .role-assistant .task-chunk-bubble{background:var(--bg-card);border:1px solid var(--border);color:var(--text-sec);border-bottom-left-radius:4px}
 .role-tool .task-chunk-bubble{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);color:var(--text-sec);border-bottom-left-radius:4px;font-family:'SF Mono',Monaco,Consolas,monospace;font-size:12px}
@@ -962,8 +966,11 @@ input,textarea,select{font-family:inherit;font-size:inherit}
     <div class="settings-view" id="settingsView">
       <div class="settings-group" id="settingsModelConfig">
         <h2 class="settings-group-title"><span data-i18n="settings.modelconfig">Model Configuration</span></h2>
-        <div class="model-health-bar" id="modelHealthBar">
-          <div style="font-size:12px;color:var(--text-muted);width:100%">Loading model status...</div>
+        <div class="settings-section">
+          <h3><span class="icon">\u{1F4CA}</span> <span data-i18n="settings.modelhealth">Model Health</span></h3>
+          <div class="model-health-bar" id="modelHealthBar">
+            <div style="font-size:12px;color:var(--text-muted);width:100%">Loading model status...</div>
+          </div>
         </div>
       <div class="settings-section">
         <h3><span class="icon">\u{1F4E1}</span> <span data-i18n="settings.embedding">Embedding Model</span></h3>
@@ -1392,6 +1399,8 @@ const I18N={
     'tasks.untitled':'Untitled Task',
     'tasks.chunks':'Related Memories',
     'tasks.nochunks':'No memories in this task yet.',
+    'tasks.expand':'Show more',
+    'tasks.collapse':'Show less',
     'tasks.skipped.default':'This conversation was too brief to generate a summary. It will not appear in search results.',
     'refresh':'\\u21BB Refresh',
     'logout':'Logout',
@@ -1496,6 +1505,7 @@ const I18N={
     'tab.import':'\u{1F4E5} Import',
     'tab.settings':'\u2699 Settings',
     'settings.modelconfig':'Model Configuration',
+    'settings.modelhealth':'Model Health',
     'settings.embedding':'Embedding Model',
     'settings.summarizer':'Summarizer Model',
     'settings.skill':'Skill Evolution',
@@ -1701,6 +1711,8 @@ const I18N={
     'tasks.untitled':'未命名任务',
     'tasks.chunks':'关联记忆',
     'tasks.nochunks':'此任务暂无关联记忆。',
+    'tasks.expand':'展开全文',
+    'tasks.collapse':'收起',
     'tasks.skipped.default':'对话内容过少，未生成摘要。该任务不会出现在检索结果中。',
     'refresh':'\\u21BB 刷新',
     'logout':'退出',
@@ -1805,6 +1817,7 @@ const I18N={
     'tab.import':'\u{1F4E5} 导入',
     'tab.settings':'\u2699 设置',
     'settings.modelconfig':'模型配置',
+    'settings.modelhealth':'模型健康',
     'settings.embedding':'嵌入模型',
     'settings.summarizer':'摘要模型',
     'settings.skill':'技能进化',
@@ -2448,14 +2461,16 @@ async function openTaskDetail(taskId){
     if(task.chunks.length===0){
       document.getElementById('taskDetailChunks').innerHTML='<div style="color:var(--text-muted);padding:12px;font-size:13px">'+t('tasks.nochunks')+'</div>';
     }else{
-      document.getElementById('taskDetailChunks').innerHTML=task.chunks.map(c=>{
+      document.getElementById('taskDetailChunks').innerHTML=task.chunks.map(function(c,i){
         var roleLabel=c.role==='user'?t('tasks.role.user'):c.role==='assistant'?t('tasks.role.assistant'):c.role.toUpperCase();
         return '<div class="task-chunk-item role-'+c.role+'">'+
           '<div class="task-chunk-role '+c.role+'">'+roleLabel+'</div>'+
-          '<div class="task-chunk-bubble" onclick="this.classList.toggle(\\\'expanded\\\')">'+esc(c.content)+'</div>'+
+          '<div class="task-chunk-bubble collapsed" id="chunk_b_'+i+'">'+esc(c.content)+'</div>'+
+          '<div class="task-chunk-expand" id="chunk_e_'+i+'" onclick="toggleChunkExpand('+i+')"><span class="expand-arrow">▼</span> <span class="expand-label">'+t('tasks.expand')+'</span></div>'+
           '<div class="task-chunk-time">'+formatTime(c.createdAt)+'</div>'+
         '</div>';
       }).join('');
+      setTimeout(function(){initChunkExpanders(task.chunks.length)},50);
     }
   }catch(e){
     document.getElementById('taskDetailTitle').textContent=t('tasks.error');
@@ -2516,6 +2531,33 @@ function renderTaskSkillSection(task){
     section.innerHTML='<div class="skill-status-header">\\u2014 \u65E0\u6280\u80FD\u4FE1\u606F</div>'+
       '<div class="skill-status-reason">\u8BE5\u4EFB\u52A1\u672A\u8FDB\u884C\u6280\u80FD\u8BC4\u4F30\u3002</div>'+
       (task.status==='completed'?'<button class="btn btn-primary" onclick="retrySkillGen(\\''+esc(task.id)+'\\')" style="margin-top:8px;font-size:12px">'+t('task.retrySkill')+'</button>':'');
+  }
+}
+
+function initChunkExpanders(count){
+  for(var i=0;i<count;i++){
+    var b=document.getElementById('chunk_b_'+i);
+    var e=document.getElementById('chunk_e_'+i);
+    if(b && b.scrollHeight > b.clientHeight + 4){
+      e.style.display='flex';
+    } else if(b) {
+      b.classList.remove('collapsed');
+    }
+  }
+}
+function toggleChunkExpand(i){
+  var b=document.getElementById('chunk_b_'+i);
+  var e=document.getElementById('chunk_e_'+i);
+  if(!b||!e)return;
+  var expanding=b.classList.contains('collapsed');
+  if(expanding){
+    b.classList.remove('collapsed');
+    e.classList.add('is-expanded');
+    e.querySelector('.expand-label').textContent=t('tasks.collapse');
+  }else{
+    b.classList.add('collapsed');
+    e.classList.remove('is-expanded');
+    e.querySelector('.expand-label').textContent=t('tasks.expand');
   }
 }
 
@@ -3060,15 +3102,16 @@ async function testModel(type){
     var d=await r.json();
     if(d.ok){
       resultEl.className='test-result ok';
-      resultEl.innerHTML='\\u2705 '+t('settings.test.ok')+'<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">'+esc(d.detail||'')+'</div>';
+      resultEl.innerHTML='\\u2705 '+t('settings.test.ok')+(d.detail?'<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">'+esc(d.detail)+'</div>':'');
     }else{
-      var errMsg=d.error||'Unknown error';
+      var errMsg=(d.error||'Unknown error').replace(/:\s*$/,'').trim();
       resultEl.className='test-result fail';
-      resultEl.innerHTML='\\u274C '+t('settings.test.fail')+'<div style="margin-top:6px;font-size:11px;padding:8px 10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:6px;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto;font-family:SF Mono,Monaco,Consolas,monospace">'+esc(errMsg)+'</div>';
+      resultEl.innerHTML='\\u274C '+t('settings.test.fail')+(errMsg?'<div style="margin-top:6px;font-size:11px;padding:8px 10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:6px;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto;font-family:SF Mono,Monaco,Consolas,monospace">'+esc(errMsg)+'</div>':'');
     }
   }catch(e){
+    var catchMsg=(e.message||'Network error').replace(/:\s*$/,'').trim();
     resultEl.className='test-result fail';
-    resultEl.innerHTML='\\u274C '+t('settings.test.fail')+'<div style="margin-top:6px;font-size:11px;padding:8px 10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:6px;white-space:pre-wrap;word-break:break-all">'+esc(e.message)+'</div>';
+    resultEl.innerHTML='\\u274C '+t('settings.test.fail')+(catchMsg?'<div style="margin-top:6px;font-size:11px;padding:8px 10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:6px;white-space:pre-wrap;word-break:break-all">'+esc(catchMsg)+'</div>':'');
   }finally{btn.disabled=false;}
 }
 
