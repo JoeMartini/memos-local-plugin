@@ -31,31 +31,30 @@ async function checkForUpdate(log: { info: (m: string) => void; warn: (m: string
     const packageName = pkg.name;
     if (!currentVersion || !packageName) return;
 
-    const resp = await fetch(`https://registry.npmjs.org/${packageName}/latest`, {
-      signal: AbortSignal.timeout(8_000),
-    });
-    if (!resp.ok) return;
-    const data = await resp.json() as { version?: string };
-    const latestVersion = data.version;
-    if (!latestVersion) return;
+    const { computeUpdateCheck } = await import("./src/update-check");
+    const result = await computeUpdateCheck(packageName, currentVersion, fetch, 8_000);
+    if (!result) return;
 
-    if (latestVersion !== currentVersion) {
+    if (result.updateAvailable) {
       const msg = [
         "",
         "╔══════════════════════════════════════════════════════════════╗",
         "║  MemOS Local Memory — New version available!               ║",
         "╠══════════════════════════════════════════════════════════════╣",
-        `║  Current: ${currentVersion.padEnd(12)}  Latest: ${latestVersion.padEnd(13)}           ║`,
+        `║  Current: ${result.current.padEnd(12)}  Latest (${result.channel}): ${result.latest.padEnd(10)}   ║`,
         "║                                                            ║",
         "║  Update:                                                   ║",
-        `║  openclaw plugins install ${packageName}  ║`,
+        `║  ${result.installCommand.padEnd(58)}║`,
         "║                                                            ║",
         "╚══════════════════════════════════════════════════════════════╝",
         "",
       ].join("\n");
       log.warn(`memos-local: ${msg}`);
     } else {
-      log.info(`memos-local: version ${currentVersion} is up to date`);
+      log.info(`memos-local: version ${currentVersion} is up to date (${result.channel})`);
+      if (result.stableChannel) {
+        log.info(`memos-local: stable channel is v${result.stableChannel.version} — switch: ${result.stableChannel.installCommand}`);
+      }
     }
   } catch {
     // Silent fail — update check is best-effort

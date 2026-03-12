@@ -1200,7 +1200,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         </div>
 
         <div id="migrateActions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-ghost" onclick="migrateScan()" id="migrateScanBtn" data-i18n="migrate.scan">Scan Data Sources</button>
+          <button class="btn" onclick="migrateScan(true)" id="migrateScanBtn" style="background:var(--bg);border:1px solid var(--border);color:var(--text);font-weight:600;padding:7px 18px;cursor:pointer" data-i18n="migrate.scan">Scan Data Sources</button>
           <button class="btn btn-primary" onclick="migrateStart()" id="migrateStartBtn" style="display:none" data-i18n="migrate.start">Start Import</button>
           <span id="migrateConcurrencyRow" style="display:none;align-items:center;gap:6px">
             <span style="font-size:11px;color:var(--text-muted)" data-i18n="migrate.concurrency.label">Concurrent agents</span>
@@ -1584,12 +1584,18 @@ const I18N={
     'migrate.scan':'Scan Data Sources',
     'migrate.start':'Start Import',
     'migrate.scanning':'Scanning...',
+    'migrate.scan.required':'Please scan data sources first',
+    'migrate.scan.done':'Scan complete \u2014 {n} new items found',
+    'migrate.imported.hint':'{n} items already imported',
+    'migrate.reconnect.hint':'--- {n} items processed before page reload ---',
     'migrate.stat.stored':'Stored',
     'migrate.stat.skipped':'Skipped',
     'migrate.stat.merged':'Merged',
     'migrate.stat.errors':'Errors',
     'migrate.phase.sqlite':'Importing memory index...',
     'migrate.phase.sessions':'Importing conversation history...',
+    'migrate.phase.stopped':'Import stopped',
+    'migrate.phase.done':'Import completed',
     'migrate.chunks':'chunks',
     'migrate.sessions.count':'sessions, {n} messages',
     'migrate.nodata':'No OpenClaw data found to import.',
@@ -1615,7 +1621,8 @@ const I18N={
     'pp.select.warn':'Please select at least one option.',
     'pp.skill.created':'Skill created',
     'pp.stat.tasks':'Tasks',
-    'pp.stat.skills':'Skills',
+    'pp.stat.skills':'Evolutions',
+    'pp.stat.skills.total':'Skills',
     'pp.stat.errors':'Errors',
     'pp.stat.skipped':'Skipped',
     'pp.info.skipped':'{n} sessions already processed, skipping.',
@@ -1675,6 +1682,10 @@ const I18N={
     'skill.save.error':'Failed to save skill: ',
     'update.available':'New version available',
     'update.run':'Run',
+    'update.btn':'Update now',
+    'update.installing':'Installing update...',
+    'update.success':'Update installed! Restarting...',
+    'update.failed':'Update failed',
     'update.dismiss':'Dismiss'
   },
   zh:{
@@ -1899,12 +1910,18 @@ const I18N={
     'migrate.scan':'扫描数据源',
     'migrate.start':'开始导入',
     'migrate.scanning':'扫描中...',
+    'migrate.scan.required':'请先扫描数据源',
+    'migrate.scan.done':'扫描完成 — 发现 {n} 条新数据可导入',
+    'migrate.imported.hint':'已导入 {n} 条记忆',
+    'migrate.reconnect.hint':'--- 页面刷新前已处理 {n} 条 ---',
     'migrate.stat.stored':'已存储',
     'migrate.stat.skipped':'已跳过',
     'migrate.stat.merged':'已合并',
     'migrate.stat.errors':'错误',
     'migrate.phase.sqlite':'正在导入记忆索引...',
     'migrate.phase.sessions':'正在导入对话历史...',
+    'migrate.phase.stopped':'导入已停止',
+    'migrate.phase.done':'导入完成',
     'migrate.chunks':'条记忆',
     'migrate.sessions.count':'个会话，{n} 条消息',
     'migrate.nodata':'未找到可导入的 OpenClaw 数据。',
@@ -1930,7 +1947,8 @@ const I18N={
     'pp.select.warn':'请至少选择一个选项。',
     'pp.skill.created':'技能已创建',
     'pp.stat.tasks':'任务',
-    'pp.stat.skills':'技能',
+    'pp.stat.skills':'进化',
+    'pp.stat.skills.total':'技能',
     'pp.stat.errors':'错误',
     'pp.stat.skipped':'已跳过',
     'pp.info.skipped':'已有 {n} 个会话处理过，自动跳过。',
@@ -1990,6 +2008,10 @@ const I18N={
     'skill.save.error':'保存技能失败：',
     'update.available':'发现新版本',
     'update.run':'执行命令',
+    'update.btn':'立即更新',
+    'update.installing':'正在安装更新...',
+    'update.success':'更新成功！正在重启...',
+    'update.failed':'更新失败',
     'update.dismiss':'关闭'
   }
 };
@@ -2139,7 +2161,7 @@ function switchView(view){
       loadModelHealth();
     } else if(view==='import'){
       migrateView.classList.add('show');
-      if(!window._migrateRunning) migrateScan();
+      if(!window._migrateRunning) migrateScan(false);
     }
   }
 }
@@ -3929,7 +3951,7 @@ let migrateStats={stored:0,skipped:0,merged:0,errors:0};
   });
 })();
 
-async function migrateScan(){
+async function migrateScan(showToast){
   const btn=document.getElementById('migrateScanBtn');
   btn.disabled=true;
   btn.textContent=t('migrate.scanning');
@@ -3962,9 +3984,31 @@ async function migrateScan(){
         t('migrate.config.warn.desc')+' ('+parts.join(', ')+')';
     }
 
+    const imported=d.importedChunkCount||0;
+    const remaining=Math.max(0,(d.totalItems||0)-imported);
+
     if(d.totalItems>0 && d.configReady){
       document.getElementById('migrateStartBtn').style.display='inline-flex';
       document.getElementById('migrateConcurrencyRow').style.display='inline-flex';
+      if(d.hasImportedData){
+        document.getElementById('migrateStartBtn').textContent=t('migrate.resume');
+      }else{
+        document.getElementById('migrateStartBtn').textContent=t('migrate.start');
+      }
+    }
+
+    var hintEl=document.getElementById('migrateImportedHint');
+    if(!hintEl){
+      hintEl=document.createElement('div');
+      hintEl.id='migrateImportedHint';
+      hintEl.style.cssText='font-size:12px;color:var(--text-sec);padding:6px 0';
+      document.getElementById('migrateActions').appendChild(hintEl);
+    }
+    if(imported>0){
+      hintEl.textContent=t('migrate.imported.hint').replace('{n}',imported);
+      hintEl.style.display='block';
+    }else{
+      hintEl.style.display='none';
     }
 
     if(d.totalItems===0){
@@ -3974,6 +4018,7 @@ async function migrateScan(){
     if(d.hasImportedData){
       document.getElementById('postprocessSection').style.display='block';
     }
+    if(showToast) toast(t('migrate.scan.done').replace('{n}',remaining),'success');
   }catch(e){
     toast('Scan failed: '+e.message,'error');
   }finally{
@@ -3983,27 +4028,36 @@ async function migrateScan(){
 }
 
 function migrateStart(){
-  if(!migrateScanData||!migrateScanData.configReady)return;
-  if(!confirm(t('migrate.start')+'?'))return;
+  const isResume=document.getElementById('migrateStartBtn').textContent===t('migrate.resume');
+  if(!isResume){
+    if(!migrateScanData||!migrateScanData.configReady){
+      toast(t('migrate.scan.required'),'error');
+      return;
+    }
+    if(!confirm(t('migrate.start')+'?'))return;
+  }
 
   const concSel=document.getElementById('migrateConcurrency');
   const concurrency=concSel?parseInt(concSel.value,10)||1:1;
 
   window._migrateRunning=true;
-  _migrateStatusChecked=false;
+  _migrateStatusChecked=true;
   document.getElementById('migrateStartBtn').style.display='none';
   document.getElementById('migrateScanBtn').disabled=true;
+  var hintEl=document.getElementById('migrateImportedHint');
+  if(hintEl) hintEl.style.display='none';
   document.getElementById('migrateConcurrencyRow').style.display='none';
   document.getElementById('migrateConcurrencyWarn').style.display='none';
   document.getElementById('migrateProgress').style.display='block';
   document.getElementById('migrateLiveLog').innerHTML='';
   migrateStats={stored:0,skipped:0,merged:0,errors:0};
   updateMigrateStats();
+  document.getElementById('migrateBar').style.width='0%';
+  document.getElementById('migrateCounter').textContent='';
 
   document.getElementById('migrateStopBtn').disabled=false;
-  document.getElementById('migrateBar').style.width='0%';
+  document.getElementById('migrateStopBtn').style.display='inline-flex';
   document.getElementById('migrateBar').style.background='linear-gradient(90deg,#6366f1,#8b5cf6)';
-  document.getElementById('migrateCounter').textContent='';
   const body=JSON.stringify({sources:['sqlite','sessions'],concurrency});
   connectMigrateSSE('/api/migrate/start','POST',body);
 }
@@ -4040,7 +4094,7 @@ function readSSEStream(r){
   const NL=String.fromCharCode(10);
   function pump(){
     reader.read().then(({done,value})=>{
-      if(done){if(!migrateDoneCalled&&!window._migrateRunning)onMigrateDone(false);return;}
+      if(done){if(!migrateDoneCalled)onMigrateDone(false);return;}
       buf+=decoder.decode(value,{stream:true});
       const lines=buf.split(NL);
       buf=lines.pop()||'';
@@ -4063,7 +4117,7 @@ function readSSEStream(r){
 
 var _migrateStatusChecked=false;
 async function checkMigrateStatus(){
-  if(_migrateStatusChecked) return;
+  if(_migrateStatusChecked||window._migrateRunning) return;
   _migrateStatusChecked=true;
   try{
     const r=await fetch('/api/migrate/status');
@@ -4085,7 +4139,18 @@ async function checkMigrateStatus(){
       document.getElementById('migrateCounter').textContent=s.processed+' / '+s.total+' ('+pct+'%)';
       const label=s.phase==='sqlite'?t('migrate.phase.sqlite'):t('migrate.phase.sessions');
       document.getElementById('migratePhaseLabel').textContent=label;
+      document.getElementById('migrateStopBtn').style.display='inline-flex';
+      if(s.processed>0){
+        const log=document.getElementById('migrateLiveLog');
+        const hint=document.createElement('div');
+        hint.style.cssText='text-align:center;padding:8px 12px;color:var(--text-muted);font-size:11px;border-bottom:1px solid var(--border)';
+        hint.textContent=t('migrate.reconnect.hint').replace('{n}',s.processed);
+        log.appendChild(hint);
+      }
       connectMigrateSSE('/api/migrate/stream','GET',null);
+      fetch('/api/migrate/scan').then(function(sr){return sr.json()}).then(function(sd){
+        if(sd&&sd.hasImportedData) document.getElementById('postprocessSection').style.display='block';
+      }).catch(function(){});
     }else if(s.done&&(s.stored>0||s.skipped>0||s.stopped)){
       migrateStats={stored:s.stored,skipped:s.skipped,merged:s.merged,errors:s.errors};
       updateMigrateStats();
@@ -4183,18 +4248,23 @@ function onMigrateDone(wasStopped,skipReload){
   document.getElementById('migrateScanBtn').disabled=false;
   document.getElementById('migrateStopBtn').disabled=true;
   document.getElementById('migrateStopBtn').textContent=t('migrate.stop');
+  document.getElementById('migrateStopBtn').style.display='none';
   if(wasStopped){
     document.getElementById('migrateBar').style.background='linear-gradient(90deg,#f59e0b,#fbbf24)';
     document.getElementById('migrateStartBtn').style.display='inline-flex';
     document.getElementById('migrateStartBtn').textContent=t('migrate.resume');
+    document.getElementById('migratePhaseLabel').textContent=t('migrate.phase.stopped');
   }else{
     document.getElementById('migrateBar').style.width='100%';
     document.getElementById('migrateBar').style.background='linear-gradient(90deg,#22c55e,#16a34a)';
     const total=migrateStats.stored+migrateStats.skipped+migrateStats.merged+migrateStats.errors;
     if(total>0) document.getElementById('migrateCounter').textContent=total+' / '+total+' (100%)';
+    document.getElementById('migratePhaseLabel').textContent=t('migrate.phase.done');
   }
   fetch('/api/migrate/scan').then(r=>{if(!r.ok)throw new Error();return r.json()}).then(d=>{
-    if(d&&d.hasImportedData) document.getElementById('postprocessSection').style.display='block';
+    if(d&&d.hasImportedData){
+      document.getElementById('postprocessSection').style.display='block';
+    }
   }).catch(()=>{});
   if(!skipReload) loadAll();
 }
@@ -4322,12 +4392,18 @@ function connectPPSSE(){
       }).catch(function(){});
     }else if(s.done){
       document.getElementById('postprocessSection').style.display='block';
-      ppStats={tasks:s.tasksCreated||0,skills:s.skillsCreated||0,errors:s.errors||0,skipped:0};
+      ppStats={tasks:s.tasksCreated||0,skills:s.skillsCreated||0,errors:s.errors||0,skipped:s.skippedSessions||0};
       updatePPStats();
       document.getElementById('ppProgress').style.display='block';
-      var pct2=s.total>0?Math.round((s.processed/s.total)*100):0;
-      document.getElementById('ppBar').style.width=pct2+'%';
-      document.getElementById('ppCounter').textContent=s.processed+' / '+s.total+' ('+pct2+'%)';
+      var totalAll=(s.total||0)+(s.skippedSessions||0);
+      if(totalAll>0){
+        document.getElementById('ppBar').style.width='100%';
+        document.getElementById('ppCounter').textContent=totalAll+' / '+totalAll+' (100%)';
+      }else{
+        var pct2=s.total>0?Math.round((s.processed/s.total)*100):0;
+        document.getElementById('ppBar').style.width=pct2+'%';
+        document.getElementById('ppCounter').textContent=s.processed+' / '+s.total+' ('+pct2+'%)';
+      }
       ppDone(!!s.stopped,false,true);
     }
   }).catch(function(){});
@@ -4335,9 +4411,11 @@ function connectPPSSE(){
 
 function handlePPEvent(evtType,data){
   if(evtType==='progress'){
-    var pct=data.total>0?Math.round((data.processed/data.total)*100):0;
-    document.getElementById('ppBar').style.width=pct+'%';
-    document.getElementById('ppCounter').textContent=data.processed+' / '+data.total+' ('+pct+'%)';
+    if(data.total>0){
+      var pct=Math.round((data.processed/data.total)*100);
+      document.getElementById('ppBar').style.width=pct+'%';
+      document.getElementById('ppCounter').textContent=data.processed+' / '+data.total+' ('+pct+'%)';
+    }
   }else if(evtType==='info'){
     if(data.alreadyProcessed>0){
       ppStats.skipped=data.alreadyProcessed;
@@ -4346,6 +4424,10 @@ function handlePPEvent(evtType,data){
     }
     if(data.pending===0){
       appendPPLogItem({step:'done',session:t('pp.info.allDone'),index:'',total:''});
+      document.getElementById('ppPhaseLabel').textContent=t('pp.info.allDone');
+      document.getElementById('ppBar').style.width='100%';
+      document.getElementById('ppBar').style.background='linear-gradient(90deg,#22c55e,#16a34a)';
+      document.getElementById('ppCounter').textContent=data.alreadyProcessed+' / '+data.totalSessions;
     }else{
       document.getElementById('ppPhaseLabel').textContent=t('pp.info.pending').replace('{n}',data.pending);
     }
@@ -4357,12 +4439,10 @@ function handlePPEvent(evtType,data){
       document.getElementById('ppPhaseLabel').textContent=t('pp.running')+' — '+actionLabel+' — '+label;
     }
     if(data.step==='done'){
-      if(data.action==='skill-only'){
-        ppStats.skills++;
-      }else{
+      if(data.action!=='skill-only'){
         ppStats.tasks++;
+        updatePPStats();
       }
-      updatePPStats();
     }else if(data.step==='error'){
       ppStats.errors++;
       updatePPStats();
@@ -4390,6 +4470,7 @@ function ppDone(wasStopped,wasFailed,skipReload){
   document.getElementById('ppStopBtn').style.display='none';
   document.getElementById('ppStartBtn').style.display='inline-flex';
   document.getElementById('ppStartBtn').textContent=wasStopped?t('pp.resume'):t('pp.start');
+  document.getElementById('ppStartBtn').disabled=false;
   var doneEl=document.getElementById('ppDone');
   doneEl.style.display='block';
   if(wasFailed){
@@ -4397,17 +4478,38 @@ function ppDone(wasStopped,wasFailed,skipReload){
     doneEl.style.color='#ef4444';
     doneEl.textContent=t('pp.failed')||'Processing failed — check error above';
     document.getElementById('ppBar').style.background='linear-gradient(90deg,#ef4444,#dc2626)';
+    document.getElementById('ppPhaseLabel').textContent=t('pp.failed');
   }else if(wasStopped){
     doneEl.style.background='rgba(245,158,11,.06)';
     doneEl.style.color='#f59e0b';
     doneEl.textContent=t('pp.stopped');
     document.getElementById('ppBar').style.background='linear-gradient(90deg,#f59e0b,#fbbf24)';
+    document.getElementById('ppPhaseLabel').textContent=t('pp.stopped');
   }else{
     doneEl.style.background='rgba(34,197,94,.06)';
     doneEl.style.color='#22c55e';
-    doneEl.textContent=t('pp.done')+' ('+t('pp.stat.tasks')+': '+ppStats.tasks+', '+t('pp.stat.skills')+': '+ppStats.skills+')';
     document.getElementById('ppBar').style.width='100%';
     document.getElementById('ppBar').style.background='linear-gradient(90deg,#22c55e,#16a34a)';
+    document.getElementById('ppPhaseLabel').textContent=t('pp.done');
+    var ppTotal=ppStats.tasks+ppStats.skipped+ppStats.errors;
+    if(ppTotal>0) document.getElementById('ppCounter').textContent=ppTotal+' / '+ppTotal+' (100%)';
+    fetch('/api/migrate/postprocess/status').then(function(r){return r.json()}).then(function(st){
+      var totalTasks=st.existingTasks||0;
+      var totalSkills=st.existingSkills||0;
+      var lines=[];
+      if(ppStats.tasks>0) lines.push(t('pp.stat.tasks')+' +'+ppStats.tasks);
+      if(ppStats.skills>0) lines.push(t('pp.stat.skills')+' +'+ppStats.skills);
+      if(ppStats.skipped>0) lines.push(t('pp.stat.skipped')+': '+ppStats.skipped);
+      var runText=lines.length>0?' ('+lines.join(', ')+')':'';
+      var totalText=' — '+t('pp.stat.tasks')+' '+totalTasks+', '+t('pp.stat.skills.total')+' '+totalSkills;
+      doneEl.textContent=t('pp.done')+runText+totalText;
+    }).catch(function(){
+      var parts=[];
+      if(ppStats.tasks>0) parts.push(t('pp.stat.tasks')+': '+ppStats.tasks);
+      if(ppStats.skills>0) parts.push(t('pp.stat.skills')+': '+ppStats.skills);
+      if(ppStats.skipped>0) parts.push(t('pp.stat.skipped')+': '+ppStats.skipped);
+      doneEl.textContent=t('pp.done')+(parts.length>0?' ('+parts.join(', ')+')':'');
+    });
   }
   if(!skipReload) loadAll();
 }
@@ -4445,16 +4547,64 @@ function toggleViewerTheme(){const el=document.documentElement;const cur=el.getA
 initViewerTheme();
 
 /* ─── Update check ─── */
+function waitForGatewayAndReload(maxAttempts,attempt){
+  attempt=attempt||0;
+  if(attempt>=maxAttempts){window.location.reload();return;}
+  setTimeout(function(){
+    fetch('/api/update-check').then(function(r){
+      if(r.ok) window.location.reload();
+      else waitForGatewayAndReload(maxAttempts,attempt+1);
+    }).catch(function(){waitForGatewayAndReload(maxAttempts,attempt+1);});
+  },3000);
+}
+function doUpdateInstall(packageSpec,btnEl){
+  btnEl.disabled=true;
+  btnEl.textContent=t('update.installing');
+  fetch('/api/update-install',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({packageSpec:packageSpec})})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.ok){
+        btnEl.textContent=t('update.success');
+        btnEl.style.background='#22c55e';
+        btnEl.style.color='#fff';
+        waitForGatewayAndReload(20);
+      }else{
+        btnEl.textContent=t('update.failed')+': '+(d.error||'').slice(0,80);
+        btnEl.style.background='#ef4444';
+        btnEl.style.color='#fff';
+        btnEl.disabled=false;
+        setTimeout(function(){btnEl.textContent=t('update.btn');btnEl.style.background='';btnEl.style.color='';},5000);
+      }
+    })
+    .catch(function(e){
+      btnEl.textContent=t('update.failed');
+      btnEl.disabled=false;
+      setTimeout(function(){btnEl.textContent=t('update.btn');btnEl.style.background='';btnEl.style.color='';},5000);
+    });
+}
 async function checkForUpdate(){
   try{
     const r=await fetch('/api/update-check');
     if(!r.ok)return;
     const d=await r.json();
     if(!d.updateAvailable)return;
+    const pkgSpec=d.installCommand?d.installCommand.replace(/^openclaw plugins install\s+/,''):(d.packageName+'@'+d.latest);
     const banner=document.createElement('div');
     banner.id='updateBanner';
     banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.25)';
-    banner.innerHTML='<span>🔔 '+t('update.available')+': <b>v'+esc(d.current)+'</b> → <b>v'+esc(d.latest)+'</b> — '+t('update.run')+': <code style="background:rgba(0,0,0,.2);padding:2px 8px;border-radius:4px;margin:0 4px">openclaw plugins install '+esc(d.packageName)+'</code></span><button onclick="this.parentElement.remove();document.body.style.paddingTop=\\'\\';" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px">&times;</button>';
+    var leftSpan=document.createElement('span');
+    leftSpan.innerHTML='🔔 '+t('update.available')+': <b>v'+esc(d.current)+'</b> → <b>v'+esc(d.latest)+'</b>';
+    var btnUpdate=document.createElement('button');
+    btnUpdate.textContent=t('update.btn');
+    btnUpdate.style.cssText='background:#fff;color:#d97706;border:none;padding:5px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;margin-left:12px';
+    btnUpdate.onclick=function(){doUpdateInstall(pkgSpec,btnUpdate)};
+    var btnClose=document.createElement('button');
+    btnClose.innerHTML='&times;';
+    btnClose.style.cssText='background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px';
+    btnClose.onclick=function(){banner.remove();document.body.style.paddingTop='';};
+    leftSpan.appendChild(btnUpdate);
+    banner.appendChild(leftSpan);
+    banner.appendChild(btnClose);
     document.body.prepend(banner);
     document.body.style.paddingTop='48px';
   }catch(e){}

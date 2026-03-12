@@ -1,6 +1,6 @@
 import http from "node:http";
 import crypto from "node:crypto";
-import { execSync } from "node:child_process";
+import { execSync, exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
@@ -75,8 +75,8 @@ export class ViewerServer {
 
   private ppRunning = false;
   private ppAbort = false;
-  private ppState: { running: boolean; done: boolean; stopped: boolean; processed: number; total: number; tasksCreated: number; skillsCreated: number; errors: number } =
-    { running: false, done: false, stopped: false, processed: 0, total: 0, tasksCreated: 0, skillsCreated: 0, errors: 0 };
+  private ppState: { running: boolean; done: boolean; stopped: boolean; processed: number; total: number; tasksCreated: number; skillsCreated: number; errors: number; skippedSessions: number; totalSessions: number } =
+    { running: false, done: false, stopped: false, processed: 0, total: 0, tasksCreated: 0, skillsCreated: 0, errors: 0, skippedSessions: 0, totalSessions: 0 };
   private ppSSEClients: http.ServerResponse[] = [];
 
   constructor(opts: ViewerServerOptions) {
@@ -249,6 +249,7 @@ export class ViewerServer {
       else if (p === "/api/model-health" && req.method === "GET") this.serveModelHealth(res);
       else if (p === "/api/fallback-model" && req.method === "GET") this.serveFallbackModel(res);
       else if (p === "/api/update-check" && req.method === "GET") this.handleUpdateCheck(res);
+      else if (p === "/api/update-install" && req.method === "POST") this.handleUpdateInstall(req, res);
       else if (p === "/api/auth/logout" && req.method === "POST") this.handleLogout(req, res);
       else if (p === "/api/cleanup-polluted" && req.method === "POST") this.handleCleanupPolluted(res);
       else if (p === "/api/migrate/scan" && req.method === "GET") this.handleMigrateScan(res);
@@ -1184,25 +1185,66 @@ export class ViewerServer {
         this.jsonResponse(res, { updateAvailable: false, current });
         return;
       }
-      const npmResp = await fetch(`https://registry.npmjs.org/${name}/latest`, {
-        signal: AbortSignal.timeout(6_000),
-      });
-      if (!npmResp.ok) {
-        this.jsonResponse(res, { updateAvailable: false, current });
+      const { computeUpdateCheck } = await import("../update-check");
+      const result = await computeUpdateCheck(name, current, fetch, 6_000);
+      if (!result) {
+        this.jsonResponse(res, { updateAvailable: false, current, packageName: name });
         return;
       }
-      const data = await npmResp.json() as { version?: string };
-      const latest = data.version ?? current;
       this.jsonResponse(res, {
-        updateAvailable: latest !== current,
-        current,
-        latest,
-        packageName: name,
+        updateAvailable: result.updateAvailable,
+        current: result.current,
+        latest: result.latest,
+        packageName: result.packageName,
+        channel: result.channel,
+        installCommand: result.installCommand,
+        stableChannel: result.stableChannel,
       });
     } catch (e) {
       this.log.warn(`handleUpdateCheck error: ${e}`);
       this.jsonResponse(res, { updateAvailable: false, error: String(e) });
     }
+  }
+
+  private handleUpdateInstall(req: http.IncomingMessage, res: http.ServerResponse): void {
+    let body = "";
+    req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+    req.on("end", () => {
+      try {
+        const { packageSpec } = JSON.parse(body);
+        if (!packageSpec || typeof packageSpec !== "string") {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: "Missing packageSpec" }));
+          return;
+        }
+        const allowed = /^@[\w-]+\/[\w.-]+(@[\w.-]+)?$/;
+        if (!allowed.test(packageSpec)) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: "Invalid package spec" }));
+          return;
+        }
+        this.log.info(`update-install: installing ${packageSpec}...`);
+        exec(`npx openclaw plugins install ${packageSpec}`, { timeout: 120_000 }, (err, stdout, stderr) => {
+          if (err) {
+            this.log.warn(`update-install failed: ${err.message}\n${stderr}`);
+            this.jsonResponse(res, { ok: false, error: stderr || err.message });
+            return;
+          }
+          this.log.info(`update-install success: ${stdout}`);
+          this.jsonResponse(res, { ok: true, output: stdout });
+          this.log.info(`update-install: restarting gateway...`);
+          setTimeout(() => {
+            exec("npx openclaw gateway restart", { timeout: 30_000 }, (restartErr) => {
+              if (restartErr) this.log.warn(`gateway restart failed: ${restartErr.message}`);
+              else this.log.info("gateway restart initiated");
+            });
+          }, 1000);
+        });
+      } catch (e) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: String(e) }));
+      }
+    });
   }
 
   private async testEmbeddingModel(provider: string, model: string, endpoint: string, apiKey: string): Promise<number | undefined> {
@@ -1438,10 +1480,18 @@ export class ViewerServer {
       }
 
       let importedSessions: string[] = [];
+      let importedChunkCount = 0;
       try {
         if (this.store) {
           importedSessions = this.store.getDistinctSessionKeys()
             .filter((sk: string) => sk.startsWith("openclaw-import-") || sk.startsWith("openclaw-session-"));
+          if (importedSessions.length > 0) {
+            const placeholders = importedSessions.map(() => "?").join(",");
+            const row = (this.store as any).db.prepare(
+              `SELECT COUNT(*) as cnt FROM chunks WHERE session_key IN (${placeholders})`
+            ).get(...importedSessions) as { cnt: number };
+            importedChunkCount = row?.cnt ?? 0;
+          }
         }
       } catch (storeErr) {
         this.log.warn(`migrate/scan: store query failed: ${storeErr}`);
@@ -1456,6 +1506,7 @@ export class ViewerServer {
         hasSummarizer,
         hasImportedData: importedSessions.length > 0,
         importedSessionCount: importedSessions.length,
+        importedChunkCount,
       });
     } catch (e) {
       this.log.warn(`migrate/scan error: ${e}`);
@@ -1587,11 +1638,14 @@ export class ViewerServer {
         } else {
           this.broadcastSSE("done", { ok: true });
         }
-        for (const c of this.migrationSSEClients) {
-          try { c.end(); } catch { /* ignore */ }
-        }
-        this.migrationSSEClients = [];
         this.migrationAbort = false;
+        const clientsToClose = [...this.migrationSSEClients];
+        this.migrationSSEClients = [];
+        setTimeout(() => {
+          for (const c of clientsToClose) {
+            try { c.end(); } catch { /* ignore */ }
+          }
+        }, 500);
       });
     });
   }
@@ -2022,7 +2076,7 @@ export class ViewerServer {
       res.on("close", () => { this.ppSSEClients = this.ppSSEClients.filter(c => c !== res); });
 
       this.ppAbort = false;
-      this.ppState = { running: true, done: false, stopped: false, processed: 0, total: 0, tasksCreated: 0, skillsCreated: 0, errors: 0 };
+      this.ppState = { running: true, done: false, stopped: false, processed: 0, total: 0, tasksCreated: 0, skillsCreated: 0, errors: 0, skippedSessions: 0, totalSessions: 0 };
 
       const send = (event: string, data: unknown) => {
         this.broadcastPPSSE(event, data);
@@ -2039,9 +2093,12 @@ export class ViewerServer {
         } else {
           this.broadcastPPSSE("done", { ...this.ppState });
         }
-        for (const c of this.ppSSEClients) { try { c.end(); } catch { /* */ } }
-        this.ppSSEClients = [];
         this.ppAbort = false;
+        const ppClientsToClose = [...this.ppSSEClients];
+        this.ppSSEClients = [];
+        setTimeout(() => {
+          for (const c of ppClientsToClose) { try { c.end(); } catch { /* */ } }
+        }, 500);
       });
     });
   }
@@ -2073,7 +2130,13 @@ export class ViewerServer {
   }
 
   private handlePostprocessStatus(res: http.ServerResponse): void {
-    this.jsonResponse(res, this.ppState);
+    let existingTasks = 0;
+    let existingSkills = 0;
+    try {
+      existingTasks = (this.store as any).db.prepare("SELECT COUNT(*) as c FROM tasks").get()?.c ?? 0;
+      existingSkills = this.store.countSkills("active");
+    } catch { /* */ }
+    this.jsonResponse(res, { ...this.ppState, existingTasks, existingSkills });
   }
 
   private broadcastPPSSE(event: string, data: unknown): void {
@@ -2123,12 +2186,18 @@ export class ViewerServer {
     }
 
     this.ppState.total = pendingItems.length;
+    this.ppState.skippedSessions = skippedCount;
+    this.ppState.totalSessions = importSessions.length;
+    const existingTaskCount = (this.store as any).db.prepare("SELECT COUNT(*) as c FROM tasks WHERE session_key IN (" + importSessions.map(() => "?").join(",") + ")").get(...importSessions)?.c ?? 0;
+    const existingSkillCount = this.store.countSkills("active");
     send("info", {
       totalSessions: importSessions.length,
       alreadyProcessed: skippedCount,
       pending: pendingItems.length,
       agents: Array.from(agentGroups.keys()),
       concurrency,
+      existingTasks: existingTaskCount,
+      existingSkills: existingSkillCount,
     });
     send("progress", { processed: 0, total: pendingItems.length });
 
