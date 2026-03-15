@@ -282,6 +282,12 @@ function callSummarize(cfg: SummarizerConfig, text: string, log: Logger): Promis
     case "openai":
     case "openai_compatible":
     case "azure_openai":
+    case "zhipu":
+    case "siliconflow":
+    case "bailian":
+    case "cohere":
+    case "mistral":
+    case "voyage":
       return summarizeOpenAI(text, cfg, log);
     case "anthropic":
       return summarizeAnthropic(text, cfg, log);
@@ -299,6 +305,12 @@ function callSummarizeTask(cfg: SummarizerConfig, text: string, log: Logger): Pr
     case "openai":
     case "openai_compatible":
     case "azure_openai":
+    case "zhipu":
+    case "siliconflow":
+    case "bailian":
+    case "cohere":
+    case "mistral":
+    case "voyage":
       return summarizeTaskOpenAI(text, cfg, log);
     case "anthropic":
       return summarizeTaskAnthropic(text, cfg, log);
@@ -316,6 +328,12 @@ function callGenerateTaskTitle(cfg: SummarizerConfig, text: string, log: Logger)
     case "openai":
     case "openai_compatible":
     case "azure_openai":
+    case "zhipu":
+    case "siliconflow":
+    case "bailian":
+    case "cohere":
+    case "mistral":
+    case "voyage":
       return generateTaskTitleOpenAI(text, cfg, log);
     case "anthropic":
       return generateTaskTitleAnthropic(text, cfg, log);
@@ -333,6 +351,12 @@ function callTopicJudge(cfg: SummarizerConfig, currentContext: string, newMessag
     case "openai":
     case "openai_compatible":
     case "azure_openai":
+    case "zhipu":
+    case "siliconflow":
+    case "bailian":
+    case "cohere":
+    case "mistral":
+    case "voyage":
       return judgeNewTopicOpenAI(currentContext, newMessage, cfg, log);
     case "anthropic":
       return judgeNewTopicAnthropic(currentContext, newMessage, cfg, log);
@@ -350,6 +374,12 @@ function callFilterRelevant(cfg: SummarizerConfig, query: string, candidates: Ar
     case "openai":
     case "openai_compatible":
     case "azure_openai":
+    case "zhipu":
+    case "siliconflow":
+    case "bailian":
+    case "cohere":
+    case "mistral":
+    case "voyage":
       return filterRelevantOpenAI(query, candidates, cfg, log);
     case "anthropic":
       return filterRelevantAnthropic(query, candidates, cfg, log);
@@ -367,6 +397,12 @@ function callJudgeDedup(cfg: SummarizerConfig, newSummary: string, candidates: A
     case "openai":
     case "openai_compatible":
     case "azure_openai":
+    case "zhipu":
+    case "siliconflow":
+    case "bailian":
+    case "cohere":
+    case "mistral":
+    case "voyage":
       return judgeDedupOpenAI(newSummary, candidates, cfg, log);
     case "anthropic":
       return judgeDedupAnthropic(newSummary, candidates, cfg, log);

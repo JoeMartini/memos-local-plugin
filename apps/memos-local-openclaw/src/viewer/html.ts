@@ -586,7 +586,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 [data-theme="light"] .settings-actions .btn-primary:hover{background:rgba(79,70,229,.1);border-color:#4f46e5}
 .settings-saved{display:inline-flex;align-items:center;gap:6px;color:var(--green);font-size:12px;font-weight:600;opacity:0;transition:opacity .3s}
 .settings-saved.show{opacity:1}
-.model-health-bar{margin-bottom:20px;border-radius:var(--radius-lg);overflow:hidden}
+.model-health-bar{margin-bottom:20px;border-radius:var(--radius-lg);overflow:visible}
 .mh-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
 .mh-table th{text-align:left;padding:6px 12px;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;background:var(--bg);border-bottom:1px solid var(--border)}
 .mh-table td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
@@ -604,7 +604,8 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .mh-badge.error{background:rgba(239,68,68,.1);color:#dc2626}
 .mh-badge.unknown{background:rgba(148,163,184,.1);color:#64748b}
 .mh-model-name{color:var(--text-muted);font-size:11px;font-family:var(--font-mono,'SFMono-Regular',Consolas,monospace)}
-.mh-err-text{font-size:11px;color:var(--rose);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help}
+.mh-err-text{font-size:11px;color:var(--rose);max-width:320px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help}
+#mhTooltip{display:none;position:fixed;min-width:280px;max-width:480px;max-height:300px;overflow-y:auto;padding:8px 10px;background:var(--bg-card,#1e1e2e);color:var(--text,#e2e8f0);border:1px solid var(--border,#333);border-radius:6px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:10000;pointer-events:none}
 .mh-time{font-size:10px;color:var(--text-muted);white-space:nowrap}
 .mh-empty{padding:16px;font-size:12px;color:var(--text-muted);text-align:center}
 @keyframes healthPulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -1690,10 +1691,11 @@ const I18N={
     'skill.save.error':'Failed to save skill: ',
     'update.available':'New version available',
     'update.run':'Run',
-    'update.btn':'Update now',
-    'update.installing':'Installing update...',
-    'update.success':'Update installed! Restarting...',
+    'update.btn':'Update',
+    'update.installing':'Installing...',
+    'update.success':'Updated!',
     'update.failed':'Update failed',
+    'update.restarting':'Restarting service...',
     'update.dismiss':'Dismiss'
   },
   zh:{
@@ -2011,10 +2013,11 @@ const I18N={
     'skill.save.error':'保存技能失败：',
     'update.available':'发现新版本',
     'update.run':'执行命令',
-    'update.btn':'立即更新',
-    'update.installing':'正在安装更新...',
-    'update.success':'更新成功！正在重启...',
+    'update.btn':'更新',
+    'update.installing':'安装中...',
+    'update.success':'更新完成',
     'update.failed':'更新失败',
+    'update.restarting':'正在重启服务...',
     'update.dismiss':'关闭'
   }
 };
@@ -3008,7 +3011,14 @@ function classifyError(msg){
   if(msg.indexOf('ECONNREFUSED')>=0) return 'Connection refused';
   if(msg.indexOf('ENOTFOUND')>=0) return 'DNS resolution failed';
   if(msg.indexOf('403')>=0) return 'Forbidden (403)';
-  return msg;
+  if(msg.indexOf('503')>=0||msg.indexOf('upstream connect error')>=0||msg.indexOf('Service Unavailable')>=0) return 'Service unavailable (503)';
+  if(msg.indexOf('502')>=0||msg.indexOf('Bad Gateway')>=0) return 'Bad gateway (502)';
+  if(msg.indexOf('500')>=0||msg.indexOf('Internal Server Error')>=0) return 'Server error (500)';
+  if(msg.indexOf('404')>=0||msg.indexOf('Not Found')>=0) return 'Not found (404)';
+  if(msg.indexOf('fetch failed')>=0||msg.indexOf('ETIMEDOUT')>=0) return 'Network error';
+  if(msg.indexOf('Unknown')>=0&&msg.indexOf('provider')>=0) return 'Unknown provider';
+  var m=msg.match(/\((\d{3})\)/); if(m) return 'HTTP error ('+m[1]+')';
+  return msg.length>80?msg.substring(0,77)+'...':msg;
 }
 
 function shortenModel(s){return s?s.replace('openai_compatible/','').replace('openai/',''):'\u2014';}
@@ -3054,7 +3064,7 @@ async function loadModelHealth(){
         issue+=shortErr;
         if(m.consecutiveErrors>1) issue+=' ('+m.consecutiveErrors+'x)';
       }
-      if(issue) h+='<td><span class="mh-err-text" title="'+escapeHtml(m.lastErrorMessage||'')+'">'+escapeHtml(issue)+'</span></td>';
+      if(issue) h+='<td><span class="mh-err-text" data-err="'+escapeHtml(m.lastErrorMessage||'')+'">'+escapeHtml(issue)+'</span></td>';
       else h+='<td><span style="color:var(--text-muted);font-size:11px">\u2014</span></td>';
 
       h+='<td style="text-align:right"><span class="mh-time">'+(ago||'\u2014')+'</span></td>';
@@ -3062,9 +3072,27 @@ async function loadModelHealth(){
     }
     h+='</tbody></table>';
     bar.innerHTML=h;
+    initMhTooltips();
   }catch(e){
     bar.innerHTML='<div class="mh-empty">Failed to load model health</div>';
   }
+}
+
+function initMhTooltips(){
+  var tip=document.getElementById('mhTooltip');
+  if(!tip){tip=document.createElement('div');tip.id='mhTooltip';document.body.appendChild(tip);}
+  document.querySelectorAll('.mh-err-text[data-err]').forEach(function(el){
+    el.addEventListener('mouseenter',function(e){
+      var msg=el.getAttribute('data-err');
+      if(!msg)return;
+      tip.textContent=msg;
+      tip.style.display='block';
+      var rect=el.getBoundingClientRect();
+      tip.style.left=Math.max(0,Math.min(rect.left,window.innerWidth-490))+'px';
+      tip.style.top=(rect.bottom+6)+'px';
+    });
+    el.addEventListener('mouseleave',function(){tip.style.display='none';});
+  });
 }
 
 function timeAgo(ts){
@@ -4663,35 +4691,35 @@ function waitForGatewayAndReload(maxAttempts,attempt){
   attempt=attempt||0;
   if(attempt>=maxAttempts){window.location.reload();return;}
   setTimeout(function(){
-    fetch('/api/update-check').then(function(r){
-      if(r.ok) window.location.reload();
-      else waitForGatewayAndReload(maxAttempts,attempt+1);
+    fetch('/api/auth/status').then(function(){
+      window.location.reload();
     }).catch(function(){waitForGatewayAndReload(maxAttempts,attempt+1);});
   },3000);
 }
-function doUpdateInstall(packageSpec,btnEl){
+function doUpdateInstall(packageSpec,btnEl,statusEl){
   btnEl.disabled=true;
   btnEl.textContent=t('update.installing');
+  btnEl.style.cssText='background:rgba(99,102,241,.15);color:var(--pri);border:1px solid rgba(99,102,241,.3);border-radius:6px;padding:4px 14px;font-size:12px;font-weight:600;cursor:wait;white-space:nowrap';
   fetch('/api/update-install',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({packageSpec:packageSpec})})
     .then(function(r){return r.json()})
     .then(function(d){
       if(d.ok){
         btnEl.textContent=t('update.success');
-        btnEl.style.background='#22c55e';
-        btnEl.style.color='#fff';
-        waitForGatewayAndReload(20);
+        btnEl.style.cssText='background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:4px 14px;font-size:12px;font-weight:600;cursor:default;white-space:nowrap';
+        if(statusEl)statusEl.textContent=t('update.restarting');
+        waitForGatewayAndReload(40);
       }else{
-        btnEl.textContent=t('update.failed')+': '+(d.error||'').slice(0,80);
-        btnEl.style.background='#ef4444';
-        btnEl.style.color='#fff';
+        btnEl.textContent=t('update.btn');
+        btnEl.style.cssText='background:none;border:1px solid currentColor;border-radius:6px;padding:4px 14px;font-size:12px;font-weight:600;color:inherit;cursor:pointer;white-space:nowrap;opacity:.85';
         btnEl.disabled=false;
-        setTimeout(function(){btnEl.textContent=t('update.btn');btnEl.style.background='';btnEl.style.color='';},5000);
+        if(statusEl)statusEl.textContent=t('update.failed')+': '+(d.error||'').slice(0,60);
+        setTimeout(function(){if(statusEl)statusEl.textContent='';},8000);
       }
     })
-    .catch(function(e){
-      btnEl.textContent=t('update.failed');
+    .catch(function(){
+      btnEl.textContent=t('update.btn');
+      btnEl.style.cssText='background:none;border:1px solid currentColor;border-radius:6px;padding:4px 14px;font-size:12px;font-weight:600;color:inherit;cursor:pointer;white-space:nowrap;opacity:.85';
       btnEl.disabled=false;
-      setTimeout(function(){btnEl.textContent=t('update.btn');btnEl.style.background='';btnEl.style.color='';},5000);
     });
 }
 async function checkForUpdate(){
@@ -4700,25 +4728,33 @@ async function checkForUpdate(){
     if(!r.ok)return;
     const d=await r.json();
     if(!d.updateAvailable)return;
-    const pkgSpec=d.installCommand?d.installCommand.replace(/^openclaw plugins install\s+/,''):(d.packageName+'@'+d.latest);
-    const banner=document.createElement('div');
+    const pkgSpec=d.installCommand?d.installCommand.replace(/^(?:npx\s+)?openclaw\s+plugins\s+install\s+/,''):(d.packageName+'@'+d.latest);
+    var banner=document.createElement('div');
     banner.id='updateBanner';
-    banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.25)';
-    var leftSpan=document.createElement('span');
-    leftSpan.innerHTML='🔔 '+t('update.available')+': <b>v'+esc(d.current)+'</b> → <b>v'+esc(d.latest)+'</b>';
+    banner.style.cssText='display:flex;align-items:center;gap:10px;padding:12px 20px;font-size:13px;font-weight:500;border-radius:10px;margin:0 32px;animation:slideIn .3s ease;background:rgba(245,158,11,.1);color:#d97706;border:1px solid rgba(245,158,11,.25)';
+    var textNode=document.createElement('div');
+    textNode.style.cssText='display:flex;align-items:center;gap:8px;flex-shrink:0';
+    textNode.innerHTML='\u{1F4E6} '+t('update.available')+' <b style="margin:0 2px">v'+esc(d.current)+'</b> \u2192 <b style="margin:0 2px">v'+esc(d.latest)+'</b>';
     var btnUpdate=document.createElement('button');
+    btnUpdate.className='emb-banner-btn';
     btnUpdate.textContent=t('update.btn');
-    btnUpdate.style.cssText='background:#fff;color:#d97706;border:none;padding:5px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;margin-left:12px';
-    btnUpdate.onclick=function(){doUpdateInstall(pkgSpec,btnUpdate)};
+    var statusDiv=document.createElement('div');
+    statusDiv.style.cssText='font-size:11px;opacity:.8;flex-shrink:0';
+    btnUpdate.onclick=function(){doUpdateInstall(pkgSpec,btnUpdate,statusDiv)};
+    textNode.appendChild(btnUpdate);
+    var spacer=document.createElement('div');
+    spacer.style.cssText='flex:1';
     var btnClose=document.createElement('button');
+    btnClose.className='emb-banner-close';
     btnClose.innerHTML='&times;';
-    btnClose.style.cssText='background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px';
-    btnClose.onclick=function(){banner.remove();document.body.style.paddingTop='';};
-    leftSpan.appendChild(btnUpdate);
-    banner.appendChild(leftSpan);
+    btnClose.onclick=function(){banner.remove()};
+    banner.appendChild(textNode);
+    banner.appendChild(statusDiv);
+    banner.appendChild(spacer);
     banner.appendChild(btnClose);
-    document.body.prepend(banner);
-    document.body.style.paddingTop='48px';
+    var embBanner=document.querySelector('.emb-banner');
+    if(embBanner&&embBanner.parentNode){embBanner.parentNode.insertBefore(banner,embBanner);}
+    else{var ct=document.querySelector('.content-area')||document.querySelector('main')||document.body;if(ct.firstChild)ct.insertBefore(banner,ct.firstChild);else ct.appendChild(banner);}
   }catch(e){}
 }
 

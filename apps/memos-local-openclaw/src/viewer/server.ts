@@ -1,4 +1,5 @@
 import http from "node:http";
+import os from "node:os";
 import crypto from "node:crypto";
 import { execSync, exec } from "node:child_process";
 import fs from "node:fs";
@@ -1177,34 +1178,100 @@ export class ViewerServer {
     req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
     req.on("end", () => {
       try {
-        const { packageSpec } = JSON.parse(body);
-        if (!packageSpec || typeof packageSpec !== "string") {
+        const { packageSpec: rawSpec } = JSON.parse(body);
+        if (!rawSpec || typeof rawSpec !== "string") {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: false, error: "Missing packageSpec" }));
           return;
         }
+        const packageSpec = rawSpec.trim().replace(/^(?:npx\s+)?openclaw\s+plugins\s+install\s+/i, "");
         const allowed = /^@[\w-]+\/[\w.-]+(@[\w.-]+)?$/;
+        this.log.info(`update-install: received packageSpec="${packageSpec}" (len=${packageSpec.length})`);
         if (!allowed.test(packageSpec)) {
+          this.log.warn(`update-install: rejected packageSpec="${packageSpec}" — does not match ${allowed}`);
           res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ok: false, error: "Invalid package spec" }));
+          res.end(JSON.stringify({ ok: false, error: `Invalid package spec: "${packageSpec}"` }));
           return;
         }
-        this.log.info(`update-install: installing ${packageSpec}...`);
-        exec(`npx openclaw plugins install ${packageSpec}`, { timeout: 120_000 }, (err, stdout, stderr) => {
-          if (err) {
-            this.log.warn(`update-install failed: ${err.message}\n${stderr}`);
-            this.jsonResponse(res, { ok: false, error: stderr || err.message });
+
+        const pkgPath = this.findPluginPackageJson();
+        const pluginName = pkgPath
+          ? (() => { try { return JSON.parse(fs.readFileSync(pkgPath, "utf-8")).name; } catch { return null; } })()
+          : null;
+        const shortName = pluginName?.replace(/^@[\w-]+\//, "") ?? "memos-local-openclaw-plugin";
+        const extDir = path.join(os.homedir(), ".openclaw", "extensions", shortName);
+        const tmpDir = path.join(os.tmpdir(), `openclaw-update-${Date.now()}`);
+
+        // Download via npm pack, extract, and replace extension dir.
+        // Does NOT touch openclaw.json → no config watcher SIGUSR1.
+        this.log.info(`update-install: downloading ${packageSpec} via npm pack...`);
+        fs.mkdirSync(tmpDir, { recursive: true });
+        exec(`npm pack ${packageSpec} --pack-destination ${tmpDir}`, { timeout: 60_000 }, (packErr, packOut) => {
+          if (packErr) {
+            this.log.warn(`update-install: npm pack failed: ${packErr.message}`);
+            this.jsonResponse(res, { ok: false, error: `Download failed: ${packErr.message}` });
+            try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
             return;
           }
-          this.log.info(`update-install success: ${stdout}`);
-          this.jsonResponse(res, { ok: true, output: stdout });
-          this.log.info(`update-install: restarting gateway...`);
-          setTimeout(() => {
-            exec("npx openclaw gateway restart", { timeout: 30_000 }, (restartErr) => {
-              if (restartErr) this.log.warn(`gateway restart failed: ${restartErr.message}`);
-              else this.log.info("gateway restart initiated");
+          const tgzFile = packOut.trim().split("\n").pop()!;
+          const tgzPath = path.join(tmpDir, tgzFile);
+          this.log.info(`update-install: downloaded ${tgzFile}, extracting...`);
+
+          const extractDir = path.join(tmpDir, "extract");
+          fs.mkdirSync(extractDir, { recursive: true });
+          exec(`tar -xzf ${tgzPath} -C ${extractDir}`, { timeout: 30_000 }, (tarErr) => {
+            if (tarErr) {
+              this.log.warn(`update-install: tar extract failed: ${tarErr.message}`);
+              this.jsonResponse(res, { ok: false, error: `Extract failed: ${tarErr.message}` });
+              try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+              return;
+            }
+
+            // npm pack extracts to a "package" subdirectory
+            const srcDir = path.join(extractDir, "package");
+            if (!fs.existsSync(srcDir)) {
+              this.jsonResponse(res, { ok: false, error: "Extracted package has no 'package' dir" });
+              try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+              return;
+            }
+
+            // Replace extension directory
+            this.log.info(`update-install: replacing ${extDir}...`);
+            try { fs.rmSync(extDir, { recursive: true, force: true }); } catch {}
+            fs.mkdirSync(path.dirname(extDir), { recursive: true });
+            fs.renameSync(srcDir, extDir);
+
+            // Install dependencies
+            this.log.info(`update-install: installing dependencies...`);
+            exec(`cd ${extDir} && npm install --omit=dev --ignore-scripts`, { timeout: 120_000 }, (npmErr, npmOut, npmStderr) => {
+              // Rebuild native modules
+              exec(`cd ${extDir} && npm rebuild better-sqlite3 2>/dev/null; true`, { timeout: 60_000 }, () => {
+                try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+
+                if (npmErr) {
+                  this.log.warn(`update-install: npm install failed: ${npmErr.message}`);
+                  this.jsonResponse(res, { ok: false, error: `Dependency install failed: ${npmStderr || npmErr.message}` });
+                  return;
+                }
+
+                // Read new version
+                let newVersion = "unknown";
+                try {
+                  const newPkg = JSON.parse(fs.readFileSync(path.join(extDir, "package.json"), "utf-8"));
+                  newVersion = newPkg.version ?? newVersion;
+                } catch {}
+
+                this.log.info(`update-install: success! Updated to ${newVersion}`);
+                this.jsonResponse(res, { ok: true, version: newVersion });
+
+                // Trigger Gateway restart after response is sent
+                setTimeout(() => {
+                  this.log.info(`update-install: triggering gateway restart...`);
+                  process.kill(process.pid, "SIGUSR1");
+                }, 500);
+              });
             });
-          }, 1000);
+          });
         });
       } catch (e) {
         res.writeHead(400, { "Content-Type": "application/json" });

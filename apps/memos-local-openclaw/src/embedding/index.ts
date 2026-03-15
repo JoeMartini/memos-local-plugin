@@ -53,11 +53,13 @@ export class Embedder {
       switch (provider) {
         case "openai":
         case "openai_compatible":
+        case "azure_openai":
+        case "zhipu":
+        case "siliconflow":
+        case "bailian":
           result = await embedOpenAI(texts, cfg!, this.log); break;
         case "gemini":
           result = await embedGemini(texts, cfg!, this.log); break;
-        case "azure_openai":
-          result = await embedOpenAI(texts, cfg!, this.log); break;
         case "cohere":
           result = await embedCohere(texts, cfg!, this.log); break;
         case "mistral":

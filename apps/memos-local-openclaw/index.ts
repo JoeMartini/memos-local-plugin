@@ -1194,7 +1194,7 @@ const memosLocalPlugin = {
 
         if (captured.length > 0) {
           worker.enqueue(captured);
-          telemetry.trackMemoryIngested(filteredCaptured.length);
+          telemetry.trackMemoryIngested(captured.length);
         }
       } catch (err) {
         api.logger.warn(`memos-local: capture failed: ${String(err)}`);
