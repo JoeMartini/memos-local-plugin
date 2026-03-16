@@ -130,13 +130,16 @@ const memosLocalPlugin = {
       }
 
       if (!sqliteReady) {
-        const msg = [
+        const nodeVer = process.version;
+        const nodeMajor = parseInt(process.versions?.node?.split(".")[0] ?? "0", 10);
+        const isNode25Plus = nodeMajor >= 25;
+        const lines = [
           "",
           "╔══════════════════════════════════════════════════════════════╗",
           "║  MemOS Local Memory — better-sqlite3 native module missing  ║",
           "╠══════════════════════════════════════════════════════════════╣",
           "║                                                            ║",
-          "║  Auto-rebuild failed. Run these commands manually:         ║",
+          "║  Auto-rebuild failed (Node " + nodeVer + "). Run manually:              ║",
           "║                                                            ║",
           `║  cd ${pluginDir}`,
           "║  npm rebuild better-sqlite3                                ║",
@@ -145,13 +148,18 @@ const memosLocalPlugin = {
           "║  If rebuild fails, install build tools first:              ║",
           "║  macOS:  xcode-select --install                            ║",
           "║  Linux:  sudo apt install build-essential python3          ║",
-          "║                                                            ║",
-          "╚══════════════════════════════════════════════════════════════╝",
-          "",
-        ].join("\n");
-        api.logger.warn(msg);
+        ];
+        if (isNode25Plus) {
+          lines.push("║                                                            ║");
+          lines.push("║  Node 25+ has no prebuild: build tools required, or use    ║");
+          lines.push("║  Node LTS (20/22): nvm install 22 && nvm use 22            ║");
+        }
+        lines.push("║                                                            ║");
+        lines.push("╚══════════════════════════════════════════════════════════════╝");
+        lines.push("");
+        api.logger.warn(lines.join("\n"));
         throw new Error(
-          `better-sqlite3 native module not found. Auto-rebuild failed. Fix: cd ${pluginDir} && npm rebuild better-sqlite3`
+          `better-sqlite3 native module not found (Node ${nodeVer}). Auto-rebuild failed. Fix: install build tools, then cd ${pluginDir} && npm rebuild better-sqlite3. Or use Node LTS (20/22).`
         );
       }
     }
