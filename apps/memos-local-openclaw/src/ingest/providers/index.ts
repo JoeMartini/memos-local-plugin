@@ -186,8 +186,9 @@ export class Summarizer {
         return resultCleaned;
       }
 
-      if (resultCleaned) {
-        this.log.warn(`summarize: result (${resultCleaned.length}) >= input (${cleaned.length}), retrying`);
+      if (resultCleaned !== undefined && resultCleaned !== null) {
+        const len: number = (resultCleaned as string).length;
+        this.log.warn(`summarize: result (${len}) >= input (${cleaned.length}), retrying`);
       }
     } catch (err) {
       this.log.warn(`summarize primary failed: ${err}`);

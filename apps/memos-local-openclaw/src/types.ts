@@ -144,7 +144,13 @@ export type SummaryProvider =
   | "anthropic"
   | "gemini"
   | "azure_openai"
-  | "bedrock";
+  | "bedrock"
+  | "zhipu"
+  | "siliconflow"
+  | "bailian"
+  | "cohere"
+  | "mistral"
+  | "voyage";
 
 export type EmbeddingProvider =
   | "openai"

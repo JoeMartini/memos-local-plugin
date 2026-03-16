@@ -270,8 +270,8 @@ export class RecallEngine {
   ): Promise<number[]> {
     const candidateList = candidates.map((c, i) => ({
       index: i,
-      summary: `[${c.skill.name}] ${c.skill.description}`,
       role: "skill" as const,
+      content: `[${c.skill.name}] ${c.skill.description}`,
     }));
 
     try {
