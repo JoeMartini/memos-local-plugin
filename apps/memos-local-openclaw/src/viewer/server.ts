@@ -1244,31 +1244,50 @@ export class ViewerServer {
             // Install dependencies
             this.log.info(`update-install: installing dependencies...`);
             exec(`cd ${extDir} && npm install --omit=dev --ignore-scripts`, { timeout: 120_000 }, (npmErr, npmOut, npmStderr) => {
-              // Rebuild native modules
-              exec(`cd ${extDir} && npm rebuild better-sqlite3 2>/dev/null; true`, { timeout: 60_000 }, () => {
+              if (npmErr) {
                 try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+                this.log.warn(`update-install: npm install failed: ${npmErr.message}`);
+                this.jsonResponse(res, { ok: false, error: `Dependency install failed: ${npmStderr || npmErr.message}` });
+                return;
+              }
 
-                if (npmErr) {
-                  this.log.warn(`update-install: npm install failed: ${npmErr.message}`);
-                  this.jsonResponse(res, { ok: false, error: `Dependency install failed: ${npmStderr || npmErr.message}` });
-                  return;
+              // Rebuild native modules (do not swallow errors)
+              exec(`cd ${extDir} && npm rebuild better-sqlite3`, { timeout: 60_000 }, (rebuildErr, rebuildOut, rebuildStderr) => {
+                if (rebuildErr) {
+                  this.log.warn(`update-install: better-sqlite3 rebuild failed: ${rebuildErr.message}`);
+                  const stderr = String(rebuildStderr || "").trim();
+                  if (stderr) this.log.warn(`update-install: rebuild stderr: ${stderr.slice(0, 500)}`);
+                  // Continue so postinstall.cjs can run (it will try rebuild again and show user guidance)
                 }
 
-                // Read new version
-                let newVersion = "unknown";
-                try {
-                  const newPkg = JSON.parse(fs.readFileSync(path.join(extDir, "package.json"), "utf-8"));
-                  newVersion = newPkg.version ?? newVersion;
-                } catch {}
+                // Run postinstall.cjs: legacy cleanup, skill install, version marker, and optional sqlite re-check
+                this.log.info(`update-install: running postinstall...`);
+                exec(`cd ${extDir} && node scripts/postinstall.cjs`, { timeout: 180_000 }, (postErr, postOut, postStderr) => {
+                  try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
 
-                this.log.info(`update-install: success! Updated to ${newVersion}`);
-                this.jsonResponse(res, { ok: true, version: newVersion });
+                  if (postErr) {
+                    this.log.warn(`update-install: postinstall failed: ${postErr.message}`);
+                    const postStderrStr = String(postStderr || "").trim();
+                    if (postStderrStr) this.log.warn(`update-install: postinstall stderr: ${postStderrStr.slice(0, 500)}`);
+                    // Still report success; plugin is updated, user can run postinstall manually if needed
+                  }
 
-                // Trigger Gateway restart after response is sent
-                setTimeout(() => {
-                  this.log.info(`update-install: triggering gateway restart...`);
-                  process.kill(process.pid, "SIGUSR1");
-                }, 500);
+                  // Read new version
+                  let newVersion = "unknown";
+                  try {
+                    const newPkg = JSON.parse(fs.readFileSync(path.join(extDir, "package.json"), "utf-8"));
+                    newVersion = newPkg.version ?? newVersion;
+                  } catch {}
+
+                  this.log.info(`update-install: success! Updated to ${newVersion}`);
+                  this.jsonResponse(res, { ok: true, version: newVersion });
+
+                  // Trigger Gateway restart after response is sent
+                  setTimeout(() => {
+                    this.log.info(`update-install: triggering gateway restart...`);
+                    process.kill(process.pid, "SIGUSR1");
+                  }, 500);
+                });
               });
             });
           });
