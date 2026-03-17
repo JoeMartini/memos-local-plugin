@@ -1116,7 +1116,6 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
             };
           }
 
-          const scope = (rawScope === "self" || rawScope === "public") ? rawScope : "mix";
           const hits = await engine.searchSkills(skillQuery, scope as any, currentOwner);
 
           if (hits.length === 0) {
