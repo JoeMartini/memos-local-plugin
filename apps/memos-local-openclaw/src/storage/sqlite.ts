@@ -1307,7 +1307,7 @@ export class SqliteStore {
  */
 function sanitizeFtsQuery(raw: string): string {
   const tokens = raw
-    .replace(/[."""(){}[\]*:^~!@#$%&\\/<>,;'`]/g, " ")
+    .replace(/[."""(){}[\]*:^~!@#$%&\\/<>,;'`-]/g, " ")
     .split(/\s+/)
     .map((t) => t.trim().replace(/^-+|-+$/g, ""))
     .filter((t) => t.length > 1)
