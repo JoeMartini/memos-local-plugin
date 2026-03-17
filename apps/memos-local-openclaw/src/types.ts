@@ -150,7 +150,8 @@ export type SummaryProvider =
   | "bailian"
   | "cohere"
   | "mistral"
-  | "voyage";
+  | "voyage"
+  | "openclaw";
 
 export type EmbeddingProvider =
   | "openai"

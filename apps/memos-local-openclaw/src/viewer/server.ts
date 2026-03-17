@@ -436,17 +436,23 @@ export class ViewerServer {
     const totalRow = db.prepare("SELECT COUNT(*) as count FROM chunks" + where).get(...params) as any;
     const rawMemories = db.prepare("SELECT * FROM chunks" + where + ` ORDER BY created_at ${sortBy} LIMIT ? OFFSET ?`).all(...params, limit, offset);
     const findMergeSources = db.prepare("SELECT id, summary, role FROM chunks WHERE dedup_target = ? AND (dedup_status = 'merged' OR dedup_status = 'duplicate')");
-    const memories = rawMemories.map((m: any) => {
-      if (m.role === "user" && m.content) {
-        m = { ...m, content: stripInboundMetadata(m.content) };
-      }
-      if (m.merge_count > 0) {
-        const sources = findMergeSources.all(m.id) as Array<{ id: string; summary: string; role: string }>;
-        m.merge_sources = sources;
+
+    const chunkIds = rawMemories.map((m: any) => m.id);
+    const sharingMap = new Map<string, { visibility: string; group_id: string | null }>();
+    if (chunkIds.length > 0) {
+      try {
+        const placeholders = chunkIds.map(() => "?").join(",");
+        const sharedRows = db.prepare(`SELECT source_chunk_id, visibility, group_id FROM hub_memories WHERE source_chunk_id IN (${placeholders})`).all(...chunkIds) as Array<{ source_chunk_id: string; visibility: string; group_id: string | null }>;
+        for (const r of sharedRows) sharingMap.set(r.source_chunk_id, r);
+      } catch {
       }
     }
     const memories = rawMemories.map((m: any) => {
       const out: any = m.role === "user" && m.content ? { ...m, content: stripInboundMetadata(m.content) } : { ...m };
+      if (out.merge_count > 0) {
+        const sources = findMergeSources.all(m.id) as Array<{ id: string; summary: string; role: string }>;
+        out.merge_sources = sources;
+      }
       const shared = sharingMap.get(m.id);
       out.sharingVisibility = shared?.visibility ?? null;
       out.sharingGroupId = shared?.group_id ?? null;
