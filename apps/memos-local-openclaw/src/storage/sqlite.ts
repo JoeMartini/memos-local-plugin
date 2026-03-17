@@ -111,6 +111,7 @@ export class SqliteStore {
     this.migrateSkillVisibility();
     this.migrateSkillEmbeddingsAndFts();
     this.migrateFtsToTrigram();
+    this.migrateHubTables();
     this.log.debug("Database schema initialized");
   }
 
