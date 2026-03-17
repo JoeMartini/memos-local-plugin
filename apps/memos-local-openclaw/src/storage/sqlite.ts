@@ -1438,13 +1438,14 @@ export class SqliteStore {
  * with implicit AND (space-separated) for safe querying.
  */
 function sanitizeFtsQuery(raw: string): string {
-  // With trigram tokenizer, the query string is matched as a substring.
-  // Clean special chars but keep the text as-is (trigram needs >= 3 chars).
-  const cleaned = raw
-    .replace(/[."""(){}[\]*:^~!@#$%&\\/<>,;'`?？。，！、：""''（）【】《》]/g, " ")
-    .trim();
-  if (cleaned.length < 3) return "";
-  return cleaned;
+  const tokens = raw
+    .replace(/[."""(){}[\]*:^~!@#$%&\\/<>,;'`-]/g, " ")
+    .split(/\s+/)
+    .map((t) => t.trim().replace(/^-+|-+$/g, ""))
+    .filter((t) => t.length > 1)
+    .filter((t) => !FTS_RESERVED.has(t.toUpperCase()));
+
+  return tokens.join(" ");
 }
 
 const FTS_RESERVED = new Set(["AND", "OR", "NOT", "NEAR"]);
