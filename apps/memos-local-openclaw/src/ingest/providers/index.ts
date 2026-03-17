@@ -15,7 +15,8 @@ import { summarizeBedrock, summarizeTaskBedrock, judgeNewTopicBedrock, filterRel
 function loadOpenClawFallbackConfig(log: Logger): SummarizerConfig | undefined {
   try {
     const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
-    const cfgPath = path.join(home, ".openclaw", "openclaw.json");
+    const ocHome = process.env.OPENCLAW_STATE_DIR || path.join(home, ".openclaw");
+    const cfgPath = path.join(ocHome, "openclaw.json");
     if (!fs.existsSync(cfgPath)) return undefined;
 
     const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
