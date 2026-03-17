@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import type { SummarizerConfig, Logger, PluginContext } from "../types";
+import type { SummarizerConfig, Logger, PluginContext, OpenClawAPI } from "../types";
 
 /**
  * Build a SummarizerConfig from OpenClaw's native model configuration (openclaw.json).
@@ -66,6 +66,8 @@ export interface LLMCallOptions {
   maxTokens?: number;
   temperature?: number;
   timeoutMs?: number;
+  /** Pass ctx.openclawAPI so callLLMOnce can handle provider === "openclaw" */
+  openclawAPI?: OpenClawAPI;
 }
 
 function normalizeEndpoint(url: string): string {
@@ -77,12 +79,28 @@ function normalizeEndpoint(url: string): string {
 
 /**
  * Make a single LLM call with the given config. Throws on failure.
+ * When cfg.provider === "openclaw", delegates to the OpenClaw host completion API.
  */
 export async function callLLMOnce(
   cfg: SummarizerConfig,
   prompt: string,
   opts: LLMCallOptions = {},
 ): Promise<string> {
+  // Handle openclaw provider via host completion API
+  if (cfg.provider === "openclaw") {
+    const api = opts.openclawAPI;
+    if (!api) {
+      throw new Error("OpenClaw API not available. Ensure sharing.capabilities.hostCompletion is enabled.");
+    }
+    const response = await api.complete({
+      prompt,
+      maxTokens: opts.maxTokens ?? 1024,
+      temperature: opts.temperature ?? 0.1,
+      model: cfg.model,
+    });
+    return response.text.trim();
+  }
+
   const endpoint = normalizeEndpoint(cfg.endpoint ?? "https://api.openai.com/v1/chat/completions");
   const model = cfg.model ?? "gpt-4o-mini";
   const headers: Record<string, string> = {

@@ -145,6 +145,53 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .search-bar input:focus{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-glow)}
 .search-bar .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px;pointer-events:none}
 .search-meta{font-size:12px;color:var(--text-sec);margin-bottom:14px;padding:0 2px}
+.scope-select{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);color:var(--text);font-size:13px;min-width:110px;outline:none}
+.sharing-inline-meta{font-size:12px;color:var(--text-muted);margin:-8px 0 14px 2px}
+.sharing-sidebar-card{margin:14px 0 18px;border:1px solid var(--border);background:var(--bg-card);border-radius:12px;padding:12px;box-shadow:var(--shadow-sm)}
+.sharing-sidebar-card .title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em}
+.sharing-sidebar-card .status{font-size:13px;color:var(--text-sec);line-height:1.5}
+.sharing-sidebar-card .status strong{color:var(--text)}
+.sharing-sidebar-card .hint{margin-top:8px;font-size:11px;color:var(--text-muted)}
+.sharing-sidebar-card .user-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sharing-sidebar-card .user-row .username{font-size:13px;font-weight:600;color:var(--text)}
+.sharing-sidebar-card .role-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;line-height:1.4;letter-spacing:.02em}
+.sharing-sidebar-card .role-badge.admin{background:rgba(52,199,89,.15);color:#34c759}
+.sharing-sidebar-card .role-badge.client{background:rgba(175,82,222,.15);color:#af52de}
+.sharing-sidebar-card .info-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:12px;margin-bottom:8px}
+.sharing-sidebar-card .info-grid .label{color:var(--text-muted);font-weight:500;white-space:nowrap}
+.sharing-sidebar-card .info-grid .value{color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sharing-sidebar-card .api-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;background:rgba(142,142,147,.12);color:var(--text-muted);letter-spacing:.02em}
+[data-theme="light"] .sharing-sidebar-card .role-badge.admin{background:rgba(5,150,105,.1);color:#059669}
+[data-theme="light"] .sharing-sidebar-card .role-badge.client{background:rgba(124,58,237,.1);color:#7c3aed}
+.result-section{margin-bottom:18px;border:1px solid var(--border);border-radius:14px;background:var(--bg-card);overflow:hidden}
+.result-section-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)}
+.result-section-title{font-size:14px;font-weight:700;color:var(--text)}
+.result-section-sub{font-size:12px;color:var(--text-muted)}
+.search-hit-list{padding:12px;display:flex;flex-direction:column;gap:10px}
+.search-hit-card,.hub-hit-card,.hub-skill-card{border:1px solid var(--border);border-radius:12px;background:var(--bg);padding:12px;box-shadow:var(--shadow-sm)}
+.search-hit-card .summary,.hub-hit-card .summary,.hub-skill-card .summary{font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px}
+.search-hit-card .excerpt,.hub-hit-card .excerpt,.hub-skill-card .excerpt{font-size:12px;color:var(--text-sec);line-height:1.55;white-space:pre-wrap}
+.search-hit-meta,.hub-hit-meta,.hub-skill-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;font-size:11px;color:var(--text-muted)}
+.meta-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border:1px solid var(--border);border-radius:999px;background:var(--bg-card)}
+.hub-hit-actions,.hub-skill-actions,.task-share-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.sharing-settings-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+.sharing-panel{border:1px solid var(--border);border-radius:14px;background:var(--bg-card);padding:14px;box-shadow:var(--shadow-sm)}
+.sharing-panel h4{font-size:14px;font-weight:700;color:var(--text);margin:0 0 10px 0}
+.sharing-panel .line{font-size:13px;color:var(--text-sec);margin-bottom:8px;line-height:1.55}
+.sharing-panel .line strong{color:var(--text)}
+.pending-user-list{display:flex;flex-direction:column;gap:10px}
+.pending-user-card{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--bg)}
+.pending-user-name{font-size:14px;font-weight:700;color:var(--text)}
+.pending-user-meta{font-size:12px;color:var(--text-sec);margin-top:4px}
+.pending-user-actions{display:flex;gap:8px;margin-top:10px}
+.task-detail-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.shared-memory-overlay,.shared-memory-overlay.show{display:none}
+.shared-memory-overlay.show{display:flex;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:1200;padding:24px}
+.shared-memory-panel{width:min(860px,95vw);max-height:85vh;overflow:auto;border:1px solid var(--border);border-radius:18px;background:var(--bg-card);box-shadow:var(--shadow-lg);padding:20px}
+.shared-memory-panel h3{font-size:18px;color:var(--text);margin-bottom:10px}
+.shared-memory-panel .content{font-size:13px;color:var(--text-sec);line-height:1.7;white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:12px}
+.hub-source-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:rgba(34,197,94,.12);color:var(--green);font-size:11px;font-weight:700;border:1px solid rgba(34,197,94,.22)}
+@media (max-width: 960px){.sharing-settings-grid{grid-template-columns:1fr}.search-bar{flex-wrap:wrap}.scope-select{width:100%}.task-detail-actions{width:100%;justify-content:flex-start}}
 
 .filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
 .filter-chip{padding:5px 14px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-sec);font-size:12px;font-weight:500;transition:all .15s}
@@ -241,6 +288,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-glow)}
 .form-group textarea{min-height:100px;resize:vertical}
 .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:28px}
+
 
 /* ─── Toast ─── */
 .emb-banner{display:flex;align-items:center;gap:10px;padding:12px 20px;font-size:13px;font-weight:500;border-radius:10px;margin:0 32px 0;animation:slideIn .3s ease}
@@ -803,6 +851,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <button class="tab" data-view="analytics" onclick="switchView('analytics')" data-i18n="tab.analytics">\u{1F4CA} Analytics</button>
         <button class="tab" data-view="logs" onclick="switchView('logs')" data-i18n="tab.logs">\u{1F4DD} Logs</button>
         <button class="tab" data-view="import" onclick="switchView('import')" data-i18n="tab.import">\u{1F4E5} Import</button>
+        <button class="tab" data-view="admin" onclick="switchView('admin')" style="display:none" data-i18n="tab.admin">\u{1F6E1} Admin</button>
         <button class="tab" data-view="settings" onclick="switchView('settings')" data-i18n="tab.settings">\u2699 Settings</button>
       </nav>
     </div>
@@ -835,8 +884,14 @@ input,textarea,select{font-family:inherit;font-size:inherit}
       <div class="search-bar">
         <span class="search-icon">\u{1F50D}</span>
         <input type="text" id="searchInput" data-i18n-ph="search.placeholder" placeholder="Search memories (supports semantic search)..." oninput="debounceSearch()">
+        <select id="memorySearchScope" class="filter-select" onchange="onMemoryScopeChange()">
+          <option value="local">Local</option>
+          <option value="group">Group</option>
+          <option value="all">All</option>
+        </select>
       </div>
       <div class="search-meta" id="searchMeta"></div>
+      <div class="search-meta" id="sharingSearchMeta"></div>
       <div class="filter-bar" id="filterBar">
         <button class="filter-chip active" data-role="" onclick="setRoleFilter(this,'')" data-i18n="filter.all">All</button>
         <button class="filter-chip" data-role="user" onclick="setRoleFilter(this,'user')">User</button>
@@ -875,6 +930,11 @@ input,textarea,select{font-family:inherit;font-size:inherit}
           <button class="filter-chip" data-task-status="active" onclick="setTaskStatusFilter(this,'active')" data-i18n="tasks.status.active">Active</button>
           <button class="filter-chip" data-task-status="completed" onclick="setTaskStatusFilter(this,'completed')" data-i18n="tasks.status.completed">Completed</button>
           <button class="filter-chip" data-task-status="skipped" onclick="setTaskStatusFilter(this,'skipped')" data-i18n="tasks.status.skipped">Skipped</button>
+          <select id="taskSearchScope" class="scope-select" onchange="onTaskScopeChange()">
+            <option value="local">Local</option>
+            <option value="group">Group</option>
+            <option value="all">All</option>
+          </select>
           <button class="btn btn-sm btn-ghost" onclick="loadTasks()" style="margin-left:auto" data-i18n="refresh">\u21BB Refresh</button>
         </div>
       </div>
@@ -884,7 +944,10 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <div class="task-detail-panel" onclick="event.stopPropagation()">
           <div class="task-detail-header">
             <h2 id="taskDetailTitle"></h2>
-            <button class="btn btn-icon" onclick="closeTaskDetail()" title="Close">\u2715</button>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div id="taskShareActions" style="display:flex;gap:8px;align-items:center"></div>
+              <button class="btn btn-icon" onclick="closeTaskDetail()" title="Close">\u2715</button>
+            </div>
           </div>
           <div class="task-detail-meta" id="taskDetailMeta"></div>
           <div class="task-skill-section" id="taskSkillSection"></div>
@@ -895,7 +958,28 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         </div>
       </div>
     </div>
+    <div class="shared-memory-overlay" id="sharedMemoryOverlay" onclick="closeSharedMemoryDetail(event)">
+      <div class="shared-memory-panel" onclick="event.stopPropagation()">
+        <div class="task-detail-header">
+          <h3 id="sharedMemoryTitle">Shared Memory</h3>
+          <button class="btn btn-icon" onclick="closeSharedMemoryDetail()" title="Close">✕</button>
+        </div>
+        <div class="task-detail-meta" id="sharedMemoryMeta"></div>
+        <div class="task-detail-summary" id="sharedMemorySummary"></div>
+        <div class="content" id="sharedMemoryContent"></div>
+      </div>
+    </div>
     <div class="skills-view" id="skillsView">
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="skillSearchInput" placeholder="Search skills locally or from Hub..." oninput="debounceSkillSearch()">
+        <select id="skillSearchScope" class="scope-select" onchange="onSkillScopeChange()">
+          <option value="local">Local</option>
+          <option value="group">Group</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div class="search-meta" id="skillSearchMeta"></div>
       <div class="tasks-header">
         <div class="tasks-stats">
           <div class="tasks-stat"><span class="tasks-stat-value" id="skillsTotalCount">-</span><span class="tasks-stat-label" data-i18n="skills.total">Total Skills</span></div>
@@ -919,6 +1003,10 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         </div>
       </div>
       <div class="tasks-list" id="skillsList"><div class="spinner"></div></div>
+      <div style="margin-top:16px">
+        <div class="section-title" style="margin-bottom:12px">Hub Skills</div>
+        <div class="tasks-list" id="hubSkillsList"><div style="color:var(--text-muted);padding:16px">No hub skills loaded.</div></div>
+      </div>
     </div>
     <div class="task-detail-overlay" id="skillDetailOverlay" onclick="closeSkillDetail(event)">
       <div class="task-detail-panel" onclick="event.stopPropagation()">
@@ -932,6 +1020,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         </div>
         <div class="task-detail-meta" id="skillDetailMeta"></div>
         <div class="skill-detail-desc" id="skillDetailDesc"></div>
+        <div id="skillShareActions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0"></div>
         <div class="task-detail-chunks-title" data-i18n="skills.files">Skill Files</div>
         <div class="skill-files-list" id="skillFilesList"></div>
         <div class="task-detail-chunks-title" id="skillContentTitle" data-i18n="skills.content">SKILL.md Content</div>
@@ -1006,6 +1095,33 @@ input,textarea,select{font-family:inherit;font-size:inherit}
           </div>
         </div>
       <div class="settings-section">
+        <h3><span class="icon">\u{1F916}</span> <span data-i18n="settings.hostproxy">Host Model Proxy</span></h3>
+        <div class="field-hint" style="margin-bottom:8px" data-i18n="settings.hostproxy.hint">Use the LLM configured in OpenClaw host for embedding and summarization. No extra API key needed.</div>
+        <div class="settings-grid">
+          <div class="settings-toggle">
+            <label class="toggle-switch">
+              <input type="checkbox" id="cfgHostCompletion" onchange="syncHostToggles()">
+              <span class="toggle-slider"></span>
+            </label>
+            <label data-i18n="settings.hostproxy.completion">Host Completion (Summarizer)</label>
+          </div>
+          <div class="settings-toggle">
+            <label class="toggle-switch">
+              <input type="checkbox" id="cfgHostSkill" onchange="syncHostToggles()">
+              <span class="toggle-slider"></span>
+            </label>
+            <label data-i18n="settings.hostproxy.skill">Host Completion (Skill)</label>
+          </div>
+          <div class="settings-toggle">
+            <label class="toggle-switch">
+              <input type="checkbox" id="cfgHostEmbedding" onchange="syncHostToggles()">
+              <span class="toggle-slider"></span>
+            </label>
+            <label data-i18n="settings.hostproxy.embedding">Host Embedding</label>
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
         <h3><span class="icon">\u{1F4E1}</span> <span data-i18n="settings.embedding">Embedding Model</span></h3>
         <div class="settings-grid">
           <div class="settings-field">
@@ -1022,6 +1138,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
               <option value="mistral">Mistral</option>
               <option value="voyage">Voyage</option>
               <option value="local">Local</option>
+              <option value="openclaw">OpenClaw Host</option>
             </select>
           </div>
           <div class="settings-field">
@@ -1060,6 +1177,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
               <option value="gemini">Gemini</option>
               <option value="azure_openai">Azure OpenAI</option>
               <option value="bedrock">Bedrock</option>
+              <option value="openclaw">OpenClaw Host</option>
             </select>
           </div>
           <div class="settings-field">
@@ -1125,6 +1243,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
                 <option value="gemini">Gemini</option>
                 <option value="azure_openai">Azure OpenAI</option>
                 <option value="bedrock">Bedrock</option>
+                <option value="openclaw">OpenClaw Host</option>
               </select>
             </div>
             <div class="settings-field">
@@ -1171,12 +1290,49 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         </div>
       </div>
 
+      <div class="settings-group" id="settingsSharingConfig">
+        <h2 class="settings-group-title" data-i18n="settings.hub">Hub & Team</h2>
+        <div class="settings-section">
+          <h3><span class="icon">\u{1F517}</span> <span data-i18n="settings.hub.connection">Hub Connection</span></h3>
+          <div id="sharingStatusPanel" style="font-size:13px;color:var(--text-sec)">Loading...</div>
+        </div>
+        <div class="settings-section">
+          <h3><span class="icon">\u{1F465}</span> <span data-i18n="settings.hub.team">Team & Groups</span></h3>
+          <div id="sharingTeamPanel" style="font-size:13px;color:var(--text-sec)">Loading...</div>
+        </div>
+        <div class="settings-section">
+          <h3><span class="icon">\u{1F6E1}</span> <span data-i18n="settings.hub.adminPending">Admin Pending Users</span></h3>
+          <div id="sharingAdminPanel" style="font-size:13px;color:var(--text-sec)">Loading...</div>
+        </div>
+      </div>
+
       <div class="settings-actions">
         <span class="settings-saved" id="settingsSaved">\u2713 <span data-i18n="settings.saved">Saved</span></span>
         <button class="btn btn-ghost" onclick="loadConfig()" data-i18n="settings.reset">Reset</button>
         <button class="btn btn-primary" onclick="saveConfig()" data-i18n="settings.save">Save Settings</button>
       </div>
       <div style="font-size:11px;color:var(--text-muted);text-align:right;margin-top:4px" data-i18n="settings.restart.hint">Some changes require restarting the OpenClaw gateway to take effect.</div>
+    </div>
+
+    <!-- ─── Admin Page ─── -->
+    <div class="admin-view" id="adminView">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 style="font-size:18px;font-weight:700;color:var(--text)"><span class="icon">\u{1F6E1}</span> <span data-i18n="admin.title">Hub Admin Panel</span></h2>
+        <button class="btn btn-sm btn-ghost" onclick="loadAdminData()" data-i18n="admin.refresh">\u21BB Refresh</button>
+      </div>
+      <div class="admin-stat-row" id="adminStats"></div>
+      <div class="admin-tabs">
+        <button class="admin-tab active" onclick="switchAdminTab('users',this)" data-i18n="admin.tab.users">Users</button>
+        <button class="admin-tab" onclick="switchAdminTab('groups',this)" data-i18n="admin.tab.groups">Groups</button>
+        <button class="admin-tab" onclick="switchAdminTab('sharedMemories',this)" data-i18n="admin.tab.sharedMemories">Shared Memories</button>
+        <button class="admin-tab" onclick="switchAdminTab('memories',this)" data-i18n="admin.tab.memories">Shared Tasks</button>
+        <button class="admin-tab" onclick="switchAdminTab('skills',this)" data-i18n="admin.tab.skills">Shared Skills</button>
+      </div>
+      <div class="admin-panel active" id="adminUsersPanel"></div>
+      <div class="admin-panel" id="adminGroupsPanel"></div>
+      <div class="admin-panel" id="adminSharedMemoriesPanel"></div>
+      <div class="admin-panel" id="adminMemoriesPanel"></div>
+      <div class="admin-panel" id="adminSkillsPanel"></div>
     </div>
 
     <!-- ─── Import Page ─── -->
@@ -1671,6 +1827,149 @@ const I18N={
     'tasks.error':'Error',
     'tasks.error.detail':'Failed to load task details',
     'tasks.untitled.related':'Untitled',
+    'tab.admin':'\u{1F6E1} Admin',
+    'settings.hub':'Hub & Team',
+    'settings.hub.connection':'Hub Connection',
+    'settings.hub.team':'Team & Groups',
+    'settings.hub.adminPending':'Admin Pending Users',
+    'admin.title':'Hub Admin Panel',
+    'admin.refresh':'\u21BB Refresh',
+    'admin.tab.users':'Users',
+    'admin.tab.groups':'Groups',
+    'admin.tab.memories':'Shared Tasks',
+    'admin.tab.skills':'Shared Skills',
+    'admin.stat.activeUsers':'Active Users',
+    'admin.stat.pending':'Pending',
+    'admin.stat.groups':'Groups',
+    'admin.stat.sharedTasks':'Shared Tasks',
+    'admin.stat.sharedSkills':'Shared Skills',
+    'admin.stat.sharedMemories':'Shared Memories',
+    'admin.pendingApproval':'Pending Approval',
+    'admin.activeUsers':'Active Users',
+    'admin.noActiveUsers':'No active users.',
+    'admin.approve':'Approve',
+    'admin.reject':'Reject',
+    'admin.device':'Device: ',
+    'admin.groups':'Groups',
+    'admin.newGroup':'+ New Group',
+    'admin.groupName':'Group name',
+    'admin.groupDesc':'Description (optional)',
+    'admin.create':'Create',
+    'admin.cancel':'Cancel',
+    'admin.delete':'Delete',
+    'admin.members':'Members',
+    'admin.noGroups':'No groups created yet.',
+    'admin.noMembers':'No members.',
+    'admin.add':'Add',
+    'admin.remove':'Remove',
+    'admin.sharedTasks':'Shared Tasks',
+    'admin.noSharedTasks':'No shared tasks on Hub.',
+    'admin.owner':'Owner: ',
+    'admin.group':'Group: ',
+    'admin.chunks':'Chunks: ',
+    'admin.updated':'Updated: ',
+    'admin.sharedSkills':'Shared Skills',
+    'admin.noSharedSkills':'No shared skills on Hub.',
+    'admin.sharedMemories':'Shared Memories',
+    'admin.noSharedMemories':'No shared memories on Hub.',
+    'admin.tab.sharedMemories':'Shared Memories',
+    'admin.version':'v',
+    'admin.quality':'Quality: ',
+    'admin.membersCount':'Members ({n}):',
+    'admin.noMembersYet':'No members yet.',
+    'admin.loadFailed':'Failed to load admin data: ',
+    'admin.groupsFailed':'Failed to load groups: ',
+    'toast.userApproved':'User approved',
+    'toast.userRejected':'User rejected',
+    'toast.approveFail':'Approve failed',
+    'toast.rejectFail':'Reject failed',
+    'toast.groupCreated':'Group created',
+    'toast.groupDeleted':'Group deleted',
+    'toast.memberAdded':'Member added',
+    'toast.memberRemoved':'Member removed',
+    'toast.taskRemoved':'Task removed',
+    'toast.skillRemoved':'Skill removed',
+    'toast.memoryRemoved':'Memory removed',
+    'toast.createFail':'Create failed',
+    'toast.deleteFail':'Delete failed',
+    'toast.addFail':'Add failed',
+    'toast.removeFail':'Remove failed',
+    'toast.groupNameRequired':'Group name is required',
+    'confirm.rejectUser':'Reject this user?',
+    'confirm.removeGroupMember':'Remove this member from the group?',
+    'confirm.removeMember':'Remove this member?',
+    'confirm.deleteGroup':'Delete group "{name}"? Members will be removed.',
+    'confirm.deleteGroupShort':'Delete group "{name}"?',
+    'confirm.removeTask':'Remove shared task "{name}" from Hub? This cannot be undone.',
+    'confirm.removeSkill':'Remove shared skill "{name}" from Hub? This cannot be undone.',
+    'confirm.removeMemory':'Remove shared memory "{name}" from Hub? This cannot be undone.',
+    'sharing.disabled':'Sharing disabled',
+    'sharing.disabled.hint':'Enable sharing in plugin config to connect a Hub.',
+    'sharing.hubAdmin':'Hub Admin',
+    'sharing.client':'Client',
+    'sharing.hubMode':'Hub mode',
+    'sharing.hubMode.status':'Status: not connected to self',
+    'sharing.hubMode.hint':'Configure sharing.client with hubAddress and userToken pointing to this Hub to enable admin UI.',
+    'sharing.clientConfigured':'Client configured',
+    'sharing.clientDisconnected':'Status: disconnected',
+    'sharing.clientDisconnected.hint':'Viewer will keep showing local data; Hub actions may fail until the connection is restored.',
+    'sharing.clientNotConfigured':'Client not configured',
+    'sharing.clientNotConfigured.hint':'Set hubAddress and userToken in sharing.client to enable team features.',
+    'sharing.settingsDisabled':'Sharing is disabled.',
+    'sharing.settingsDisabled.hint':'Enable sharing in config to use Hub memory and skill collaboration.',
+    'sharing.noTeam':'No team connection.',
+    'sharing.adminUnavailable':'Admin tools unavailable.',
+    'sharing.adminEnabled':'Admin controls enabled',
+    'sharing.adminPendingHint':'Pending users will appear below.',
+    'sharing.notAdmin':'Current user is not an admin.',
+    'sharing.pendingLoadFail':'Failed to load pending users: ',
+    'sharing.noPending':'No pending users.',
+    'sharing.manageGroups':'Manage Groups',
+    'sharing.openAdmin':'Open Admin Panel',
+    'sharing.hubNotConfigured':'Hub is running but client connection is not configured.',
+    'sharing.hubNotConfigured.hint':'Add sharing.client.hubAddress and sharing.client.userToken pointing to this Hub to enable the admin interface.',
+    'sharing.notConnected':'Not connected to Hub.',
+    'sharing.role':'Role:',
+    'sharing.clientConfiguredLabel':'Client configured:',
+    'sharing.configuredHub':'Configured Hub:',
+    'sharing.connected':'Connected:',
+    'sharing.yes':'yes',
+    'sharing.no':'no',
+    'sharing.user':'User:',
+    'sharing.team':'Team:',
+    'sharing.groups':'Groups:',
+    'sharing.loading':'Loading...',
+    'sharing.loadingGroups':'Loading groups...',
+    'sharing.noGroupsYet':'No groups yet.',
+    'search.localResults':'Local Results',
+    'search.hubResults':'Hub Results',
+    'search.noLocal':'No local results.',
+    'search.noHub':'No Hub results.',
+    'search.viewDetail':'View Detail',
+    'search.sharedMemory':'Shared Memory',
+    'search.loadFailed':'Failed to load shared memory',
+    'share.alreadyShared':'Shared',
+    'share.shareBtn':'Share',
+    'share.updateBtn':'Update',
+    'share.unshareBtn':'Unshare',
+    'toast.taskShared':'Task shared',
+    'toast.taskShareFail':'Task share failed',
+    'toast.taskUnshared':'Task unshared',
+    'toast.taskUnshareFail':'Task unshare failed',
+    'toast.memoryShared':'Memory shared',
+    'toast.memoryShareFail':'Memory share failed',
+    'toast.memoryUnshared':'Memory unshared',
+    'toast.memoryUnshareFail':'Memory unshare failed',
+    'toast.skillShared':'Skill shared',
+    'toast.skillShareFail':'Skill share failed',
+    'toast.skillUnshared':'Skill unshared',
+    'toast.skillUnshareFail':'Skill unshare failed',
+    'share.memoryVisibilityPrompt':'Share visibility (public or group):',
+    'share.memoryUnshareConfirm':'Unshare this memory?',
+    'share.group':'Group',
+    'share.public':'Public',
+    'toast.skillPulled':'Skill pulled to local storage',
+    'toast.skillPullFail':'Skill pull failed',
     'task.edit':'Edit',
     'task.delete':'Delete',
     'task.save':'Save',
@@ -1993,6 +2292,149 @@ const I18N={
     'tasks.error':'出错了',
     'tasks.error.detail':'加载任务详情失败',
     'tasks.untitled.related':'未命名',
+    'tab.admin':'\u{1F6E1} 管理',
+    'settings.hub':'Hub 与团队',
+    'settings.hub.connection':'Hub 连接',
+    'settings.hub.team':'团队与分组',
+    'settings.hub.adminPending':'管理员待审用户',
+    'admin.title':'Hub 管理面板',
+    'admin.refresh':'\u21BB 刷新',
+    'admin.tab.users':'用户',
+    'admin.tab.groups':'分组',
+    'admin.tab.memories':'共享任务',
+    'admin.tab.skills':'共享技能',
+    'admin.stat.activeUsers':'活跃用户',
+    'admin.stat.pending':'待审核',
+    'admin.stat.groups':'分组',
+    'admin.stat.sharedTasks':'共享任务',
+    'admin.stat.sharedSkills':'共享技能',
+    'admin.stat.sharedMemories':'共享记忆',
+    'admin.pendingApproval':'待审批',
+    'admin.activeUsers':'活跃用户',
+    'admin.noActiveUsers':'暂无活跃用户。',
+    'admin.approve':'批准',
+    'admin.reject':'拒绝',
+    'admin.device':'设备：',
+    'admin.groups':'分组',
+    'admin.newGroup':'+ 新建分组',
+    'admin.groupName':'分组名称',
+    'admin.groupDesc':'描述（可选）',
+    'admin.create':'创建',
+    'admin.cancel':'取消',
+    'admin.delete':'删除',
+    'admin.members':'成员',
+    'admin.noGroups':'暂无分组。',
+    'admin.noMembers':'暂无成员。',
+    'admin.add':'添加',
+    'admin.remove':'移除',
+    'admin.sharedTasks':'共享任务',
+    'admin.noSharedTasks':'Hub 上暂无共享任务。',
+    'admin.owner':'归属：',
+    'admin.group':'分组：',
+    'admin.chunks':'记忆片段：',
+    'admin.updated':'更新于：',
+    'admin.sharedSkills':'共享技能',
+    'admin.noSharedSkills':'Hub 上暂无共享技能。',
+    'admin.sharedMemories':'共享记忆',
+    'admin.noSharedMemories':'Hub 上暂无共享记忆。',
+    'admin.tab.sharedMemories':'共享记忆',
+    'admin.version':'v',
+    'admin.quality':'质量：',
+    'admin.membersCount':'成员（{n}）：',
+    'admin.noMembersYet':'暂无成员。',
+    'admin.loadFailed':'加载管理数据失败：',
+    'admin.groupsFailed':'加载分组失败：',
+    'toast.userApproved':'用户已批准',
+    'toast.userRejected':'用户已拒绝',
+    'toast.approveFail':'批准失败',
+    'toast.rejectFail':'拒绝失败',
+    'toast.groupCreated':'分组已创建',
+    'toast.groupDeleted':'分组已删除',
+    'toast.memberAdded':'成员已添加',
+    'toast.memberRemoved':'成员已移除',
+    'toast.taskRemoved':'任务已移除',
+    'toast.skillRemoved':'技能已移除',
+    'toast.memoryRemoved':'记忆已移除',
+    'toast.createFail':'创建失败',
+    'toast.deleteFail':'删除失败',
+    'toast.addFail':'添加失败',
+    'toast.removeFail':'移除失败',
+    'toast.groupNameRequired':'请输入分组名称',
+    'confirm.rejectUser':'确定要拒绝此用户吗？',
+    'confirm.removeGroupMember':'确定要将此成员移出分组吗？',
+    'confirm.removeMember':'确定要移除此成员吗？',
+    'confirm.deleteGroup':'确定要删除分组「{name}」吗？成员将被移除。',
+    'confirm.deleteGroupShort':'确定要删除分组「{name}」吗？',
+    'confirm.removeTask':'确定要从 Hub 移除共享任务「{name}」吗？此操作不可撤销。',
+    'confirm.removeSkill':'确定要从 Hub 移除共享技能「{name}」吗？此操作不可撤销。',
+    'confirm.removeMemory':'确定要从 Hub 移除共享记忆「{name}」吗？此操作不可撤销。',
+    'sharing.disabled':'共享已禁用',
+    'sharing.disabled.hint':'在插件配置中启用共享以连接 Hub。',
+    'sharing.hubAdmin':'Hub 管理员',
+    'sharing.client':'客户端',
+    'sharing.hubMode':'Hub 模式',
+    'sharing.hubMode.status':'状态：未连接到自身',
+    'sharing.hubMode.hint':'配置 sharing.client 的 hubAddress 和 userToken 指向此 Hub 以启用管理界面。',
+    'sharing.clientConfigured':'客户端已配置',
+    'sharing.clientDisconnected':'状态：已断开',
+    'sharing.clientDisconnected.hint':'查看器将继续显示本地数据；Hub 操作可能在连接恢复前失败。',
+    'sharing.clientNotConfigured':'客户端未配置',
+    'sharing.clientNotConfigured.hint':'设置 sharing.client 中的 hubAddress 和 userToken 以启用团队功能。',
+    'sharing.settingsDisabled':'共享已禁用。',
+    'sharing.settingsDisabled.hint':'在配置中启用共享以使用 Hub 记忆和技能协作。',
+    'sharing.noTeam':'无团队连接。',
+    'sharing.adminUnavailable':'管理工具不可用。',
+    'sharing.adminEnabled':'管理控制已启用',
+    'sharing.adminPendingHint':'待审用户将显示在下方。',
+    'sharing.notAdmin':'当前用户不是管理员。',
+    'sharing.pendingLoadFail':'加载待审用户失败：',
+    'sharing.noPending':'暂无待审用户。',
+    'sharing.manageGroups':'管理分组',
+    'sharing.openAdmin':'打开管理面板',
+    'sharing.hubNotConfigured':'Hub 正在运行，但客户端连接未配置。',
+    'sharing.hubNotConfigured.hint':'添加 sharing.client.hubAddress 和 sharing.client.userToken 指向此 Hub 以启用管理界面。',
+    'sharing.notConnected':'未连接到 Hub。',
+    'sharing.role':'角色：',
+    'sharing.clientConfiguredLabel':'客户端已配置：',
+    'sharing.configuredHub':'配置的 Hub：',
+    'sharing.connected':'已连接：',
+    'sharing.yes':'是',
+    'sharing.no':'否',
+    'sharing.user':'用户：',
+    'sharing.team':'团队：',
+    'sharing.groups':'分组：',
+    'sharing.loading':'加载中...',
+    'sharing.loadingGroups':'正在加载分组...',
+    'sharing.noGroupsYet':'暂无分组。',
+    'search.localResults':'本地结果',
+    'search.hubResults':'Hub 结果',
+    'search.noLocal':'无本地结果。',
+    'search.noHub':'无 Hub 结果。',
+    'search.viewDetail':'查看详情',
+    'search.sharedMemory':'共享记忆',
+    'search.loadFailed':'加载共享记忆失败',
+    'share.alreadyShared':'已共享',
+    'share.shareBtn':'共享',
+    'share.updateBtn':'更新共享',
+    'share.unshareBtn':'取消共享',
+    'toast.taskShared':'任务已共享',
+    'toast.taskShareFail':'任务共享失败',
+    'toast.taskUnshared':'任务已取消共享',
+    'toast.taskUnshareFail':'取消共享失败',
+    'toast.memoryShared':'记忆已共享',
+    'toast.memoryShareFail':'记忆共享失败',
+    'toast.memoryUnshared':'记忆已取消共享',
+    'toast.memoryUnshareFail':'记忆取消共享失败',
+    'toast.skillShared':'技能已共享',
+    'toast.skillShareFail':'技能共享失败',
+    'toast.skillUnshared':'技能已取消共享',
+    'toast.skillUnshareFail':'技能取消共享失败',
+    'share.memoryVisibilityPrompt':'共享可见性（public 或 group）：',
+    'share.memoryUnshareConfirm':'取消共享此记忆？',
+    'share.group':'团队',
+    'share.public':'公开',
+    'toast.skillPulled':'技能已拉取到本地',
+    'toast.skillPullFail':'技能拉取失败',
     'task.edit':'编辑',
     'task.delete':'删除',
     'task.save':'保存',
@@ -2172,6 +2614,883 @@ function switchView(view){
   }
 }
 
+function onMemoryScopeChange(){
+  memorySearchScope=document.getElementById('memorySearchScope')?.value||'local';
+  if(document.getElementById('searchInput').value.trim()) doSearch(document.getElementById('searchInput').value);
+  else if(memorySearchScope!=='local') { document.getElementById('sharingSearchMeta').textContent=''; loadHubMemories(); }
+  else { document.getElementById('sharingSearchMeta').textContent=''; loadMemories(); }
+}
+
+function onSkillScopeChange(){
+  skillSearchScope=document.getElementById('skillSearchScope')?.value||'local';
+  loadSkills();
+}
+
+function onTaskScopeChange(){
+  taskSearchScope=document.getElementById('taskSearchScope')?.value||'local';
+  tasksPage=0;
+  loadTasks();
+}
+
+async function loadSharingStatus(forcePending){
+  try{
+    const r=await fetch('/api/sharing/status');
+    const d=await r.json();
+    sharingStatusCache=d;
+    renderSharingSidebar(d);
+    renderSharingSettings(d);
+    if(forcePending && d && d.admin && d.admin.canManageUsers) loadSharingPendingUsers();
+  }catch(e){
+    renderSharingSidebar(null);
+    renderSharingSettings(null);
+  }
+}
+
+function renderSharingSidebar(data){
+  var statusEl=document.getElementById('sharingSidebarStatus');
+  var hintEl=document.getElementById('sharingSidebarHint');
+  if(!statusEl||!hintEl) return;
+  if(!data||!data.enabled){
+    statusEl.innerHTML='<strong>'+t('sharing.disabled')+'</strong>';
+    hintEl.textContent=t('sharing.disabled.hint');
+    return;
+  }
+  var conn=data.connection||{};
+  if(conn.connected&&conn.user){
+    var groups=(conn.user.groups||[]).map(function(g){return g.name;}).join(', ')||'(none)';
+    var roleLabel=data.role==='hub'?t('sharing.hubAdmin'):t('sharing.client');
+    var roleCls=conn.user.role==='admin'?'admin':'client';
+    statusEl.innerHTML='<div class="user-row"><span class="username">'+esc(conn.user.username)+'</span><span class="role-badge '+roleCls+'">'+esc(roleLabel)+'</span></div>'+'<div class="info-grid">'+'<span class="label">'+t('sharing.team')+'</span><span class="value">'+esc(conn.teamName||'Unknown')+'</span>'+'<span class="label">Hub</span><span class="value">'+esc(conn.hubUrl||data.hubUrl||'')+'</span>'+'<span class="label">'+t('sharing.groups')+'</span><span class="value">'+esc(groups)+'</span>'+'</div>';
+    hintEl.innerHTML=conn.apiVersion?'<span class="api-badge">API '+esc(conn.apiVersion)+'</span>':'';
+    var adminTab=document.querySelector('.tab[data-view="admin"]');
+    if(adminTab) adminTab.style.display=(conn.user.role==='admin')?'':'none';
+  }else if(data.role==='hub'){
+    statusEl.innerHTML='<strong>'+t('sharing.hubMode')+'</strong><br>'+t('sharing.hubMode.status');
+    hintEl.textContent=t('sharing.hubMode.hint');
+    var adminTab=document.querySelector('.tab[data-view="admin"]');
+    if(adminTab) adminTab.style.display=(data.admin&&data.admin.canManageUsers)?'':'none';
+  }else if(data.clientConfigured){
+    statusEl.innerHTML='<strong>'+t('sharing.clientConfigured')+'</strong><br>Hub: '+esc(data.hubUrl||'')+'<br>'+t('sharing.clientDisconnected');
+    hintEl.textContent=t('sharing.clientDisconnected.hint');
+  }else{
+    statusEl.innerHTML='<strong>'+t('sharing.clientNotConfigured')+'</strong>';
+    hintEl.textContent=t('sharing.clientNotConfigured.hint');
+  }
+}
+
+function renderSharingSettings(data){
+  var statusEl=document.getElementById('sharingStatusPanel');
+  var teamEl=document.getElementById('sharingTeamPanel');
+  var adminEl=document.getElementById('sharingAdminPanel');
+  if(!statusEl||!teamEl||!adminEl) return;
+  if(!data||!data.enabled){
+    statusEl.innerHTML='<div class="line"><strong>'+t('sharing.settingsDisabled')+'</strong></div><div class="line">'+t('sharing.settingsDisabled.hint')+'</div>';
+    teamEl.innerHTML='<div class="line">'+t('sharing.noTeam')+'</div>';
+    adminEl.innerHTML='<div class="line">'+t('sharing.adminUnavailable')+'</div>';
+    return;
+  }
+  var conn=data.connection||{};
+  var user=conn.user||{};
+  var groups=(user.groups||[]).map(function(g){return g.name;}).join(', ')||'(none)';
+  var statusLines=[];
+  statusLines.push('<div class="line"><strong>'+t('sharing.role')+'</strong> '+esc(data.role||'unknown')+'</div>');
+  statusLines.push('<div class="line"><strong>'+t('sharing.clientConfiguredLabel')+'</strong> '+(data.clientConfigured?t('sharing.yes'):t('sharing.no'))+'</div>');
+  if(data.hubUrl) statusLines.push('<div class="line"><strong>'+t('sharing.configuredHub')+'</strong> '+esc(data.hubUrl)+'</div>');
+  statusLines.push('<div class="line"><strong>'+t('sharing.connected')+'</strong> '+(conn.connected?t('sharing.yes'):t('sharing.no'))+'</div>');
+  if(conn.apiVersion) statusLines.push('<div class="line"><strong>API:</strong> '+esc(conn.apiVersion)+'</div>');
+  statusEl.innerHTML=statusLines.join('');
+
+  var teamLines=[];
+  if(conn.connected&&conn.user){
+    teamLines.push('<div class="line"><strong>'+t('sharing.user')+'</strong> '+esc(user.username)+' ('+esc(user.role)+')</div>');
+    teamLines.push('<div class="line"><strong>'+t('sharing.team')+'</strong> '+esc(conn.teamName||'Unknown')+'</div>');
+    teamLines.push('<div class="line"><strong>'+t('sharing.groups')+'</strong> '+esc(groups)+'</div>');
+    if(user.role==='admin'){
+      teamLines.push('<div style="margin-top:12px;display:flex;gap:8px">');
+      teamLines.push('<button class="btn btn-sm" onclick="loadGroupManager()">'+t('sharing.manageGroups')+'</button>');
+      teamLines.push('<button class="btn btn-sm btn-primary" onclick="switchView(\\'admin\\')">'+t('sharing.openAdmin')+'</button>');
+      teamLines.push('</div>');
+    }
+    teamLines.push('<div id="groupManagerPanel" style="margin-top:12px;display:none"></div>');
+  }else if(data.role==='hub'&&!data.clientConfigured){
+    teamLines.push('<div class="line">'+t('sharing.hubNotConfigured')+'</div>');
+    teamLines.push('<div class="line" style="color:var(--amber)">'+t('sharing.hubNotConfigured.hint')+'</div>');
+  }else{
+    teamLines.push('<div class="line">'+t('sharing.notConnected')+'</div>');
+  }
+  teamEl.innerHTML=teamLines.join('');
+
+  adminEl.innerHTML=(data.admin&&data.admin.canManageUsers)
+    ? '<div class="line"><span class="hub-source-badge">'+t('sharing.adminEnabled')+'</span></div><div class="line">'+t('sharing.adminPendingHint')+'</div>'
+    : '<div class="line">'+t('sharing.notAdmin')+'</div>';
+}
+
+async function loadSharingPendingUsers(){
+  var el=document.getElementById('sharingAdminPanel');
+  if(!el) return;
+  el.innerHTML=t('sharing.loading');
+  try{
+    const r=await fetch('/api/sharing/pending-users');
+    const d=await r.json();
+    const users=Array.isArray(d.users)?d.users:[];
+    renderSharingPendingUsers(users, d.error, sharingStatusCache&&sharingStatusCache.admin?sharingStatusCache.admin.rejectSupported:false);
+  }catch(e){
+    el.innerHTML='<div class="line">'+t('sharing.pendingLoadFail')+esc(String(e))+'</div>';
+  }
+}
+
+function renderSharingPendingUsers(users, error, rejectSupported){
+  var el=document.getElementById('sharingAdminPanel');
+  if(!el) return;
+  if(error){
+    el.innerHTML='<div class="line">'+esc(error)+'</div>';
+    return;
+  }
+  if(!users||users.length===0){
+    el.innerHTML='<div class="line">'+t('sharing.noPending')+'</div>';
+    return;
+  }
+  el.innerHTML='<div class="pending-user-list">'+users.map(function(user){
+    return '<div class="pending-user-card">'+
+      '<div class="pending-user-name">'+esc(user.username||user.id||'')+'</div>'+
+      '<div class="pending-user-meta">'+t('admin.device')+esc(user.deviceName||'unknown')+'</div>'+
+      '<div class="pending-user-actions">'+
+        '<button class="btn btn-sm" onclick="approveSharingUser(&quot;'+escAttr(user.id)+'&quot;,&quot;'+escAttr(user.username||'')+'&quot;)">'+t('admin.approve')+'</button>'+
+        (rejectSupported?'<button class="btn btn-sm btn-ghost" onclick="rejectSharingUser(&quot;'+escAttr(user.id)+'&quot;,&quot;'+escAttr(user.username||'')+'&quot;)">'+t('admin.reject')+'</button>':'')+
+      '</div>'+
+    '</div>';
+  }).join('')+'</div>';
+}
+
+async function approveSharingUser(userId,username){
+  try{
+    const r=await fetch('/api/sharing/approve-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
+    const d=await r.json();
+    if(d.ok){toast(t('toast.userApproved'),'success');loadSharingPendingUsers();loadSharingStatus(true);} else {toast(d.error||t('toast.approveFail'),'error');}
+  }catch(e){toast(t('toast.approveFail')+': '+e.message,'error');}
+}
+
+async function rejectSharingUser(userId,username){
+  try{
+    const r=await fetch('/api/sharing/reject-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
+    const d=await r.json();
+    if(d.ok){toast(t('toast.userRejected'),'success');loadSharingPendingUsers();} else {toast(d.error||t('toast.rejectFail'),'error');}
+  }catch(e){toast(t('toast.rejectFail')+': '+e.message,'error');}
+}
+
+/* ─── Group Manager ─── */
+var groupManagerUsers=[];
+async function loadGroupManager(){
+  var panel=document.getElementById('groupManagerPanel');
+  if(!panel) return;
+  panel.style.display='block';
+  panel.innerHTML=t('sharing.loadingGroups');
+  try{
+    var [gr,ur]=await Promise.all([
+      fetch('/api/sharing/groups').then(function(r){return r.json();}),
+      fetch('/api/sharing/users').then(function(r){return r.json();})
+    ]);
+    var groups=Array.isArray(gr.groups)?gr.groups:[];
+    groupManagerUsers=Array.isArray(ur.users)?ur.users:[];
+    renderGroupManager(panel,groups);
+  }catch(e){panel.innerHTML=t('admin.groupsFailed')+esc(String(e));}
+}
+function renderGroupManager(panel,groups){
+  var html='<div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">'+
+    '<strong>'+t('admin.groups')+' ('+groups.length+')</strong>'+
+    '<button class="btn btn-sm" onclick="showCreateGroupForm()">'+t('admin.newGroup')+'</button>'+
+  '</div>';
+  html+='<div id="createGroupForm" style="display:none;margin-bottom:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px">'+
+    '<input id="newGroupName" type="text" placeholder="'+t('admin.groupName')+'" style="width:60%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-right:6px">'+
+    '<input id="newGroupDesc" type="text" placeholder="'+t('admin.groupDesc')+'" style="width:60%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-right:6px;margin-top:6px">'+
+    '<div style="margin-top:8px"><button class="btn btn-sm btn-primary" onclick="createGroup()">'+t('admin.create')+'</button> '+
+    '<button class="btn btn-sm btn-ghost" onclick="hideCreateGroupForm()">'+t('admin.cancel')+'</button></div>'+
+  '</div>';
+  if(groups.length===0){
+    html+='<div class="line">'+t('sharing.noGroupsYet')+'</div>';
+  }else{
+    html+='<div style="display:flex;flex-direction:column;gap:8px">';
+    for(var i=0;i<groups.length;i++){
+      var g=groups[i];
+      html+='<div style="padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center">'+
+          '<div><strong>'+esc(g.name)+'</strong>'+(g.description?' — <span style="color:var(--text-sec)">'+esc(g.description)+'</span>':'')+'</div>'+
+          '<div style="display:flex;gap:6px">'+
+            '<button class="btn btn-sm" onclick="toggleGroupMembers(&quot;'+escAttr(g.id)+'&quot;)">'+t('admin.members')+'</button>'+
+            '<button class="btn btn-sm btn-ghost" onclick="deleteGroup(&quot;'+escAttr(g.id)+'&quot;,&quot;'+escAttr(g.name)+'&quot;)" style="color:#ef4444">'+t('admin.delete')+'</button>'+
+          '</div>'+
+        '</div>'+
+        '<div id="groupMembers_'+escAttr(g.id)+'" style="display:none;margin-top:8px"></div>'+
+      '</div>';
+    }
+    html+='</div>';
+  }
+  panel.innerHTML=html;
+}
+function showCreateGroupForm(){var f=document.getElementById('createGroupForm');if(f)f.style.display='block';}
+function hideCreateGroupForm(){var f=document.getElementById('createGroupForm');if(f)f.style.display='none';}
+async function createGroup(){
+  var name=(document.getElementById('newGroupName')).value.trim();
+  var desc=(document.getElementById('newGroupDesc')).value.trim();
+  if(!name){toast(t('toast.groupNameRequired'),'error');return;}
+  try{
+    var r=await fetch('/api/sharing/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:desc})});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.groupCreated'),'success');hideCreateGroupForm();loadGroupManager();}else{toast(d.error||t('toast.createFail'),'error');}
+  }catch(e){toast(t('toast.createFail')+': '+e.message,'error');}
+}
+async function deleteGroup(groupId,groupName){
+  if(!confirm(t('confirm.deleteGroup').replace('{name}',groupName))) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId),{method:'DELETE'});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.groupDeleted'),'success');loadGroupManager();}else{toast(d.error||t('toast.deleteFail'),'error');}
+  }catch(e){toast(t('toast.deleteFail')+': '+e.message,'error');}
+}
+async function toggleGroupMembers(groupId){
+  var el=document.getElementById('groupMembers_'+groupId);
+  if(!el) return;
+  if(el.style.display!=='none'){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML=t('sharing.loading');
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members');
+    var d=await r.json();
+    var members=Array.isArray(d.members)?d.members:[];
+    renderGroupMembers(el,groupId,members);
+  }catch(e){el.innerHTML=t('admin.groupsFailed')+esc(String(e));}
+}
+function renderGroupMembers(el,groupId,members){
+  var html='<div style="font-size:12px;margin-bottom:6px;color:var(--text-sec)">'+t('admin.membersCount').replace('{n}',members.length)+'</div>';
+  if(members.length>0){
+    html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
+    for(var i=0;i<members.length;i++){
+      var m=members[i];
+      html+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;font-size:12px">'+
+        esc(m.username||m.userId)+
+        ' <button style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:11px;padding:0 2px" onclick="removeGroupMember(&quot;'+escAttr(groupId)+'&quot;,&quot;'+escAttr(m.userId)+'&quot;)">&times;</button>'+
+      '</span>';
+    }
+    html+='</div>';
+  }else{
+    html+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">'+t('admin.noMembersYet')+'</div>';
+  }
+  var memberIds=new Set(members.map(function(m){return m.userId;}));
+  var available=groupManagerUsers.filter(function(u){return !memberIds.has(u.id);});
+  if(available.length>0){
+    html+='<div style="display:flex;gap:6px;align-items:center">'+
+      '<select id="addMemberSelect_'+escAttr(groupId)+'" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">';
+    for(var j=0;j<available.length;j++){
+      html+='<option value="'+escAttr(available[j].id)+'">'+esc(available[j].username)+'</option>';
+    }
+    html+='</select>'+
+      '<button class="btn btn-sm" onclick="addGroupMember(&quot;'+escAttr(groupId)+'&quot;)">'+t('admin.add')+'</button>'+
+    '</div>';
+  }
+  el.innerHTML=html;
+}
+async function addGroupMember(groupId){
+  var sel=document.getElementById('addMemberSelect_'+groupId);
+  if(!sel) return;
+  var userId=sel.value;
+  if(!userId) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.memberAdded'),'success');reloadGroupMembers(groupId);}else{toast(d.error||t('toast.addFail'),'error');}
+  }catch(e){toast(t('toast.addFail')+': '+e.message,'error');}
+}
+async function removeGroupMember(groupId,userId){
+  if(!confirm(t('confirm.removeGroupMember'))) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.memberRemoved'),'success');reloadGroupMembers(groupId);}else{toast(d.error||t('toast.removeFail'),'error');}
+  }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
+}
+async function reloadGroupMembers(groupId){
+  var el=document.getElementById('groupMembers_'+groupId);
+  if(!el) return;
+  el.style.display='block';
+  el.innerHTML=t('sharing.loading');
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members');
+    var d=await r.json();
+    var members=Array.isArray(d.members)?d.members:[];
+    renderGroupMembers(el,groupId,members);
+  }catch(e){el.innerHTML=t('admin.groupsFailed')+esc(String(e));}
+}
+
+/* ─── Hub Admin Panel ─── */
+var adminDataCache={users:[],groups:[],tasks:[],skills:[],memories:[]};
+
+function switchAdminTab(tab,btn){
+  document.querySelectorAll('.admin-tabs .admin-tab').forEach(function(t){t.classList.remove('active');});
+  btn.classList.add('active');
+  document.querySelectorAll('.admin-panel').forEach(function(p){p.classList.remove('active');});
+  var panel=document.getElementById('admin'+tab.charAt(0).toUpperCase()+tab.slice(1)+'Panel');
+  if(panel) panel.classList.add('active');
+}
+
+async function loadAdminData(){
+  try{
+    var [usersR,groupsR,tasksR,skillsR,pendingR,memoriesR]=await Promise.all([
+      fetch('/api/sharing/users').then(function(r){return r.json();}),
+      fetch('/api/sharing/groups').then(function(r){return r.json();}),
+      fetch('/api/admin/shared-tasks').then(function(r){return r.json();}),
+      fetch('/api/admin/shared-skills').then(function(r){return r.json();}),
+      fetch('/api/sharing/pending-users').then(function(r){return r.json();}),
+      fetch('/api/admin/shared-memories').then(function(r){return r.json();})
+    ]);
+    adminDataCache.users=Array.isArray(usersR.users)?usersR.users:[];
+    adminDataCache.groups=Array.isArray(groupsR.groups)?groupsR.groups:[];
+    adminDataCache.tasks=Array.isArray(tasksR.tasks)?tasksR.tasks:[];
+    adminDataCache.skills=Array.isArray(skillsR.skills)?skillsR.skills:[];
+    adminDataCache.memories=Array.isArray(memoriesR.memories)?memoriesR.memories:[];
+    var pending=Array.isArray(pendingR.users)?pendingR.users:[];
+    renderAdminStats(pending.length);
+    renderAdminUsers(adminDataCache.users, pending);
+    renderAdminGroups(adminDataCache.groups);
+    renderAdminMemories(adminDataCache.tasks);
+    renderAdminSkills(adminDataCache.skills);
+    renderAdminSharedMemories(adminDataCache.memories);
+  }catch(e){
+    var statsEl=document.getElementById('adminStats');
+    if(statsEl) statsEl.innerHTML='<div class="admin-empty">'+t('admin.loadFailed')+esc(String(e))+'</div>';
+  }
+}
+
+function renderAdminStats(pendingCount){
+  var el=document.getElementById('adminStats');
+  if(!el) return;
+  el.innerHTML=
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.users.length+'</div><div class="lbl">'+t('admin.stat.activeUsers')+'</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+pendingCount+'</div><div class="lbl">'+t('admin.stat.pending')+'</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.groups.length+'</div><div class="lbl">'+t('admin.stat.groups')+'</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.tasks.length+'</div><div class="lbl">'+t('admin.stat.sharedTasks')+'</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+adminDataCache.skills.length+'</div><div class="lbl">'+t('admin.stat.sharedSkills')+'</div></div>'+
+    '<div class="admin-stat-box"><div class="val">'+(adminDataCache.memories||[]).length+'</div><div class="lbl">'+t('admin.stat.sharedMemories')+'</div></div>';
+}
+
+function renderAdminUsers(users,pending){
+  var el=document.getElementById('adminUsersPanel');
+  if(!el) return;
+  var html='';
+  if(pending&&pending.length>0){
+    html+='<div style="margin-bottom:16px"><h3 style="font-size:14px;font-weight:600;color:var(--amber);margin-bottom:10px">'+t('admin.pendingApproval')+' ('+pending.length+')</h3>';
+    for(var p=0;p<pending.length;p++){
+      var pu=pending[p];
+      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(pu.username||pu.id||'Unknown')+'</div><span class="admin-badge pending">pending</span></div>'+
+        '<div class="admin-card-meta">'+t('admin.device')+esc(pu.deviceName||'unknown')+'</div>'+
+        '<div class="admin-card-actions">'+
+          '<button class="btn btn-sm btn-primary" onclick="adminApproveUser(&quot;'+escAttr(pu.id)+'&quot;,&quot;'+escAttr(pu.username||'')+'&quot;)">'+t('admin.approve')+'</button>'+
+          '<button class="btn btn-sm btn-ghost" onclick="adminRejectUser(&quot;'+escAttr(pu.id)+'&quot;)" style="color:var(--rose)">'+t('admin.reject')+'</button>'+
+        '</div></div>';
+    }
+    html+='</div>';
+  }
+  html+='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.activeUsers')+' ('+users.length+')</h3>';
+  if(users.length===0){
+    html+='<div class="admin-empty">'+t('admin.noActiveUsers')+'</div>';
+  }else{
+    for(var i=0;i<users.length;i++){
+      var u=users[i];
+      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(u.username||u.id)+'</div>'+
+        '<span class="admin-badge '+(u.role==='admin'?'admin':'member')+'">'+esc(u.role||'member')+'</span></div>'+
+        '<div class="admin-card-meta">ID: '+esc(u.id)+(u.status?' \u00B7 Status: '+esc(u.status):'')+'</div></div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+async function adminApproveUser(userId,username){
+  try{
+    var r=await fetch('/api/sharing/approve-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.userApproved'),'success');loadAdminData();}else{toast(d.error||t('toast.approveFail'),'error');}
+  }catch(e){toast(t('toast.approveFail')+': '+e.message,'error');}
+}
+async function adminRejectUser(userId){
+  if(!confirm(t('confirm.rejectUser'))) return;
+  try{
+    var r=await fetch('/api/sharing/reject-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.userRejected'),'success');loadAdminData();}else{toast(d.error||t('toast.rejectFail'),'error');}
+  }catch(e){toast(t('toast.rejectFail')+': '+e.message,'error');}
+}
+
+function renderAdminGroups(groups){
+  var el=document.getElementById('adminGroupsPanel');
+  if(!el) return;
+  var html='<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'+
+    '<h3 style="font-size:14px;font-weight:600;color:var(--text)">'+t('admin.groups')+' ('+groups.length+')</h3>'+
+    '<button class="btn btn-sm btn-primary" onclick="showAdminCreateGroup()">'+t('admin.newGroup')+'</button></div>';
+  html+='<div id="adminCreateGroupForm" style="display:none;margin-bottom:14px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:10px">'+
+    '<div style="display:flex;flex-direction:column;gap:8px">'+
+    '<input id="adminNewGroupName" type="text" placeholder="'+t('admin.groupName')+'" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text)">'+
+    '<input id="adminNewGroupDesc" type="text" placeholder="'+t('admin.groupDesc')+'" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text)">'+
+    '<div style="display:flex;gap:8px"><button class="btn btn-sm btn-primary" onclick="adminCreateGroup()">'+t('admin.create')+'</button>'+
+    '<button class="btn btn-sm btn-ghost" onclick="hideAdminCreateGroup()">'+t('admin.cancel')+'</button></div></div></div>';
+  if(groups.length===0){
+    html+='<div class="admin-empty">'+t('admin.noGroups')+'</div>';
+  }else{
+    for(var i=0;i<groups.length;i++){
+      var g=groups[i];
+      html+='<div class="admin-card"><div class="admin-card-header"><div class="admin-card-title">'+esc(g.name)+'</div>'+
+        '<button class="btn btn-sm btn-ghost" onclick="adminDeleteGroup(&quot;'+escAttr(g.id)+'&quot;,&quot;'+escAttr(g.name)+'&quot;)" style="color:var(--rose);font-size:11px">'+t('admin.delete')+'</button></div>'+
+        (g.description?'<div class="admin-card-meta">'+esc(g.description)+'</div>':'')+
+        '<div id="adminGroupMembers_'+escAttr(g.id)+'" style="margin-top:10px"></div>'+
+      '</div>';
+    }
+  }
+  el.innerHTML=html;
+  for(var i=0;i<groups.length;i++){adminLoadGroupMembers(groups[i].id);}
+}
+function showAdminCreateGroup(){var f=document.getElementById('adminCreateGroupForm');if(f)f.style.display='block';}
+function hideAdminCreateGroup(){var f=document.getElementById('adminCreateGroupForm');if(f)f.style.display='none';}
+async function adminCreateGroup(){
+  var name=(document.getElementById('adminNewGroupName')).value.trim();
+  var desc=(document.getElementById('adminNewGroupDesc')).value.trim();
+  if(!name){toast(t('toast.groupNameRequired'),'error');return;}
+  try{
+    var r=await fetch('/api/sharing/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:desc})});
+    var d=await r.json();
+    if(d.ok||d.id){toast(t('toast.groupCreated'),'success');hideAdminCreateGroup();loadAdminData();}else{toast(d.error||t('toast.createFail'),'error');}
+  }catch(e){toast(t('toast.createFail')+': '+e.message,'error');}
+}
+async function adminDeleteGroup(groupId,groupName){
+  if(!confirm(t('confirm.deleteGroupShort').replace('{name}',groupName))) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId),{method:'DELETE'});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.groupDeleted'),'success');loadAdminData();}else{toast(d.error||t('toast.deleteFail'),'error');}
+  }catch(e){toast(t('toast.deleteFail')+': '+e.message,'error');}
+}
+async function adminLoadGroupMembers(groupId){
+  var el=document.getElementById('adminGroupMembers_'+groupId);
+  if(!el) return;
+  el.innerHTML=t('sharing.loading');
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members');
+    var d=await r.json();
+    var members=Array.isArray(d.members)?d.members:[];
+    var html='<div style="font-size:12px;margin-bottom:6px;color:var(--text-sec)">'+t('admin.membersCount').replace('{n}',members.length)+'</div>';
+    if(members.length>0){
+      html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
+      for(var i=0;i<members.length;i++){
+        var m=members[i];
+        html+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;font-size:12px">'+
+          esc(m.username||m.userId)+
+          ' <button style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:11px;padding:0 2px" onclick="adminRemoveGroupMember(&quot;'+escAttr(groupId)+'&quot;,&quot;'+escAttr(m.userId)+'&quot;)">&times;</button></span>';
+      }
+      html+='</div>';
+    }else{
+      html+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">'+t('admin.noMembers')+'</div>';
+    }
+    var memberIds=new Set(members.map(function(m){return m.userId;}));
+    var available=adminDataCache.users.filter(function(u){return !memberIds.has(u.id);});
+    if(available.length>0){
+      html+='<div style="display:flex;gap:6px;align-items:center">'+
+        '<select id="adminAddMember_'+escAttr(groupId)+'" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg-card);color:var(--text)">';
+      for(var j=0;j<available.length;j++){
+        html+='<option value="'+escAttr(available[j].id)+'">'+esc(available[j].username)+'</option>';
+      }
+      html+='</select><button class="btn btn-sm" onclick="adminAddGroupMember(&quot;'+escAttr(groupId)+'&quot;)">'+t('admin.add')+'</button></div>';
+    }
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=t('admin.groupsFailed')+esc(String(e));}
+}
+async function adminAddGroupMember(groupId){
+  var sel=document.getElementById('adminAddMember_'+groupId);
+  if(!sel) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:sel.value})});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.memberAdded'),'success');adminLoadGroupMembers(groupId);}else{toast(d.error||t('toast.addFail'),'error');}
+  }catch(e){toast(t('toast.addFail')+': '+e.message,'error');}
+}
+async function adminRemoveGroupMember(groupId,userId){
+  if(!confirm(t('confirm.removeMember'))) return;
+  try{
+    var r=await fetch('/api/sharing/groups/'+encodeURIComponent(groupId)+'/members',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.memberRemoved'),'success');adminLoadGroupMembers(groupId);}else{toast(d.error||t('toast.removeFail'),'error');}
+  }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
+}
+
+function renderAdminMemories(tasks){
+  var el=document.getElementById('adminMemoriesPanel');
+  if(!el) return;
+  adminTasksCache=tasks;
+  var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.sharedTasks')+' ('+tasks.length+')</h3>';
+  if(tasks.length===0){
+    html+='<div class="admin-empty">'+t('admin.noSharedTasks')+'</div>';
+  }else{
+    for(var i=0;i<tasks.length;i++){
+      var tk=tasks[i];
+      html+='<div class="admin-card" onclick="openHubTaskDetailFromCache(\\\'admin\\\','+i+')" style="cursor:pointer"><div class="admin-card-header"><div class="admin-card-title">'+esc(tk.title||tk.id)+'</div>'+
+        '<span class="admin-badge '+(tk.visibility==='public'?'public':'group')+'">'+esc(tk.visibility||'public')+'</span></div>'+
+        '<div class="admin-card-meta">'+
+          t('admin.owner')+esc(tk.ownerName||tk.sourceUserId||'unknown')+
+          (tk.groupName?' \u00B7 '+t('admin.group')+esc(tk.groupName):'')+
+          (tk.chunkCount!=null?' \u00B7 '+t('admin.chunks')+tk.chunkCount:'')+
+          ' \u00B7 '+t('admin.updated')+new Date(tk.updatedAt||tk.createdAt).toLocaleDateString()+
+        '</div>'+
+        '<div class="admin-card-actions">'+
+          '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();adminDeleteTask(&quot;'+escAttr(tk.id)+'&quot;,&quot;'+escAttr(tk.title||tk.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
+        '</div></div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+async function adminDeleteTask(taskId,taskTitle){
+  if(!confirm(t('confirm.removeTask').replace('{name}',taskTitle))) return;
+  try{
+    var r=await fetch('/api/admin/shared-tasks/'+encodeURIComponent(taskId),{method:'DELETE'});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.taskRemoved'),'success');loadAdminData();}else{toast(d.error||t('toast.removeFail'),'error');}
+  }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
+}
+
+function renderAdminSkills(skills){
+  var el=document.getElementById('adminSkillsPanel');
+  if(!el) return;
+  adminSkillsCache=skills;
+  var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.sharedSkills')+' ('+skills.length+')</h3>';
+  if(skills.length===0){
+    html+='<div class="admin-empty">'+t('admin.noSharedSkills')+'</div>';
+  }else{
+    for(var i=0;i<skills.length;i++){
+      var s=skills[i];
+      html+='<div class="admin-card" onclick="openHubSkillDetailFromCache(\\\'admin\\\','+i+')" style="cursor:pointer"><div class="admin-card-header"><div class="admin-card-title">'+esc(s.name||s.id)+'</div>'+
+        '<span class="admin-badge '+(s.visibility==='public'?'public':'group')+'">'+esc(s.visibility||'public')+'</span></div>'+
+        '<div class="admin-card-meta">'+
+          (s.description?esc(s.description)+'<br>':'')+
+          t('admin.owner')+esc(s.ownerName||s.sourceUserId||'unknown')+
+          (s.groupName?' \u00B7 '+t('admin.group')+esc(s.groupName):'')+
+          (s.version!=null?' \u00B7 '+t('admin.version')+s.version:'')+
+          (s.qualityScore!=null?' \u00B7 '+t('admin.quality')+s.qualityScore:'')+
+        '</div>'+
+        '<div class="admin-card-actions">'+
+          '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();adminDeleteSkill(&quot;'+escAttr(s.id)+'&quot;,&quot;'+escAttr(s.name||s.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
+        '</div></div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+async function adminDeleteSkill(skillId,skillName){
+  if(!confirm(t('confirm.removeSkill').replace('{name}',skillName))) return;
+  try{
+    var r=await fetch('/api/admin/shared-skills/'+encodeURIComponent(skillId),{method:'DELETE'});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.skillRemoved'),'success');loadAdminData();}else{toast(d.error||t('toast.removeFail'),'error');}
+  }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
+}
+
+function renderAdminSharedMemories(memories){
+  var el=document.getElementById('adminSharedMemoriesPanel');
+  if(!el) return;
+  adminMemoriesCache=memories||[];
+  var html='<h3 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px">'+t('admin.sharedMemories')+' ('+(memories||[]).length+')</h3>';
+  if(!memories||memories.length===0){
+    html+='<div class="admin-empty">'+t('admin.noSharedMemories')+'</div>';
+  }else{
+    for(var i=0;i<memories.length;i++){
+      var m=memories[i];
+      html+='<div class="admin-card" onclick="openHubMemoryDetail(\\\'admin\\\','+i+')" style="cursor:pointer"><div class="admin-card-header"><div class="admin-card-title">'+esc(m.summary||m.content?.slice(0,80)||m.id)+'</div>'+
+        '<span class="admin-badge '+(m.visibility==='public'?'public':'group')+'">'+esc(m.visibility||'public')+'</span></div>'+
+        '<div class="admin-card-meta">'+
+          t('admin.owner')+esc(m.ownerName||m.sourceUserId||'unknown')+
+          (m.groupName?' \u00B7 '+t('admin.group')+esc(m.groupName):'')+
+          (m.kind?' \u00B7 Kind: '+esc(m.kind):'')+
+          (m.role?' \u00B7 Role: '+esc(m.role):'')+
+          ' \u00B7 '+t('admin.updated')+new Date(m.updatedAt||m.createdAt).toLocaleDateString()+
+        '</div>'+
+        '<div class="admin-card-actions">'+
+          '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();adminDeleteMemory(&quot;'+escAttr(m.id)+'&quot;,&quot;'+escAttr(m.summary||m.id)+'&quot;)" style="color:var(--rose)">'+t('admin.remove')+'</button>'+
+        '</div></div>';
+    }
+  }
+  el.innerHTML=html;
+}
+
+async function adminDeleteMemory(memoryId,memoryTitle){
+  if(!confirm(t('confirm.removeMemory').replace('{name}',memoryTitle))) return;
+  try{
+    var r=await fetch('/api/admin/shared-memories/'+encodeURIComponent(memoryId),{method:'DELETE'});
+    var d=await r.json();
+    if(d.ok){toast(t('toast.memoryRemoved'),'success');loadAdminData();}else{toast(d.error||t('toast.removeFail'),'error');}
+  }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
+}
+
+function renderSharingMemorySearchResults(data,query){
+  const list=document.getElementById('memoryList');
+  const localHits=(data&&data.local&&Array.isArray(data.local.hits))?data.local.hits:[];
+  const hubHits=(data&&data.hub&&Array.isArray(data.hub.hits))?data.hub.hits:[];
+  document.getElementById('searchMeta').textContent='Search results for "'+query+'"';
+  document.getElementById('sharingSearchMeta').textContent='Local '+localHits.length+' · Hub '+hubHits.length;
+  document.getElementById('pagination').innerHTML='';
+  list.innerHTML=''+
+    '<div class="result-section">'+
+      '<div class="result-section-header"><div class="result-section-title">'+t('search.localResults')+'</div><div class="result-section-sub">'+localHits.length+' hit(s)</div></div>'+
+      '<div class="search-hit-list">'+(localHits.length?localHits.map(function(hit,idx){
+        return '<div class="search-hit-card">'+
+          '<div class="summary">'+(idx+1)+'. '+esc(hit.summary||'(no summary)')+'</div>'+
+          '<div class="excerpt">'+esc(hit.excerpt||'')+'</div>'+
+          '<div class="search-hit-meta">'+
+            '<span class="meta-chip">role: '+esc(hit.role||'unknown')+'</span>'+
+            (hit.score!=null?'<span class="meta-chip">score: '+Math.round(hit.score*100)+'%</span>':'')+
+            (hit.taskId?'<span class="meta-chip">task: '+esc(hit.taskId)+'</span>':'')+
+          '</div>'+
+        '</div>';
+      }).join(''):'<div class="search-hit-card"><div class="excerpt">'+t('search.noLocal')+'</div></div>')+'</div>'+
+    '</div>'+
+    '<div class="result-section">'+
+      '<div class="result-section-header"><div class="result-section-title">'+t('search.hubResults')+'</div><div class="result-section-sub">'+hubHits.length+' hit(s)</div></div>'+
+      '<div class="search-hit-list">'+(hubHits.length?hubHits.map(function(hit,idx){
+        return '<div class="hub-hit-card">'+
+          '<div class="summary">'+(idx+1)+'. '+esc(hit.summary||'(no summary)')+'</div>'+
+          '<div class="excerpt">'+esc(hit.excerpt||'')+'</div>'+
+          '<div class="hub-hit-meta">'+
+            '<span class="meta-chip">owner: '+esc(hit.ownerName||'unknown')+'</span>'+
+            (hit.groupName?'<span class="meta-chip">group: '+esc(hit.groupName)+'</span>':'')+
+            '<span class="meta-chip">visibility: '+esc(hit.visibility||'hub')+'</span>'+
+          '</div>'+
+          '<div class="hub-hit-actions">'+
+            '<button class="btn btn-sm" onclick="openSharedMemoryDetail(&quot;'+escAttr(hit.remoteHitId)+'&quot;,&quot;'+escAttr(hit.summary||t('search.sharedMemory'))+'&quot;,&quot;'+escAttr(hit.ownerName||'')+'&quot;,&quot;'+escAttr(hit.groupName||'')+'&quot;)">'+t('search.viewDetail')+'</button>'+
+          '</div>'+
+        '</div>';
+      }).join(''):'<div class="hub-hit-card"><div class="excerpt">'+t('search.noHub')+'</div></div>')+'</div>'+
+    '</div>';
+}
+
+async function openSharedMemoryDetail(remoteHitId,title,owner,groupName){
+  currentSharedMemoryHitId=remoteHitId;
+  document.getElementById('sharedMemoryOverlay').classList.add('show');
+  document.getElementById('sharedMemoryTitle').textContent=title||t('search.sharedMemory');
+  document.getElementById('sharedMemoryMeta').innerHTML='<span class="meta-item">Hub</span>'+(owner?'<span class="meta-item">'+t('admin.owner')+esc(owner)+'</span>':'')+(groupName?'<span class="meta-item">'+t('admin.group')+esc(groupName)+'</span>':'');
+  document.getElementById('sharedMemorySummary').textContent=t('sharing.loading');
+  document.getElementById('sharedMemoryContent').textContent='';
+  try{
+    const r=await fetch('/api/sharing/memory-detail',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({remoteHitId:remoteHitId})});
+    const d=await r.json();
+    if(d.error) throw new Error(d.error);
+    document.getElementById('sharedMemorySummary').textContent=d.summary||'';
+    document.getElementById('sharedMemoryContent').textContent=d.content||'';
+  }catch(e){
+    document.getElementById('sharedMemorySummary').textContent=t('search.loadFailed');
+    document.getElementById('sharedMemoryContent').textContent=String(e.message||e);
+  }
+}
+
+function closeSharedMemoryDetail(event){
+  if(event && event.target!==document.getElementById('sharedMemoryOverlay')) return;
+  document.getElementById('sharedMemoryOverlay').classList.remove('show');
+}
+
+async function openHubMemoryDetail(cacheKey,idx){
+  var arr=cacheKey==='admin'?adminMemoriesCache:hubMemoriesCache;
+  var m=arr[idx];
+  if(!m) return;
+  var overlay=document.getElementById('sharedMemoryOverlay');
+  overlay.classList.add('show');
+  document.getElementById('sharedMemoryTitle').textContent=m.summary||m.content?.slice(0,80)||'(no summary)';
+  var metaHtml='<span class="meta-item">\\u{1F310} Hub</span>'+
+    (m.ownerName?'<span class="meta-item">'+t('admin.owner')+esc(m.ownerName)+'</span>':'')+
+    (m.groupName?'<span class="meta-item">'+t('admin.group')+esc(m.groupName)+'</span>':'')+
+    (m.kind?'<span class="meta-item">Kind: '+esc(m.kind)+'</span>':'')+
+    (m.role?'<span class="meta-item">Role: '+esc(m.role)+'</span>':'')+
+    '<span class="meta-item">visibility: '+esc(m.visibility||'hub')+'</span>'+
+    '<span class="meta-item">'+new Date(m.updatedAt||m.createdAt||0).toLocaleString(dateLoc())+'</span>';
+  document.getElementById('sharedMemoryMeta').innerHTML=metaHtml;
+  document.getElementById('sharedMemorySummary').textContent=m.summary||'';
+  document.getElementById('sharedMemoryContent').textContent=m.content||t('sharing.loading');
+  // try to fetch full content from Hub API
+  var remoteId=m.remoteHitId||m.id;
+  if(remoteId){
+    try{
+      var r=await fetch('/api/sharing/memory-detail',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({remoteHitId:remoteId})});
+      var d=await r.json();
+      if(!d.error&&(d.content||d.summary)){
+        if(d.summary) document.getElementById('sharedMemorySummary').textContent=d.summary;
+        document.getElementById('sharedMemoryContent').textContent=d.content||m.content||'';
+      }
+    }catch(e){}
+  }
+}
+
+function openHubTaskDetailFromCache(cacheKey,idx){
+  var arr=cacheKey==='admin'?adminTasksCache:hubTasksCache;
+  var task=arr[idx];
+  if(!task) return;
+  var overlay=document.getElementById('taskDetailOverlay');
+  overlay.classList.add('show');
+  document.getElementById('taskDetailTitle').textContent=task.title||'(no title)';
+  document.getElementById('taskShareActions').innerHTML='';
+  var meta=[
+    '<span class="meta-item">\\u{1F310} Hub</span>',
+    task.status?'<span class="meta-item"><span class="task-status-badge '+task.status+'">'+esc(task.status)+'</span></span>':'',
+    '<span class="meta-item">'+t('admin.owner')+esc(task.ownerName||'unknown')+'</span>',
+    task.groupName?'<span class="meta-item">'+t('admin.group')+esc(task.groupName)+'</span>':'',
+    '<span class="meta-item">visibility: '+esc(task.visibility||'hub')+'</span>',
+    task.chunkCount!=null?'<span class="meta-item">\\u{1F4DD} '+esc(String(task.chunkCount))+' '+t('tasks.chunks.label')+'</span>':'',
+    task.startedAt?'<span class="meta-item">\\u{1F4C5} '+formatTime(task.startedAt)+'</span>':'',
+    task.endedAt?'<span class="meta-item">\\u2192 '+formatTime(task.endedAt)+'</span>':'',
+    (task.updatedAt||task.createdAt)?'<span class="meta-item">'+t('admin.updated')+new Date(task.updatedAt||task.createdAt).toLocaleString(dateLoc())+'</span>':'',
+    task.sourceTaskId?'<div style="width:100%;margin-top:4px"><span class="meta-item" style="width:100%">'+t('tasks.taskid')+'<span class="task-id-full">'+esc(task.sourceTaskId)+'</span></span></div>':'',
+  ].filter(Boolean);
+  document.getElementById('taskDetailMeta').innerHTML=meta.join('');
+  document.getElementById('taskSkillSection').innerHTML='';
+  document.getElementById('taskSkillSection').className='task-skill-section';
+  document.getElementById('taskDetailSummary').innerHTML=task.summary?renderSummaryHtml(task.summary):'<div style="color:var(--text-muted);font-size:13px">'+t('tasks.nochunks')+'</div>';
+  document.getElementById('taskDetailChunks').innerHTML='<div style="color:var(--text-muted);padding:12px;font-size:13px">'+t('tasks.nochunks')+'</div>';
+}
+
+function openHubSkillDetailFromCache(cacheKey,idx){
+  var arr=cacheKey==='admin'?adminSkillsCache:hubSkillsCache;
+  var skill=arr[idx];
+  if(!skill) return;
+  var overlay=document.getElementById('skillDetailOverlay');
+  overlay.classList.add('show');
+  document.getElementById('skillDetailTitle').textContent='\\u{1F9E0} '+(skill.name||'(no name)');
+  var qs=skill.qualityScore;
+  var qsBadge=(qs!==null&&qs!==undefined)?'<span class="meta-item"><span class="skill-badge quality '+(qs>=7?'high':qs>=5?'mid':'low')+'">\\u2605 '+(+qs).toFixed(1)+'/10</span></span>':'';
+  var meta=[
+    '<span class="meta-item">\\u{1F310} Hub</span>',
+    skill.version!=null?'<span class="meta-item"><span class="skill-badge version">v'+skill.version+'</span></span>':'',
+    skill.status?'<span class="meta-item"><span class="skill-badge status-'+skill.status+'">'+esc(skill.status)+'</span></span>':'',
+    '<span class="meta-item">visibility: '+esc(skill.visibility||'hub')+'</span>',
+    qsBadge,
+    '<span class="meta-item">'+t('admin.owner')+esc(skill.ownerName||'unknown')+'</span>',
+    skill.groupName?'<span class="meta-item">'+t('admin.group')+esc(skill.groupName)+'</span>':'',
+    (skill.updatedAt||skill.createdAt)?'<span class="meta-item">'+t('admin.updated')+new Date(skill.updatedAt||skill.createdAt).toLocaleString(dateLoc())+'</span>':'',
+  ].filter(Boolean);
+  document.getElementById('skillDetailMeta').innerHTML=meta.join('');
+  document.getElementById('skillDetailDesc').textContent=skill.description||'';
+  document.getElementById('skillFilesList').innerHTML='';
+  document.getElementById('skillDetailContent').innerHTML=skill.content?'<pre>'+esc(skill.content)+'</pre>':'';
+  document.getElementById('skillVersionsList').innerHTML='';
+  document.getElementById('skillRelatedTasks').innerHTML='';
+  var visBtn=document.getElementById('skillVisibilityBtn');
+  if(visBtn) visBtn.style.display='none';
+  var dlBtn=document.getElementById('skillDownloadBtn');
+  if(dlBtn) dlBtn.style.display='none';
+  var shareBtn=document.getElementById('skillShareActions');
+  if(shareBtn) shareBtn.innerHTML='';
+}
+
+function escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function renderTaskShareActions(task){
+  currentTaskDetail=task||null;
+  const el=document.getElementById('taskShareActions');
+  if(!el){return;}
+  if(!task||!task.id){el.innerHTML='';return;}
+  const current=(task.sharingVisibility||task.visibility||null);
+  const isShared=!!current;
+  var statusHtml='';
+  if(isShared){
+    var scopeLabel=current==='group'?'Group':'Public';
+    statusHtml='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:#22c55e22;border:1px solid #22c55e44;border-radius:12px;font-size:12px;color:#22c55e">\u2713 '+t('share.alreadyShared')+' ('+scopeLabel+')</span>';
+  }
+  el.innerHTML=statusHtml+
+    '<select id="taskShareScope" class="filter-select" style="min-width:120px">'+
+      '<option value="group"'+(current==='group'?' selected':'')+'>Share to Group</option>'+
+      '<option value="public"'+(current==='public'?' selected':'')+'>Share to Public</option>'+
+    '</select>'+
+    '<button class="btn btn-sm" onclick="shareCurrentTask()">'+(isShared?t('share.updateBtn'):t('share.shareBtn'))+'</button>'+
+    (isShared?'<button class="btn btn-sm btn-ghost" onclick="unshareCurrentTask()">'+t('share.unshareBtn')+'</button>':'');
+}
+
+async function shareCurrentTask(){
+  if(!currentTaskDetail) return;
+  const visibility=document.getElementById('taskShareScope').value||'public';
+  try{
+    const r=await fetch('/api/sharing/tasks/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({taskId:currentTaskDetail.id,visibility:visibility})});
+    const d=await r.json();
+    if(d.ok||d.shared){toast(t('toast.taskShared'),'success');currentTaskDetail.sharingVisibility=visibility;renderTaskShareActions(currentTaskDetail);} else {toast(d.error||t('toast.taskShareFail'),'error');}
+  }catch(e){toast(t('toast.taskShareFail')+': '+e.message,'error');}
+}
+
+async function unshareCurrentTask(){
+  if(!currentTaskDetail) return;
+  try{
+    const r=await fetch('/api/sharing/tasks/unshare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({taskId:currentTaskDetail.id})});
+    const d=await r.json();
+    if(d.ok||d.unshared){toast(t('toast.taskUnshared'),'success');currentTaskDetail.sharingVisibility=null;renderTaskShareActions(currentTaskDetail);} else {toast(d.error||t('toast.taskUnshareFail'),'error');}
+  }catch(e){toast(t('toast.taskUnshareFail')+': '+e.message,'error');}
+}
+
+function renderSkillShareActions(skill){
+  const el=document.getElementById('skillShareActions');
+  if(!el){return;}
+  if(!skill||!skill.id){el.innerHTML='';return;}
+  const current=(skill.sharingVisibility||null);
+  const isShared=!!current;
+  var statusHtml='';
+  if(isShared){
+    var scopeLabel=current==='group'?'Group':'Public';
+    statusHtml='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:#22c55e22;border:1px solid #22c55e44;border-radius:12px;font-size:12px;color:#22c55e">\u2713 '+t('share.alreadyShared')+' ('+scopeLabel+')</span>';
+  }
+  el.innerHTML=statusHtml+
+    '<select id="skillShareScope" class="filter-select" style="min-width:120px">'+
+      '<option value="group"'+(current==='group'?' selected':'')+'>Share to Group</option>'+
+      '<option value="public"'+(current==='public'?' selected':'')+'>Share to Public</option>'+
+    '</select>'+
+    '<button class="btn btn-sm" onclick="shareCurrentSkill()">'+(isShared?t('share.updateBtn'):t('share.shareBtn'))+'</button>'+
+    (isShared?'<button class="btn btn-sm btn-ghost" onclick="unshareCurrentSkill()">'+t('share.unshareBtn')+'</button>':'');
+}
+
+async function shareCurrentSkill(){
+  if(!currentSkillDetail) return;
+  const visibility=document.getElementById('skillShareScope').value||'public';
+  try{
+    const r=await fetch('/api/sharing/skills/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skillId:currentSkillDetail.id,visibility:visibility})});
+    const d=await r.json();
+    if(d.ok){toast(t('toast.skillShared'),'success');currentSkillDetail.sharingVisibility=visibility;renderSkillShareActions(currentSkillDetail);} else {toast(d.error||t('toast.skillShareFail'),'error');}
+  }catch(e){toast(t('toast.skillShareFail')+': '+e.message,'error');}
+}
+
+async function unshareCurrentSkill(){
+  if(!currentSkillDetail) return;
+  try{
+    const r=await fetch('/api/sharing/skills/unshare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skillId:currentSkillDetail.id})});
+    const d=await r.json();
+    if(d.ok){toast(t('toast.skillUnshared'),'success');currentSkillDetail.sharingVisibility=null;renderSkillShareActions(currentSkillDetail);} else {toast(d.error||t('toast.skillUnshareFail'),'error');}
+  }catch(e){toast(t('toast.skillUnshareFail')+': '+e.message,'error');}
+}
+
+async function shareMemoryPrompt(chunkId){
+  try{
+    const r=await fetch('/api/sharing/memories/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chunkId:chunkId,visibility:'public'})});
+    const d=await r.json();
+    if(d.ok){toast(t('toast.memoryShared'),'success');loadMemories();} else {toast(d.error||t('toast.memoryShareFail'),'error');}
+  }catch(e){toast(t('toast.memoryShareFail')+': '+e.message,'error');}
+}
+
+async function unshareMemory(chunkId){
+  try{
+    const r=await fetch('/api/sharing/memories/unshare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chunkId:chunkId})});
+    const d=await r.json();
+    if(d.ok){toast(t('toast.memoryUnshared'),'success');loadMemories();} else {toast(d.error||t('toast.memoryUnshareFail'),'error');}
+  }catch(e){toast(t('toast.memoryUnshareFail')+': '+e.message,'error');}
+}
+
+function debounceSkillSearch(){
+  clearTimeout(skillSearchTimer);
+  skillSearchTimer=setTimeout(function(){loadSkills();},300);
+}
+
+async function pullHubSkill(skillId){
+  try{
+    const r=await fetch('/api/sharing/skills/pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skillId:skillId})});
+    const d=await r.json();
+    if(d.ok||d.pulled||d.details){toast(t('toast.skillPulled'),'success');loadSkills();} else {toast(d.error||t('toast.skillPullFail'),'error');}
+  }catch(e){toast(t('toast.skillPullFail')+': '+e.message,'error');}
+}
+
 // ─── Logs ───
 let logAutoTimer=null;
 let logPage=1;
@@ -2228,7 +3547,7 @@ function renderLogToolFilter(tools,current){
 
 function formatLogTime(ts){
   const d=new Date(ts);
-  const time=d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  const time=d.toLocaleTimeString(dateLoc(),{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
   const y=d.getFullYear();
   const m=String(d.getMonth()+1).padStart(2,'0');
   const day=String(d.getDate()).padStart(2,'0');
@@ -2489,6 +3808,7 @@ function setMetricsDays(d){
 }
 
 async function loadMetrics(){
+  try{
   const r=await fetch('/api/metrics?days='+metricsDays);
   const d=await r.json();
   document.getElementById('mTotal').textContent=formatNum(d.totals.memories);
@@ -2497,9 +3817,11 @@ async function loadMetrics(){
   document.getElementById('mEmbeddings').textContent=formatNum(d.totals.embeddings);
   renderChartWrites(d.writesPerDay);
   loadToolMetrics();
+  }catch(e){console.error('loadMetrics',e)}
 }
 
 function formatNum(n){return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'k':String(n);}
+function dateLoc(){return curLang==='zh'?'zh-CN':'en-US';}
 
 /* ─── Tasks View Logic ─── */
 let tasksStatusFilter='';
@@ -2515,29 +3837,24 @@ function setTaskStatusFilter(btn,status){
 }
 
 async function loadTasks(){
+  const scope=document.getElementById('taskSearchScope')?document.getElementById('taskSearchScope').value:taskSearchScope;
+  taskSearchScope=scope||'local';
+  if(taskSearchScope!=='local'){ return loadHubTasks(); }
   const list=document.getElementById('tasksList');
   list.innerHTML='<div class="spinner"></div>';
   try{
     const params=new URLSearchParams({limit:String(TASKS_PER_PAGE),offset:String(tasksPage*TASKS_PER_PAGE)});
     if(tasksStatusFilter) params.set('status',tasksStatusFilter);
-    const r=await fetch('/api/tasks?'+params);
-    const data=await r.json();
-
-    // stats
-    const allR=await fetch('/api/tasks?limit=1&offset=0');
-    const allD=await allR.json();
+    const [data,allD,activeD,compD,skipD]=await Promise.all([
+      fetch('/api/tasks?'+params).then(r=>r.json()),
+      fetch('/api/tasks?limit=1&offset=0').then(r=>r.json()),
+      fetch('/api/tasks?status=active&limit=1&offset=0').then(r=>r.json()),
+      fetch('/api/tasks?status=completed&limit=1&offset=0').then(r=>r.json()),
+      fetch('/api/tasks?status=skipped&limit=1&offset=0').then(r=>r.json())
+    ]);
     document.getElementById('tasksTotalCount').textContent=formatNum(allD.total);
-
-    const activeR=await fetch('/api/tasks?status=active&limit=1&offset=0');
-    const activeD=await activeR.json();
     document.getElementById('tasksActiveCount').textContent=formatNum(activeD.total);
-
-    const compR=await fetch('/api/tasks?status=completed&limit=1&offset=0');
-    const compD=await compR.json();
     document.getElementById('tasksCompletedCount').textContent=formatNum(compD.total);
-
-    const skipR=await fetch('/api/tasks?status=skipped&limit=1&offset=0');
-    const skipD=await skipR.json();
     document.getElementById('tasksSkippedCount').textContent=formatNum(skipD.total);
 
     if(!data.tasks||data.tasks.length===0){
@@ -2603,13 +3920,16 @@ async function openTaskDetail(taskId){
   document.getElementById('taskSkillSection').className='task-skill-section';
   document.getElementById('taskDetailSummary').textContent='';
   document.getElementById('taskDetailChunks').innerHTML='<div class="spinner"></div>';
+  document.getElementById('taskShareActions').innerHTML='';
   document.getElementById('taskDetailActions').innerHTML='';
 
   try{
     const r=await fetch('/api/task/'+taskId);
     const task=await r.json();
+    currentTaskDetail=task;
 
     document.getElementById('taskDetailTitle').textContent=task.title||t('tasks.untitled');
+    renderTaskShareActions(task);
 
     const meta=[
       '<span class="meta-item"><span class="task-status-badge '+task.status+'">'+t('tasks.status.'+task.status)+'</span></span>',
@@ -2778,60 +4098,170 @@ function setSkillStatusFilter(btn,status){
 
 async function loadSkills(){
   const list=document.getElementById('skillsList');
+  const hubList=document.getElementById('hubSkillsList');
   list.innerHTML='<div class="spinner"></div>';
+  if(hubList){
+    hubList.innerHTML=skillSearchScope==='local'
+      ? '<div style="color:var(--text-muted);padding:16px">Hub search disabled in local scope.</div>'
+      : '<div class="spinner"></div>';
+  }
+
+  const query=(document.getElementById('skillSearchInput')?.value||'').trim();
+  const scope=document.getElementById('skillSearchScope') ? document.getElementById('skillSearchScope').value : skillSearchScope;
+  skillSearchScope=scope||'local';
+
   try{
     const params=new URLSearchParams();
     if(skillsStatusFilter) params.set('status',skillsStatusFilter);
     const visFilter=document.getElementById('skillVisibilityFilter')?.value;
     if(visFilter) params.set('visibility',visFilter);
-    const r=await fetch('/api/skills?'+params);
-    const data=await r.json();
 
-    document.getElementById('skillsTotalCount').textContent=formatNum(data.skills.length);
-    document.getElementById('skillsActiveCount').textContent=formatNum(data.skills.filter(s=>s.status==='active').length);
-    document.getElementById('skillsDraftCount').textContent=formatNum(data.skills.filter(s=>s.status==='draft').length);
-    document.getElementById('skillsInstalledCount').textContent=formatNum(data.skills.filter(s=>s.installed).length);
-    document.getElementById('skillsPublicCount').textContent=formatNum(data.skills.filter(s=>s.visibility==='public').length);
+    const localRes=await fetch('/api/skills?'+params.toString());
+    const localData=await localRes.json();
+    let localSkills=Array.isArray(localData.skills)?localData.skills:[];
+    if(query){
+      const q=query.toLowerCase();
+      localSkills=localSkills.filter(skill=>{
+        const haystack=[skill.name,skill.description,skill.tags].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
+    }
 
-    if(!data.skills||data.skills.length===0){
-      list.innerHTML='<div style="text-align:center;padding:48px;color:var(--text-muted);font-size:14px">'+t('skills.empty')+'</div>';
+    const renderLocalCards=function(skills){
+      if(!skills||skills.length===0){
+        return '<div style="text-align:center;padding:48px;color:var(--text-muted);font-size:14px">'+(query?'No local skill results.':t('skills.empty'))+'</div>';
+      }
+      return skills.map(skill=>{
+        const timeStr=formatTime(skill.createdAt);
+        const tags=parseTags(skill.tags);
+        const installedClass=skill.installed?'installed':'';
+        const statusClass=skill.status==='archived'?'archived':(skill.status==='draft'?'draft':'');
+        const sourceLabel=tags.includes('hub-import')?'hub-import':skill.sourceType;
+        const qs=skill.qualityScore;
+        const qsBadge=qs!==null&&qs!==undefined?'<span class="skill-badge quality '+(qs>=7?'high':qs>=5?'mid':'low')+'">★ '+qs.toFixed(1)+'</span>':'';
+        const visBadge=skill.visibility==='public'?'<span class="skill-badge visibility-public">🌐 '+t('skills.visibility.public')+'</span>':'';
+        return '<div class="skill-card '+installedClass+' '+statusClass+'" onclick="openSkillDetail(&quot;'+escAttr(skill.id)+'&quot;)">'+
+          '<div class="skill-card-top">'+
+            '<div class="skill-card-name">🧠 '+esc(skill.name)+'</div>'+
+            '<div class="skill-card-badges">'+
+              qsBadge+
+              '<span class="skill-badge version">v'+skill.version+'</span>'+
+              visBadge+
+              (skill.installed?'<span class="skill-badge installed">'+t('skills.installed.badge')+'</span>':'')+
+              '<span class="skill-badge status-'+skill.status+'">'+t('skills.status.'+skill.status)+'</span>'+
+            '</div>'+
+          '</div>'+
+          '<div class="skill-card-desc">'+esc(skill.description)+'</div>'+
+          '<div class="skill-card-bottom">'+
+            '<span class="tag"><span class="icon">📅</span> '+timeStr+'</span>'+
+            '<span class="tag"><span class="icon">📦</span> '+sourceLabel+'</span>'+
+            (tags.length>0?'<div class="skill-card-tags">'+tags.map(t=>'<span class="skill-tag">'+esc(t)+'</span>').join('')+'</div>':'')+
+          '</div>'+
+        '</div>';
+      }).join('');
+    };
+
+    list.innerHTML=renderLocalCards(localSkills);
+
+    if(skillSearchScope==='local'){
+      if(hubList){
+        hubList.innerHTML='<div style="color:var(--text-muted);padding:16px">Hub search disabled in local scope.</div>';
+      }
+      document.getElementById('skillSearchMeta').textContent=query?('Local '+localSkills.length):'';
+      document.getElementById('skillsTotalCount').textContent=formatNum(localSkills.length);
+      document.getElementById('skillsActiveCount').textContent=formatNum(localSkills.filter(s=>s.status==='active').length);
+      document.getElementById('skillsDraftCount').textContent=formatNum(localSkills.filter(s=>s.status==='draft').length);
+      document.getElementById('skillsInstalledCount').textContent=formatNum(localSkills.filter(s=>s.installed).length);
+      document.getElementById('skillsPublicCount').textContent=formatNum(localSkills.filter(s=>s.visibility==='public').length);
       return;
     }
 
-    list.innerHTML=data.skills.map(skill=>{
-      const timeStr=formatTime(skill.createdAt);
-      const tags=parseTags(skill.tags);
-      const installedClass=skill.installed?'installed':'';
-      const statusClass=skill.status==='archived'?'archived':(skill.status==='draft'?'draft':'');
-      const qs=skill.qualityScore;
-      const qsBadge=qs!==null&&qs!==undefined?'<span class="skill-badge quality '+(qs>=7?'high':qs>=5?'mid':'low')+'">\\u2605 '+qs.toFixed(1)+'</span>':'';
-      const visBadge=skill.visibility==='public'?'<span class="skill-badge visibility-public">\\u{1F310} '+t('skills.visibility.public')+'</span>':'';
-      return '<div class="skill-card '+installedClass+' '+statusClass+'" onclick="openSkillDetail(\\''+skill.id+'\\')">'+
-        '<div class="skill-card-top">'+
-          '<div class="skill-card-name">\\u{1F9E0} '+esc(skill.name)+'</div>'+
-          '<div class="skill-card-badges">'+
-            qsBadge+
-            '<span class="skill-badge version">v'+skill.version+'</span>'+
-            visBadge+
-            (skill.installed?'<span class="skill-badge installed">'+t('skills.installed.badge')+'</span>':'')+
-            '<span class="skill-badge status-'+skill.status+'">'+t('skills.status.'+skill.status)+'</span>'+
+    if(!query){
+      if(hubList){ loadHubSkills(hubList); }
+      document.getElementById('skillSearchMeta').textContent='Local '+localSkills.length;
+      document.getElementById('skillsTotalCount').textContent=formatNum(localSkills.length);
+      document.getElementById('skillsActiveCount').textContent=formatNum(localSkills.filter(s=>s.status==='active').length);
+      document.getElementById('skillsDraftCount').textContent=formatNum(localSkills.filter(s=>s.status==='draft').length);
+      document.getElementById('skillsInstalledCount').textContent=formatNum(localSkills.filter(s=>s.installed).length);
+      document.getElementById('skillsPublicCount').textContent=formatNum(localSkills.filter(s=>s.visibility==='public').length);
+      return;
+    }
+
+    const sharingParams=new URLSearchParams();
+    sharingParams.set('query',query);
+    sharingParams.set('scope',skillSearchScope);
+    sharingParams.set('maxResults','20');
+    const r=await fetch('/api/sharing/search/skills?'+sharingParams.toString());
+    const data=await r.json();
+    const localHits=(data.local&&Array.isArray(data.local.hits))?data.local.hits:[];
+    const hubHits=(data.hub&&Array.isArray(data.hub.hits))?data.hub.hits:[];
+
+    list.innerHTML=localHits.length?localHits.map(function(skill){
+      return '<div class="hub-skill-card" onclick="openSkillDetail(&quot;'+escAttr(skill.skillId)+'&quot;)">'+
+        '<div class="summary">'+esc(skill.name)+'</div>'+
+        '<div class="excerpt">'+esc(skill.description||'')+'</div>'+
+        '<div class="hub-skill-meta"><span class="meta-chip">visibility: '+esc(skill.visibility||'private')+'</span><span class="meta-chip">owner: '+esc(skill.owner||'agent:main')+'</span></div>'+
+      '</div>';
+    }).join(''):'<div class="hub-skill-card"><div class="excerpt">No local skill results.</div></div>';
+
+    if(hubList){
+      hubList.innerHTML=hubHits.length?hubHits.map(function(skill){
+        return '<div class="hub-skill-card">'+
+          '<div class="summary">'+esc(skill.name)+'</div>'+
+          '<div class="excerpt">'+esc(skill.description||'')+'</div>'+
+          '<div class="hub-skill-meta">'+
+            '<span class="meta-chip">owner: '+esc(skill.ownerName||'unknown')+'</span>'+
+            (skill.groupName?'<span class="meta-chip">group: '+esc(skill.groupName)+'</span>':'')+
+            '<span class="meta-chip">visibility: '+esc(skill.visibility||'hub')+'</span>'+
+            (skill.version!=null?'<span class="meta-chip">v'+skill.version+'</span>':'')+
           '</div>'+
+          '<div class="hub-skill-actions"><button class="btn btn-sm" onclick="event.stopPropagation();pullHubSkill(&quot;'+escAttr(skill.skillId)+'&quot;)">Pull to Local</button></div>'+
+        '</div>';
+      }).join(''):'<div class="hub-skill-card"><div class="excerpt">No Hub skill results.</div></div>';
+    }
+
+    document.getElementById('skillSearchMeta').textContent='Local '+localHits.length+' · Hub '+hubHits.length;
+    document.getElementById('skillsTotalCount').textContent=formatNum(localHits.length+hubHits.length);
+    document.getElementById('skillsActiveCount').textContent=formatNum(localHits.length);
+    document.getElementById('skillsDraftCount').textContent='0';
+    document.getElementById('skillsInstalledCount').textContent='-';
+    document.getElementById('skillsPublicCount').textContent=formatNum(hubHits.filter(function(s){return s.visibility==='public';}).length);
+  }catch(e){
+    list.innerHTML='<div style="text-align:center;padding:24px;color:var(--rose)">Failed to load skills: '+esc(String(e))+'</div>';
+    if(hubList){
+      hubList.innerHTML='<div style="text-align:center;padding:24px;color:var(--rose)">Failed to load Hub skills: '+esc(String(e))+'</div>';
+    }
+  }
+}
+
+async function loadHubSkills(hubList){
+  if(!hubList) hubList=document.getElementById('hubSkillsList');
+  if(!hubList) return;
+  hubList.innerHTML='<div class="spinner"></div>';
+  try{
+    const r=await fetch('/api/sharing/skills/list?limit=40');
+    const d=await r.json();
+    const skills=Array.isArray(d.skills)?d.skills:[];
+    hubSkillsCache=skills;
+    if(!skills.length){
+      hubList.innerHTML='<div class="hub-skill-card"><div class="excerpt">No shared skills on Hub.</div></div>';
+      return;
+    }
+    hubList.innerHTML=skills.map(function(skill,idx){
+      return '<div class="hub-skill-card" onclick="openHubSkillDetailFromCache(\\\'hub\\\',' +idx+')" style="cursor:pointer">'+
+        '<div class="summary">'+esc(skill.name)+'</div>'+
+        '<div class="excerpt">'+esc(skill.description||'')+'</div>'+
+        '<div class="hub-skill-meta">'+
+          '<span class="meta-chip">owner: '+esc(skill.ownerName||'unknown')+'</span>'+
+          (skill.groupName?'<span class="meta-chip">group: '+esc(skill.groupName)+'</span>':'')+
+          '<span class="meta-chip">visibility: '+esc(skill.visibility||'hub')+'</span>'+
+          (skill.version!=null?'<span class="meta-chip">v'+skill.version+'</span>':'')+
         '</div>'+
-        '<div class="skill-card-desc">'+esc(skill.description)+'</div>'+
-        '<div class="skill-card-bottom">'+
-          '<span class="tag"><span class="icon">\\u{1F4C5}</span> '+timeStr+'</span>'+
-          '<span class="tag"><span class="icon">\\u{1F4E6}</span> '+skill.sourceType+'</span>'+
-          (tags.length>0?'<div class="skill-card-tags">'+tags.map(t=>'<span class="skill-tag">'+esc(t)+'</span>').join('')+'</div>':'')+
-        '</div>'+
-        '<div class="card-actions" onclick="event.stopPropagation()">'+
-          '<button class="btn btn-sm btn-ghost" onclick="openSkillDetail(\\''+skill.id+'\\')">'+t('card.expand')+'</button>'+
-          (skill.visibility==='public'?'<button class="btn btn-sm btn-ghost" onclick="toggleSkillPublic(\\''+skill.id+'\\',false)">\\u{1F512} '+t('skills.setPrivate')+'</button>':'<button class="btn btn-sm btn-ghost" onclick="toggleSkillPublic(\\''+skill.id+'\\',true)">\\u{1F310} '+t('skills.setPublic')+'</button>')+
-          '<button class="btn btn-sm btn-ghost" style="color:var(--accent)" onclick="deleteSkill(\\''+skill.id+'\\')">'+t('skill.delete')+'</button>'+
-        '</div>'+
+        '<div class="hub-skill-actions"><button class="btn btn-sm" onclick="event.stopPropagation();pullHubSkill(\\''+escAttr(skill.sourceSkillId)+'\\')">Pull to Local</button></div>'+
       '</div>';
     }).join('');
   }catch(e){
-    list.innerHTML='<div style="text-align:center;padding:24px;color:var(--rose)">Failed to load skills: '+esc(String(e))+'</div>';
+    hubList.innerHTML='<div style="text-align:center;padding:24px;color:var(--rose)">Failed to load Hub skills</div>';
   }
 }
 
@@ -2840,6 +4270,7 @@ function parseTags(tagsStr){
 }
 
 let currentSkillId='';
+let currentSkillDetail=null;
 
 async function openSkillDetail(skillId){
   currentSkillId=skillId;
@@ -2852,6 +4283,8 @@ async function openSkillDetail(skillId){
   document.getElementById('skillDetailContent').innerHTML='<div class="spinner"></div>';
   document.getElementById('skillVersionsList').innerHTML='<div class="spinner"></div>';
   document.getElementById('skillRelatedTasks').innerHTML='';
+  var vb=document.getElementById('skillVisibilityBtn');if(vb)vb.style.display='';
+  var db=document.getElementById('skillDownloadBtn');if(db)db.style.display='';
   document.getElementById('skillDetailActions').innerHTML='';
 
   try{
@@ -2897,6 +4330,8 @@ async function openSkillDetail(skillId){
     }
 
     document.getElementById('skillDetailDesc').textContent=skill.description;
+    currentSkillDetail=skill;
+    renderSkillShareActions(skill);
 
     if(files.length>0){
       const fileIcons={'skill':'\\u{1F4D6}','script':'\\u{2699}','reference':'\\u{1F4CE}','file':'\\u{1F4C4}'};
@@ -3104,6 +4539,32 @@ function timeAgo(ts){
 }
 
 /* ─── Settings / Config ─── */
+function syncHostToggles(){
+  const hc=document.getElementById('cfgHostCompletion').checked;
+  const hs=document.getElementById('cfgHostSkill').checked;
+  const he=document.getElementById('cfgHostEmbedding').checked;
+  const sumSel=document.getElementById('cfgSumProvider');
+  const embSel=document.getElementById('cfgEmbProvider');
+  const skillSel=document.getElementById('cfgSkillProvider');
+  if(hc){sumSel.value='openclaw';sumSel.disabled=true;}else{sumSel.disabled=false;}
+  if(hs){skillSel.value='openclaw';skillSel.disabled=true;}else{skillSel.disabled=false;}
+  if(he){embSel.value='openclaw';embSel.disabled=true;}else{embSel.disabled=false;}
+}
+function onProviderChange(){
+  const sumSel=document.getElementById('cfgSumProvider');
+  const embSel=document.getElementById('cfgEmbProvider');
+  const skillSel=document.getElementById('cfgSkillProvider');
+  const hcEl=document.getElementById('cfgHostCompletion');
+  const hsEl=document.getElementById('cfgHostSkill');
+  const heEl=document.getElementById('cfgHostEmbedding');
+  if(sumSel.value==='openclaw'&&!hcEl.checked){hcEl.checked=true;sumSel.disabled=true;}
+  if(sumSel.value!=='openclaw'&&hcEl.checked){hcEl.checked=false;}
+  if(skillSel.value==='openclaw'&&!hsEl.checked){hsEl.checked=true;skillSel.disabled=true;}
+  if(skillSel.value!=='openclaw'&&hsEl.checked){hsEl.checked=false;}
+  if(embSel.value==='openclaw'&&!heEl.checked){heEl.checked=true;embSel.disabled=true;}
+  if(embSel.value!=='openclaw'&&heEl.checked){heEl.checked=false;}
+}
+
 async function loadConfig(){
   try{
     const r=await fetch('/api/config');
@@ -3138,6 +4599,17 @@ async function loadConfig(){
 
     const tel=cfg.telemetry||{};
     document.getElementById('cfgTelemetryEnabled').checked=tel.enabled!==false;
+
+    const sharing=cfg.sharing||{};
+    const caps=sharing.capabilities||{};
+    // Also infer toggle state from provider selection (e.g. config file edited manually)
+    const embProv=(cfg.embedding||{}).provider;
+    const sumProv=(cfg.summarizer||{}).provider;
+    const skProv=((cfg.skillEvolution||{}).summarizer||{}).provider;
+    document.getElementById('cfgHostCompletion').checked=!!caps.hostCompletion||sumProv==='openclaw';
+    document.getElementById('cfgHostSkill').checked=!!caps.hostSkill||skProv==='openclaw';
+    document.getElementById('cfgHostEmbedding').checked=!!caps.hostEmbedding||embProv==='openclaw';
+    syncHostToggles();
   }catch(e){
     console.error('loadConfig error',e);
   }
@@ -3218,6 +4690,11 @@ async function saveConfig(){
   cfg.telemetry={enabled:document.getElementById('cfgTelemetryEnabled').checked};
 
   function done(){saveBtn.disabled=false;saveBtn.textContent=t('settings.save');}
+
+  const hostCompletion=document.getElementById('cfgHostCompletion').checked;
+  const hostSkill=document.getElementById('cfgHostSkill').checked;
+  const hostEmbedding=document.getElementById('cfgHostEmbedding').checked;
+  cfg.sharing={capabilities:{hostCompletion,hostSkill,hostEmbedding}};
 
   // 1) Embedding model is required
   if(!embP||embP===''){done();toast(t('settings.save.emb.required'),'error');return;}
@@ -3378,7 +4855,7 @@ function formatDuration(ms){
 
 function formatTime(ts){
   if(!ts) return '-';
-  return new Date(ts).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  return new Date(ts).toLocaleString(dateLoc(),{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
 
 function fillDays(rows,days){
@@ -3631,7 +5108,7 @@ function renderToolAgg(data){
 
 /* ─── Data loading ─── */
 async function loadAll(){
-  await Promise.all([loadStats(),loadMemories()]);
+  await Promise.all([loadStats(),loadMemories(),loadSharingStatus(false)]);
   checkMigrateStatus();
   connectPPSSE();
   checkForUpdate();
@@ -3745,8 +5222,7 @@ async function loadMemories(page){
   }
 }
 
-async function doSearch(q){
-  if(!q.trim()){currentPage=1;loadMemories();return}
+async function loadHubMemories(){
   const list=document.getElementById('memoryList');
   list.innerHTML='<div class="spinner"></div>';
   try{
@@ -3812,7 +5288,7 @@ function renderMemories(items){
   }
   items.forEach(m=>{memoryCache[m.id]=m});
   list.innerHTML=items.map(m=>{
-    const time=m.created_at?new Date(typeof m.created_at==='number'?m.created_at:m.created_at).toLocaleString('zh-CN'):'';
+    const time=m.created_at?new Date(typeof m.created_at==='number'?m.created_at:m.created_at).toLocaleString(dateLoc()):'';
     const role=m.role||'user';
     const rawSummary=m.summary||'';
     const rawContent=m.content||'';
@@ -3824,7 +5300,7 @@ function renderMemories(items){
     const mc=m.merge_count||0;
     const cardTitle=esc(rawSummary||rawContent||'');
     const mergeBadge=mc>0?'<span class="merge-badge">\\u{1F504} '+t('card.evolved')+' '+mc+t('card.times')+'</span>':'';
-    const updatedAt=(m.updated_at&&m.updated_at>m.created_at)?'<span class="card-updated">'+t('card.updated')+' '+new Date(m.updated_at).toLocaleString('zh-CN')+'</span>':'';
+    const updatedAt=(m.updated_at&&m.updated_at>m.created_at)?'<span class="card-updated">'+t('card.updated')+' '+new Date(m.updated_at).toLocaleString(dateLoc())+'</span>':'';
     const ds=m.dedup_status||'active';
     const isInactive=ds==='merged';
     const dedupBadge=ds==='duplicate'?'<span class="dedup-badge duplicate">'+t('card.dedupDuplicate')+'</span>':ds==='merged'?'<span class="dedup-badge merged">'+t('card.dedupMerged')+'</span>':'';
@@ -3833,6 +5309,8 @@ function renderMemories(items){
     const ownerVal=m.owner||'agent:main';
     const isPublicMem=ownerVal==='public';
     const ownerBadge=isPublicMem?'<span class="owner-badge public">\\u{1F310} '+t('filter.public')+'</span>':'<span class="owner-badge agent">\\u{1F512} '+t('filter.private')+'</span>';
+    const memShared=m.sharingVisibility||null;
+    const memShareBadge=memShared?'<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:#22c55e22;border:1px solid #22c55e44;border-radius:10px;font-size:11px;color:#22c55e">\\u2713 '+(memShared==='group'?t('share.group'):t('share.public'))+'</span>':'';
     let dedupInfo='';
     if(ds==='duplicate'||ds==='merged'){
       const reason=m.dedup_reason?'<span style="font-size:11px;color:var(--text-muted)">'+t('card.dedupReason')+esc(m.dedup_reason)+'</span>':'';
@@ -3846,7 +5324,7 @@ function renderMemories(items){
         if(hist.length>0){
           historyHtml='<div class="merge-history" id="history-'+id+'" style="display:none"><div style="font-weight:600;margin-bottom:8px;font-size:12px">'+t('card.evolveHistory')+' ('+hist.length+')</div>';
           hist.forEach(function(h){
-            const ht=h.at?new Date(h.at).toLocaleString('zh-CN'):'';
+            const ht=h.at?new Date(h.at).toLocaleString(dateLoc()):'';
             historyHtml+='<div class="merge-history-item"><span class="merge-action '+h.action+'">'+h.action+'</span> <span style="color:var(--text-muted)">'+ht+'</span><br>'+esc(h.reason||'');
             if(h.from) historyHtml+='<br><span style="opacity:.6">'+t('card.oldSummary')+':</span> '+esc(h.from);
             if(h.to) historyHtml+='<br><span style="opacity:.6">'+t('card.newSummary')+':</span> '+esc(h.to);
@@ -3882,6 +5360,7 @@ function renderMemories(items){
         (mc>0?'<button class="btn btn-sm btn-ghost" onclick="toggleHistory(\\''+id+'\\')">'+t('card.evolveHistory')+'</button>':'')+
         '<button class="btn btn-sm btn-ghost" onclick="openEditModal(\\''+id+'\\')">'+t('card.edit')+'</button>'+
         (isPublicMem?'<button class="btn btn-sm btn-ghost" onclick="toggleMemoryPublic(\\''+id+'\\',false)">\\u{1F512} '+t('skills.setPrivate')+'</button>':'<button class="btn btn-sm btn-ghost mem-public-btn" onclick="toggleMemoryPublic(\\''+id+'\\',true)">\\u{1F310} '+t('skills.setPublic')+'</button>')+
+        (memShared?'<button class="btn btn-sm btn-ghost" onclick="unshareMemory(\\''+id+'\\')">'+t('share.unshareBtn')+'</button>':'<button class="btn btn-sm btn-ghost" onclick="shareMemoryPrompt(\\''+id+'\\')">'+t('share.shareBtn')+'</button>')+
         '<button class="btn btn-sm btn-ghost" style="color:var(--accent)" onclick="deleteMemory(\\''+id+'\\')">'+t('card.delete')+'</button>'+
         vscore+
       '</div></div>';
@@ -3953,8 +5432,8 @@ async function showMemoryModal(chunkId){
     const role=(m.role||'unknown').toUpperCase();
     const roleCls=(m.role||'').toLowerCase();
     const ds=m.dedup_status||'active';
-    const time=new Date(m.created_at).toLocaleString('zh-CN');
-    const updated=m.updated_at?new Date(m.updated_at).toLocaleString('zh-CN'):'';
+    const time=new Date(m.created_at).toLocaleString(dateLoc());
+    const updated=m.updated_at?new Date(m.updated_at).toLocaleString(dateLoc()):'';
     let html='<div class="modal-memory-card">';
     html+='<div class="modal-header-row"><span class="role-tag '+roleCls+'">'+role+'</span>';
     if(ds!=='active') html+='<span class="dedup-badge '+(ds==='duplicate'?'duplicate':'merged')+'">'+ds+'</span>';

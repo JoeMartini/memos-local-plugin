@@ -160,7 +160,8 @@ export type EmbeddingProvider =
   | "cohere"
   | "mistral"
   | "voyage"
-  | "local";
+  | "local"
+  | "openclaw";
 
 export interface ProviderConfig {
   provider: string;
@@ -170,6 +171,7 @@ export interface ProviderConfig {
   headers?: Record<string, string>;
   timeoutMs?: number;
   temperature?: number;
+  capabilities?: SharingCapabilities;
 }
 
 export interface SummarizerConfig extends ProviderConfig {
@@ -246,6 +248,7 @@ export interface SkillEvolutionConfig {
   minConfidence?: number;
   maxSkillLines?: number;
   autoInstall?: boolean;
+  /** Optional independent LLM config for skill evaluation/validation. Falls back to main summarizer if not set. */
   summarizer?: SummarizerConfig;
 }
 
@@ -253,6 +256,35 @@ export interface TelemetryConfig {
   enabled?: boolean;
   posthogApiKey?: string;
   posthogHost?: string;
+}
+
+export type SharingRole = "hub" | "client";
+
+export interface SharingCapabilities {
+  hostEmbedding?: boolean;
+  hostCompletion?: boolean;
+  hostSkill?: boolean;
+}
+
+export interface HubModeConfig {
+  port?: number;
+  teamName?: string;
+  teamToken?: string;
+}
+
+export interface ClientModeConfig {
+  hubAddress?: string;
+  userToken?: string;
+  teamToken?: string;
+  pendingUserId?: string;
+}
+
+export interface SharingConfig {
+  enabled?: boolean;
+  role?: SharingRole;
+  hub?: HubModeConfig;
+  client?: ClientModeConfig;
+  capabilities?: SharingCapabilities;
 }
 
 export interface MemosLocalConfig {
@@ -280,6 +312,7 @@ export interface MemosLocalConfig {
   };
   skillEvolution?: SkillEvolutionConfig;
   telemetry?: TelemetryConfig;
+  sharing?: SharingConfig;
 }
 
 // ─── Defaults ───
@@ -320,6 +353,12 @@ export interface PluginContext {
   workspaceDir: string;
   config: MemosLocalConfig;
   log: Logger;
+  openclawAPI?: OpenClawAPI;
+}
+
+export interface OpenClawAPI {
+  embed(request: { texts: string[]; model?: string }): Promise<{ embeddings: number[][]; dimensions: number }>;
+  complete(request: { prompt: string; maxTokens?: number; temperature?: number; model?: string }): Promise<{ text: string }>;
 }
 
 export interface Logger {

@@ -32,5 +32,6 @@
       "Memory Viewer will be available at http://127.0.0.1:18799",
       "If better-sqlite3 fails to build, ensure you have C++ build tools: xcode-select --install (macOS) or build-essential (Linux)"
     ]
-  }
+  },
+  "extensions": ["./index.ts"]
 }

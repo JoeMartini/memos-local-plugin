@@ -356,7 +356,7 @@ export class SkillGenerator {
       .replace("{CONVERSATION}", conversationText.slice(0, 12000))
       + langInstruction;
 
-    const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.step1", { maxTokens: 6000, temperature: 0.2, timeoutMs: 120_000 });
+    const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.step1", { maxTokens: 6000, temperature: 0.2, timeoutMs: 120_000, openclawAPI: this.ctx.openclawAPI });
 
     const trimmed = raw.trim();
     if (trimmed.startsWith("---")) return trimmed;
@@ -379,7 +379,7 @@ export class SkillGenerator {
       .replace("{CONVERSATION}", conversationText.slice(0, 6000));
 
     try {
-      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.scripts", { maxTokens: 3000, temperature: 0.1, timeoutMs: 120_000 });
+      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.scripts", { maxTokens: 3000, temperature: 0.1, timeoutMs: 120_000, openclawAPI: this.ctx.openclawAPI });
       return this.parseJSONArray<{ filename: string; content: string }>(raw);
     } catch (err) {
       this.ctx.log.warn(`SkillGenerator: script extraction failed: ${err}`);
@@ -401,7 +401,7 @@ export class SkillGenerator {
       .replace("{CONVERSATION}", conversationText.slice(0, 6000));
 
     try {
-      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.refs", { maxTokens: 3000, temperature: 0.1, timeoutMs: 120_000 });
+      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.refs", { maxTokens: 3000, temperature: 0.1, timeoutMs: 120_000, openclawAPI: this.ctx.openclawAPI });
       return this.parseJSONArray<{ filename: string; content: string }>(raw);
     } catch (err) {
       this.ctx.log.warn(`SkillGenerator: reference extraction failed: ${err}`);
@@ -423,7 +423,7 @@ export class SkillGenerator {
       + `\n\n⚠️ LANGUAGE: Write test prompts and expectations in ${lang}, matching the skill's language.\n`;
 
     try {
-      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.evals", { maxTokens: 2000, temperature: 0.3, timeoutMs: 120_000 });
+      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillGenerator.evals", { maxTokens: 2000, temperature: 0.3, timeoutMs: 120_000, openclawAPI: this.ctx.openclawAPI });
       return this.parseJSONArray(raw);
     } catch (err) {
       this.ctx.log.warn(`SkillGenerator: eval generation failed: ${err}`);
@@ -467,6 +467,7 @@ export class SkillGenerator {
     return { hitCount, results };
   }
 
+
   // ─── Helpers ───
 
   private parseJSONArray<T>(raw: string): T[] {
@@ -498,5 +499,6 @@ export class SkillGenerator {
     if (match2) return match2[1];
     return "";
   }
+
 
 }

@@ -143,7 +143,7 @@ export class SkillValidator {
     const prompt = QUALITY_PROMPT.replace("{SKILL_CONTENT}", content.slice(0, 6000));
 
     try {
-      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillValidator.quality");
+      const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillValidator.quality", { openclawAPI: this.ctx.openclawAPI });
 
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return;

@@ -5,13 +5,13 @@ description: "Use the MemOS Local memory system to search and use the user's pas
 
 # MemOS Local Memory — Agent Guide
 
-This skill describes how to use the MemOS memory tools so you can reliably search and use the user's long-term conversation history, share knowledge across agents, and discover public skills.
+This skill describes how to use the MemOS memory tools so you can reliably search and use the user's long-term conversation history, query Hub-shared team data, share tasks, and discover or pull reusable skills.
 
 ## How memory is provided each turn
 
 - **Automatic recall (hook):** At the start of each turn, the system runs a memory search using the user's current message and injects relevant past memories into your context. You do not need to call any tool for that.
 - **When that is not enough:** If the user's message is very long, vague, or the automatic search returns **no memories**, you should **generate your own short, focused query** and call `memory_search` yourself.
-- **Memory isolation:** Each agent can only see its own memories and memories marked as `public`. Other agents' private memories are invisible to you.
+- **Memory isolation:** Each agent can only see its own local private memories and local `public` memories. Hub-shared data only appears when you search with `scope="group"` or `scope="all"`.
 
 ## Tools — what they do and when to call
 
@@ -88,6 +88,30 @@ This skill describes how to use the MemOS memory tools so you can reliably searc
 - **When to call:** You want to stop sharing a previously published skill.
 - **Parameters:**
   - `skillId` (string, **required**) — The skill ID to unpublish.
+
+### network_memory_detail
+
+- **What it does:** Fetches the full content behind a Hub search hit.
+- **When to call:** A `memory_search` result came from the Hub and you need the full shared memory content.
+- **Parameters:** `remoteHitId`.
+
+### task_share / task_unshare
+
+- **What they do:** Share a local task to the Hub, or remove it later.
+- **When to call:** A task is valuable to your group or to the whole team and should be discoverable via shared search.
+- **Parameters:** `taskId`, plus sharing visibility/scope when required.
+
+### network_skill_pull
+
+- **What it does:** Pulls a Hub-shared skill bundle down into local storage.
+- **When to call:** `skill_search` found a useful Hub skill and you want to use it locally or offline.
+- **Parameters:** `skillId`.
+
+### network_team_info
+
+- **What it does:** Returns current Hub connection information, user, role, and groups.
+- **When to call:** You need to confirm whether team sharing is configured or which groups the current client belongs to.
+- **Parameters:** none.
 
 ### memory_timeline
 

@@ -5,9 +5,9 @@
 [![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
 [![GitHub](https://img.shields.io/badge/GitHub-Source-181717?logo=github)](https://github.com/MemTensor/MemOS/tree/main/apps/memos-local-openclaw)
 
-Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/openclaw) AI Agents. Every conversation is automatically captured, semantically indexed, and instantly recallable — with **task summarization & skill evolution**, and **multi-agent collaborative memory**.
+Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/openclaw) AI Agents. Every conversation is automatically captured, semantically indexed, and instantly recallable — with **task summarization & skill evolution**, **Hub-based team sharing for memories and skills**, and **multi-agent collaborative memory**.
 
-**Full-write | Hybrid Search | Task Summarization & Skill Evolution | Multi-Agent Collaboration | Memory Viewer**
+**Full-write | Hybrid Search | Task Summarization & Skill Evolution | Hub Team Sharing | Memory Viewer**
 
 > **Homepage:**  🌐 [Homepage](https://memos-claw.openmem.net) · 📖 [Documentation](https://memos-claw.openmem.net/docs/index.html) · 📦 [NPM](https://www.npmjs.com/package/@memtensor/memos-local-openclaw-plugin)
 
@@ -48,13 +48,13 @@ Persistent local conversation memory for [OpenClaw](https://github.com/nicepkg/o
 - **Dedicated model** — Optional separate LLM model for skill generation (e.g., Claude 4.6 for higher quality)
 - **LLM fallback chain** — `skillSummarizer` → `summarizer` → OpenClaw native model (auto-detected from `openclaw.json`). If all configured models fail, the next in chain is tried automatically
 
-### Multi-Agent Collaboration
-- **Memory isolation** — Each agent's memories are tagged with `owner`. During search, agents only see their own private memories and explicitly shared `public` memories
-- **Public memory** — `memory_write_public` tool allows agents to write shared knowledge accessible to all agents (e.g., team decisions, conventions, shared configs)
-- **Skill sharing** — Skills have a `visibility` toggle (`private`/`public`). Public skills are discoverable by all agents via `skill_search`
-- **Skill discovery** — `skill_search` combines FTS (name + description) and vector search (description embedding) with RRF fusion, followed by LLM relevance judgment. Supports `scope` parameter: `mix` (default), `self`, or `public`
-- **Publish/unpublish** — `skill_publish` / `skill_unpublish` tools toggle skill visibility. Other agents can search, preview, and install public skills
-- **Agent-aware capture** — `agent_end` event extracts `agentId` to tag all captured messages with the correct owner
+### Hub Team Sharing (v4)
+- **Hub-Spoke collaboration** — One Hub stores shared tasks, memories, and skills; clients keep private data local and query the Hub only when needed
+- **Scoped retrieval** — `memory_search` and `skill_search` support `local`, `group`, and `all` search scopes in v4 flows
+- **Admin approval flow** — Team members are approved through the Hub before they can access shared data
+- **Task sharing** — `task_share` / `task_unshare` push or remove task memories from the Hub without changing local private storage
+- **Skill publish/pull** — Skills can be published to Hub visibility scopes and pulled back locally as full bundles for offline reuse
+- **Viewer support** — The Memory Viewer now includes Hub connection state, pending approvals, scoped search, task share controls, and Hub skill pull actions
 
 ### Memory Migration — Reconnect 🦐
 - **One-click import** — Seamlessly migrate OpenClaw's native built-in memories (SQLite + JSONL) into the MemOS intelligent memory system
@@ -184,7 +184,7 @@ Add the plugin config to `~/.openclaw/openclaw.json`:
 | Mistral | `mistral` | `mistral-embed` | |
 | Local (offline) | `local` | — | Uses `Xenova/all-MiniLM-L6-v2`, no API needed |
 
-> **No embedding config?** The plugin falls back to the local model automatically. You can start with zero configuration and add a cloud provider later for better quality.
+> **No embedding config?** In the current sidecar build, the plugin falls back to the local embedding model automatically. If you need deterministic team-wide behavior, configure an explicit provider.
 
 #### Summarizer Provider Options
 
@@ -258,6 +258,18 @@ memos-local: started (embedding: openai_compatible)
 ║  Open in browser to manage memories       ║
 ╚══════════════════════════════════════════╝
 ```
+
+## Hub Sharing Quick Start (v4)
+
+If you want team sharing, do this after the basic install works:
+
+1. **Pick a Hub machine** and set `sharing.enabled=true`, `sharing.role="hub"`, plus `sharing.hub.port`, `sharing.hub.teamName`, and `sharing.hub.teamToken`.
+2. **Configure each client machine** with `sharing.enabled=true`, `sharing.role="client"`, `sharing.client.hubAddress`, and `sharing.client.userToken`.
+3. **Open Viewer → Settings → Hub & Team** to verify connection state, current user, role, and groups.
+4. **Search with scope** `Group` or `All` in Memories and Skills to query Hub data alongside local data.
+5. **Share tasks** from the Tasks view and **pull skills** from the Skills view.
+
+For the full end-user workflow, see [`HUB-SHARING-GUIDE.md`](./HUB-SHARING-GUIDE.md).
 
 ### 5. Verify Memory is Working
 
@@ -361,21 +373,26 @@ Query → FTS5 + Vector dual recall → RRF Fusion → MMR Rerank
 
 ## Agent Tools
 
-The plugin provides **12 smart tools** (11 registered tools + auto-recall) and auto-installs the **memos-memory-guide** skill:
+The plugin provides local memory tools plus v4 Hub-sharing tools, and auto-installs the **memos-memory-guide** skill:
 
 | Tool | Purpose | When to Use |
 |------|---------|-------------|
 | `auto_recall` | Automatically injects relevant memories into agent context each turn (via `before_agent_start` hook) | Runs automatically — no manual call needed |
-| `memory_search` | Search memories (auto-filtered to current agent + public); returns excerpts + `chunkId` / `task_id` | When auto-recall returned nothing or you need a different query |
-| `memory_get` | Get full original text of a memory chunk | When you need to verify exact details from a search hit |
-| `memory_timeline` | Surrounding conversation around a chunk | When you need the exact dialogue before/after a hit |
-| `memory_write_public` | Write a memory to the shared public space (owner="public") | When the agent discovers knowledge all agents should access |
-| `task_summary` | Full structured summary of a completed task | When a hit has `task_id` and you need the full story (goal, steps, result) |
-| `skill_get` | Get skill content by `skillId` or `taskId` | When a hit has a linked task/skill and you want the reusable experience guide |
+| `memory_search` | Search memories with `scope: local | group | all`; Hub hits are returned separately from local hits | When auto-recall returned nothing or you need local + shared context |
+| `memory_get` | Get full original text of a local memory chunk | When you need to verify exact details from a local search hit |
+| `memory_timeline` | Surrounding conversation around a local chunk | When you need the exact dialogue before/after a local hit |
+| `network_memory_detail` | Fetch full content for a Hub memory hit | When a shared search hit looks relevant and you need full detail |
+| `memory_write_public` | Write a memory to the local shared public space (`owner="public"`) | When the agent discovers knowledge all local agents should access |
+| `task_summary` | Full structured summary of a completed task | When a hit has `task_id` and you need the full story |
+| `task_share` | Push a local task and its memories to the Hub | When a task should be searchable by your group or the whole team |
+| `task_unshare` | Remove a shared task from the Hub | When a task should stop being shared |
+| `skill_get` | Get local skill content by `skillId` or `taskId` | When a hit has a linked task/skill and you want the reusable guide |
 | `skill_install` | Install a skill into the agent workspace | When the skill should be permanently available for future turns |
-| `skill_search` | Search skills via FTS + vector + LLM relevance; scope: `mix` / `self` / `public` | When an agent needs to discover existing skills for a task |
-| `skill_publish` | Set a skill's visibility to public | When a skill should be discoverable by other agents |
-| `skill_unpublish` | Set a skill's visibility back to private | When a skill should no longer be shared |
+| `skill_search` | Search skills with `scope: local | group | all` | When an agent needs to discover local or Hub-shared skills |
+| `skill_publish` | Publish a skill to Hub sharing or local public visibility, depending on scope | When a skill should be shared with teammates |
+| `skill_unpublish` | Make a previously shared skill private again | When a skill should no longer be shared |
+| `network_skill_pull` | Pull a Hub skill bundle into local storage | When a teammate's shared skill should be usable locally/offline |
+| `network_team_info` | Show current Hub URL, user, role, and groups | When you need to inspect current team connection state |
 | `memory_viewer` | Get the URL of the Memory Viewer web UI | When the user asks where to view or manage their memories |
 
 ### Search Parameters
@@ -403,7 +420,7 @@ Open `http://127.0.0.1:18799` in your browser after starting the gateway.
 | **Analytics** | Daily write/read activity charts, memory/task/skill totals, role breakdown |
 | **Logs** | Tool call log (memory_search, auto_recall, memory_add, etc.) with input/output, duration, and tool filter; auto-refresh |
 | **Import** | 🦐 OpenClaw native memory migration — scan, one-click import with real-time SSE progress, smart dedup, pause/resume; post-processing for task & skill generation |
-| **Settings** | Online configuration for embedding model, summarizer model, skill evolution settings, viewer port |
+| **Settings** | Online configuration plus **Hub & Team** status, current role, team/groups, and admin pending-user actions |
 
 **Viewer won't open?**
 

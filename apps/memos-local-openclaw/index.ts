@@ -10,6 +10,7 @@ import { Type } from "@sinclair/typebox";
 import * as fs from "fs";
 import * as path from "path";
 import { buildContext } from "./src/config";
+import type { HostModelsConfig } from "./src/openclaw-api";
 import { SqliteStore } from "./src/storage/sqlite";
 import { Embedder } from "./src/embedding";
 import { IngestWorker } from "./src/ingest/worker";
@@ -17,6 +18,10 @@ import { RecallEngine } from "./src/recall/engine";
 import { captureMessages, stripInboundMetadata } from "./src/capture";
 import { DEFAULTS } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
+import { HubServer } from "./src/hub/server";
+import { hubGetMemoryDetail, hubRequestJson, hubSearchMemories, hubSearchSkills, resolveHubClient } from "./src/client/hub";
+import { getHubStatus, connectToHub } from "./src/client/connector";
+import { fetchHubSkillBundle, publishSkillBundleToHub, restoreSkillBundleFromHub } from "./src/client/skill-sync";
 import { SkillEvolver } from "./src/skill/evolver";
 import { SkillInstaller } from "./src/skill/installer";
 import { Summarizer } from "./src/ingest/providers";
@@ -164,17 +169,35 @@ const memosLocalPlugin = {
       }
     }
 
-    const pluginCfg = (api.pluginConfig ?? {}) as Record<string, unknown>;
+    let pluginCfg = (api.pluginConfig ?? {}) as Record<string, unknown>;
     const stateDir = api.resolvePath("~/.openclaw");
+
+    // Fallback: read config from file if not provided by OpenClaw
+    const configPath = path.join(stateDir, "state", "memos-local", "config.json");
+    if (Object.keys(pluginCfg).length === 0 && fs.existsSync(configPath)) {
+      try {
+        const fileConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+        pluginCfg = fileConfig;
+        api.logger.info(`memos-local: loaded config from ${configPath}`);
+      } catch (e) {
+        api.logger.warn(`memos-local: failed to load config from ${configPath}: ${e}`);
+      }
+    }
+
+    // Extract host model providers so OpenClawAPIClient can proxy completion/embedding
+    const hostModels: HostModelsConfig | undefined = api.config?.models?.providers
+      ? { providers: api.config.models.providers as Record<string, import("./src/openclaw-api").HostModelProvider> }
+      : undefined;
+
     const ctx = buildContext(stateDir, process.cwd(), pluginCfg as any, {
       debug: (msg: string) => api.logger.info(`[debug] ${msg}`),
       info: (msg: string) => api.logger.info(msg),
       warn: (msg: string) => api.logger.warn(msg),
       error: (msg: string) => api.logger.warn(`[error] ${msg}`),
-    });
+    }, hostModels);
 
     const store = new SqliteStore(ctx.config.storage!.dbPath!, ctx.log);
-    const embedder = new Embedder(ctx.config.embedding, ctx.log);
+    const embedder = new Embedder(ctx.config.embedding, ctx.log, ctx.openclawAPI);
     const worker = new IngestWorker(store, embedder, ctx);
     const engine = new RecallEngine(store, embedder, ctx);
     const evidenceTag = ctx.config.capture?.evidenceWrapperTag ?? DEFAULTS.evidenceWrapperTag;
@@ -238,7 +261,7 @@ const memosLocalPlugin = {
       });
     });
 
-    const summarizer = new Summarizer(ctx.config.summarizer, ctx.log);
+    const summarizer = new Summarizer(ctx.config.summarizer, ctx.log, ctx.openclawAPI);
 
     api.logger.info(`memos-local: initialized (db: ${ctx.config.storage!.dbPath})`);
 
@@ -319,7 +342,6 @@ const memosLocalPlugin = {
             };
           }
 
-          // LLM relevance + sufficiency filtering
           let filteredHits = result.hits;
           let sufficient = false;
 
@@ -345,16 +367,57 @@ const memosLocalPlugin = {
             }
           }
 
+          const beforeDedup = filteredHits.length;
+          filteredHits = deduplicateHits(filteredHits);
+          ctx.log.debug(`memory_search dedup: ${beforeDedup} → ${filteredHits.length}`);
+
+          const localDetailsHits = filteredHits.map((h) => {
+            let effectiveTaskId = h.taskId;
+            if (effectiveTaskId) {
+              const t = store.getTask(effectiveTaskId);
+              if (t && t.status === "skipped") effectiveTaskId = null;
+            }
+            return {
+              ref: h.ref,
+              chunkId: h.ref.chunkId,
+              taskId: effectiveTaskId,
+              skillId: h.skillId,
+              role: h.source.role,
+              score: h.score,
+              summary: h.summary,
+            };
+          });
+
+          if (searchScope !== "local") {
+            const hub = await hubSearchMemories(store, ctx, { query, maxResults: searchLimit, scope: searchScope as any, hubAddress, userToken }).catch(() => ({ hits: [], meta: { totalCandidates: 0, searchedGroups: [], includedPublic: searchScope === "all" } }));
+            const localText = filteredHits.length > 0
+              ? filteredHits.map((h, i) => {
+                  const excerpt = h.original_excerpt.length > 220 ? h.original_excerpt.slice(0, 217) + "..." : h.original_excerpt;
+                  return `${i + 1}. [${h.source.role}] ${excerpt}`;
+                }).join("\n")
+              : "(none)";
+            const hubText = hub.hits.length > 0
+              ? hub.hits.map((h, i) => `${i + 1}. [${h.ownerName}] ${h.summary}${h.groupName ? ` (${h.groupName})` : ""}`).join("\n")
+              : "(none)";
+
+            return {
+              content: [{
+                type: "text",
+                text: `Local results:\n${localText}\n\nHub results:\n${hubText}`,
+              }],
+              details: {
+                local: { hits: localDetailsHits, meta: result.meta },
+                hub,
+              },
+            };
+          }
+
           if (filteredHits.length === 0) {
             return {
               content: [{ type: "text", text: "No relevant memories found for this query." }],
               details: { candidates: rawCandidates, filtered: [], meta: result.meta },
             };
           }
-
-          const beforeDedup = filteredHits.length;
-          filteredHits = deduplicateHits(filteredHits);
-          ctx.log.debug(`memory_search dedup: ${beforeDedup} → ${filteredHits.length}`);
 
           const lines = filteredHits.map((h, i) => {
             const excerpt = h.original_excerpt;
@@ -448,7 +511,7 @@ const memosLocalPlugin = {
           if (!anchorChunk) {
             return {
               content: [{ type: "text", text: `Chunk not found: ${chunkId}` }],
-              details: { error: "not_found" },
+              details: { error: "not_found", entries: [] },
             };
           }
 
@@ -497,7 +560,7 @@ const memosLocalPlugin = {
             Type.Number({ description: `Max chars (default ${DEFAULTS.getMaxCharsDefault}, max ${DEFAULTS.getMaxCharsMax})` }),
           ),
         }),
-        execute: trackTool("memory_get", async (_toolCallId: any, params: any) => {
+        execute: trackTool("memory_get", async (_toolCallId: any, params: any, context?: any) => {
           const { chunkId, maxChars } = params as { chunkId: string; maxChars?: number };
           const limit = Math.min(maxChars ?? DEFAULTS.getMaxCharsDefault, DEFAULTS.getMaxCharsMax);
 
@@ -602,6 +665,207 @@ const memosLocalPlugin = {
         }),
       },
       { name: "task_summary" },
+    );
+
+    // ─── Tool: task_share ───
+
+    api.registerTool(
+      {
+        name: "task_share",
+        label: "Task Share",
+        description:
+          "Share one existing local task and its chunks to the configured hub. " +
+          "Minimal MVP path for validating team task sharing.",
+        parameters: Type.Object({
+          taskId: Type.String({ description: "Local task ID to share" }),
+          visibility: Type.Optional(Type.String({ description: "Share visibility: 'public' (default) or 'group'" })),
+          groupId: Type.Optional(Type.String({ description: "Optional group ID when visibility='group'" })),
+        }),
+        execute: trackTool("task_share", async (_toolCallId: any, params: any) => {
+          const { taskId, visibility: rawVisibility, groupId } = params as {
+            taskId: string;
+            visibility?: string;
+            groupId?: string;
+          };
+
+          const task = store.getTask(taskId);
+          if (!task) {
+            return {
+              content: [{ type: "text", text: `Task not found: ${taskId}` }],
+              details: { error: "not_found", taskId },
+            };
+          }
+
+          const chunks = store.getChunksByTask(taskId);
+          if (chunks.length === 0) {
+            return {
+              content: [{ type: "text", text: `Task ${taskId} has no chunks to share.` }],
+              details: { error: "no_chunks", taskId },
+            };
+          }
+
+          const visibility = rawVisibility === "group" ? "group" : "public";
+          const hubClient = await resolveHubClient(store, ctx);
+          const { v4: uuidv4 } = require("uuid");
+          const hubTaskId = uuidv4();
+
+          const response = await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/tasks/share", {
+            method: "POST",
+            body: JSON.stringify({
+              task: {
+                id: hubTaskId,
+                sourceTaskId: task.id,
+                sourceUserId: hubClient.userId,
+                title: task.title,
+                summary: task.summary,
+                groupId: visibility === "group" ? (groupId ?? null) : null,
+                visibility,
+                createdAt: task.startedAt,
+                updatedAt: task.updatedAt,
+              },
+              chunks: chunks.map((chunk) => ({
+                id: uuidv4(),
+                hubTaskId,
+                sourceTaskId: task.id,
+                sourceChunkId: chunk.id,
+                sourceUserId: hubClient.userId,
+                role: chunk.role,
+                content: chunk.content,
+                summary: chunk.summary,
+                kind: chunk.kind,
+                createdAt: chunk.createdAt,
+              })),
+            }),
+          }) as any;
+
+          store.markTaskShared(task.id, hubTaskId, chunks.length, visibility, groupId);
+
+          return {
+            content: [{ type: "text", text: `Shared task "${task.title}" with ${chunks.length} chunks to the hub.` }],
+            details: {
+              shared: true,
+              taskId: task.id,
+              visibility,
+              chunkCount: chunks.length,
+              hubUrl: hubClient.hubUrl,
+              response,
+            },
+          };
+        }),
+      },
+      { name: "task_share" },
+    );
+
+    // ─── Tool: task_unshare ───
+
+    api.registerTool(
+      {
+        name: "task_unshare",
+        label: "Task Unshare",
+        description: "Remove one previously shared task from the configured hub.",
+        parameters: Type.Object({
+          taskId: Type.String({ description: "Local task ID to unshare" }),
+        }),
+        execute: trackTool("task_unshare", async (_toolCallId: any, params: any) => {
+          const { taskId } = params as { taskId: string };
+
+          const task = store.getTask(taskId);
+          if (!task) {
+            return {
+              content: [{ type: "text", text: `Task not found: ${taskId}` }],
+              details: { error: "not_found", taskId },
+            };
+          }
+
+          const hubClient = await resolveHubClient(store, ctx);
+          await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/tasks/unshare", {
+            method: "POST",
+            body: JSON.stringify({
+              sourceUserId: hubClient.userId,
+              sourceTaskId: task.id,
+            }),
+          });
+
+          store.unmarkTaskShared(task.id);
+
+          return {
+            content: [{ type: "text", text: `Unshared task "${task.title}" from the hub.` }],
+            details: {
+              unshared: true,
+              taskId: task.id,
+              hubUrl: hubClient.hubUrl,
+            },
+          };
+        }),
+      },
+      { name: "task_unshare" },
+    );
+
+    api.registerTool(
+      {
+        name: "network_memory_detail",
+        label: "Network Memory Detail",
+        description: "Fetch the full detail for a Hub search hit returned by memory_search(scope=group|all).",
+        parameters: Type.Object({
+          remoteHitId: Type.String({ description: "The remoteHitId returned by a Hub search hit" }),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for tests or manual routing" })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for tests" })),
+        }),
+        execute: trackTool("network_memory_detail", async (_toolCallId: any, params: any) => {
+          const { remoteHitId, hubAddress, userToken } = params as {
+            remoteHitId: string;
+            hubAddress?: string;
+            userToken?: string;
+          };
+
+          const detail = await hubGetMemoryDetail(store, ctx, { remoteHitId, hubAddress, userToken });
+          return {
+            content: [{
+              type: "text",
+              text: `## Shared Memory Detail
+
+${detail.summary}
+
+${detail.content}`,
+            }],
+            details: detail,
+          };
+        }),
+      },
+      { name: "network_memory_detail" },
+    );
+
+    api.registerTool(
+      {
+        name: "network_team_info",
+        label: "Network Team Info",
+        description: "Show current Hub connection status, signed-in user, role, and group memberships.",
+        parameters: Type.Object({}),
+        execute: trackTool("network_team_info", async () => {
+          const status = await getHubStatus(store, ctx.config);
+          if (!status.connected || !status.user) {
+            return {
+              content: [{ type: "text", text: "Hub is not connected." }],
+              details: status,
+            };
+          }
+
+          const groupNames = status.user.groups.map((group) => group.name);
+          return {
+            content: [{
+              type: "text",
+              text: `## Team Connection
+
+User: ${status.user.username}
+Role: ${status.user.role}
+Hub: ${status.hubUrl ?? "(unknown)"}
+Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
+            }],
+            details: status,
+          };
+        }),
+      },
+      { name: "network_team_info" },
     );
 
     // ─── Tool: skill_get ───
@@ -815,17 +1079,44 @@ const memosLocalPlugin = {
         name: "skill_search",
         label: "Skill Search",
         description:
-          "Search available skills by natural language. Searches your own skills, public skills, or both. " +
+          "Search available skills by natural language. Searches local skills by default, or local + Hub skills when scope=group/all. " +
           "Use when you need a capability or guide and don't have a matching skill at hand.",
         parameters: Type.Object({
           query: Type.String({ description: "Natural language description of the needed skill" }),
-          scope: Type.Optional(Type.String({ description: "Search scope: 'mix' (default, self + public), 'self' (own only), 'public' (public only)" })),
+          scope: Type.Optional(Type.String({ description: "Search scope: 'mix'/'self'/'public' for local search, or 'group'/'all' for local + Hub search" })),
         }),
-        execute: trackTool("skill_search", async (_toolCallId: any, params: any) => {
+        execute: trackTool("skill_search", async (_toolCallId: any, params: any, context?: any) => {
           const { query: skillQuery, scope: rawScope } = params as { query: string; scope?: string };
           const scope = (rawScope === "self" || rawScope === "public") ? rawScope : "mix";
           const currentOwner = `agent:${currentAgentId}`;
 
+          if (rawScope === "group" || rawScope === "all") {
+            const [localHits, hub] = await Promise.all([
+              engine.searchSkills(skillQuery, "mix" as any, currentOwner),
+              hubSearchSkills(store, ctx, { query: skillQuery, maxResults: 10 }).catch(() => ({ hits: [] })),
+            ]);
+
+            if (localHits.length === 0 && hub.hits.length === 0) {
+              return {
+                content: [{ type: "text", text: `No relevant skills found for: "${skillQuery}" (scope: ${rawScope})` }],
+                details: { query: skillQuery, scope: rawScope, local: { hits: [] }, hub },
+              };
+            }
+
+            const localText = localHits.length > 0
+              ? localHits.map((h, i) => `${i + 1}. [${h.name}] ${h.description.slice(0, 150)}${h.visibility === "public" ? " (public)" : ""}`).join("\n")
+              : "(none)";
+            const hubText = hub.hits.length > 0
+              ? hub.hits.map((h, i) => `${i + 1}. [${h.name}] ${h.description.slice(0, 150)} (${h.visibility}${h.groupName ? `:${h.groupName}` : ""}, owner=${h.ownerName})`).join("\n")
+              : "(none)";
+
+            return {
+              content: [{ type: "text", text: `Local skills:\n${localText}\n\nHub skills:\n${hubText}` }],
+              details: { query: skillQuery, scope: rawScope, local: { hits: localHits }, hub },
+            };
+          }
+
+          const scope = (rawScope === "self" || rawScope === "public") ? rawScope : "mix";
           const hits = await engine.searchSkills(skillQuery, scope as any, currentOwner);
 
           if (hits.length === 0) {
@@ -857,17 +1148,28 @@ const memosLocalPlugin = {
         description: "Make a skill public so other agents can discover and install it via skill_search.",
         parameters: Type.Object({
           skillId: Type.String({ description: "The skill ID to publish" }),
+          scope: Type.Optional(Type.String({ description: "Publish scope: omit for local public, or use 'public' / 'group' to publish to Hub" })),
+          groupId: Type.Optional(Type.String({ description: "Optional group ID when scope='group'" })),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for tests or manual routing" })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for tests" })),
         }),
         execute: trackTool("skill_publish", async (_toolCallId: any, params: any) => {
-          const { skillId: pubSkillId } = params as { skillId: string };
+          const { skillId: pubSkillId, scope, groupId, hubAddress, userToken } = params as { skillId: string; scope?: string; groupId?: string; hubAddress?: string; userToken?: string };
           const skill = store.getSkill(pubSkillId);
           if (!skill) {
             return { content: [{ type: "text", text: `Skill not found: ${pubSkillId}` }] };
           }
+          if (scope === "public" || scope === "group") {
+            const published = await publishSkillBundleToHub(store, ctx, { skillId: pubSkillId, visibility: scope, groupId, hubAddress, userToken });
+            return {
+              content: [{ type: "text", text: `Skill "${skill.name}" published to hub (${published.visibility}).` }],
+              details: { skillId: pubSkillId, name: skill.name, publishedToHub: true, hubSkillId: published.skillId, visibility: published.visibility },
+            };
+          }
           store.setSkillVisibility(pubSkillId, "public");
           return {
             content: [{ type: "text", text: `Skill "${skill.name}" is now public.` }],
-            details: { skillId: pubSkillId, name: skill.name, visibility: "public" },
+            details: { skillId: pubSkillId, name: skill.name, visibility: "public", publishedToHub: false },
           };
         }),
       },
@@ -898,6 +1200,29 @@ const memosLocalPlugin = {
         }),
       },
       { name: "skill_unpublish" },
+    );
+
+    api.registerTool(
+      {
+        name: "network_skill_pull",
+        label: "Network Skill Pull",
+        description: "Download a published Hub skill bundle and restore it into local managed skills.",
+        parameters: Type.Object({
+          skillId: Type.String({ description: "The Hub skill ID to pull" }),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for tests or manual routing" })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for tests" })),
+        }),
+        execute: trackTool("network_skill_pull", async (_toolCallId: any, params: any) => {
+          const { skillId, hubAddress, userToken } = params as { skillId: string; hubAddress?: string; userToken?: string };
+          const payload = await fetchHubSkillBundle(store, ctx, { skillId, hubAddress, userToken });
+          const restored = restoreSkillBundleFromHub(store, ctx, payload);
+          return {
+            content: [{ type: "text", text: `Pulled Hub skill "${restored.localName}" into local storage.` }],
+            details: { pulled: true, hubSkillId: skillId, localSkillId: restored.localSkillId, localName: restored.localName, dirPath: restored.dirPath },
+          };
+        }),
+      },
+      { name: "network_skill_pull" },
     );
 
     // ─── Auto-recall: inject relevant memories before agent starts ───
@@ -1204,10 +1529,73 @@ const memosLocalPlugin = {
           worker.enqueue(captured);
           telemetry.trackMemoryIngested(captured.length);
         }
+
+        // Incremental push: sync new chunks for already-shared tasks
+        syncSharedTasksIncremental().catch((err) => {
+          ctx.log.warn(`incremental sync failed: ${err}`);
+        });
       } catch (err) {
         api.logger.warn(`memos-local: capture failed: ${String(err)}`);
       }
     });
+
+    async function syncSharedTasksIncremental(): Promise<void> {
+      if (!ctx.config.sharing?.enabled || ctx.config.sharing.role !== "client") return;
+      const shared = store.listLocalSharedTasks();
+      if (shared.length === 0) return;
+
+      let hubClient: { hubUrl: string; userToken: string; userId: string } | undefined;
+      try {
+        hubClient = await resolveHubClient(store, ctx);
+      } catch {
+        return;
+      }
+      const { v4: uuidv4 } = require("uuid");
+
+      for (const entry of shared) {
+        const task = store.getTask(entry.taskId);
+        if (!task) continue;
+        const chunks = store.getChunksByTask(entry.taskId);
+        if (chunks.length <= entry.syncedChunks) continue;
+
+        const newChunks = chunks.slice(entry.syncedChunks);
+        ctx.log.info(`incremental sync: task=${entry.taskId} pushing ${newChunks.length} new chunk(s)`);
+
+        try {
+          await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/tasks/share", {
+            method: "POST",
+            body: JSON.stringify({
+              task: {
+                id: entry.hubTaskId,
+                sourceTaskId: entry.taskId,
+                sourceUserId: hubClient.userId,
+                title: task.title,
+                summary: task.summary,
+                groupId: entry.visibility === "group" ? entry.groupId ?? null : null,
+                visibility: entry.visibility,
+                createdAt: task.startedAt ?? task.updatedAt ?? Date.now(),
+                updatedAt: task.updatedAt ?? Date.now(),
+              },
+              chunks: newChunks.map((chunk) => ({
+                id: uuidv4(),
+                hubTaskId: entry.hubTaskId,
+                sourceTaskId: entry.taskId,
+                sourceChunkId: chunk.id,
+                sourceUserId: hubClient.userId,
+                role: chunk.role,
+                content: chunk.content,
+                summary: chunk.summary,
+                kind: chunk.kind,
+                createdAt: chunk.createdAt,
+              })),
+            }),
+          });
+          store.markTaskShared(entry.taskId, entry.hubTaskId, chunks.length, entry.visibility, entry.groupId);
+        } catch (err) {
+          ctx.log.warn(`incremental sync failed for task=${entry.taskId}: ${err}`);
+        }
+      }
+    }
 
     // ─── Memory Viewer (web UI) ───
 
@@ -1220,11 +1608,30 @@ const memosLocalPlugin = {
       ctx,
     });
 
+    const hubServer = ctx.config.sharing?.enabled && ctx.config.sharing.role === "hub"
+      ? new HubServer({ store, log: ctx.log, config: ctx.config, dataDir: stateDir, embedder })
+      : null;
+
     // ─── Service lifecycle ───
 
     api.registerService({
       id: "memos-local-openclaw-plugin",
       start: async () => {
+        if (hubServer) {
+          const hubUrl = await hubServer.start();
+          api.logger.info(`memos-local: hub started at ${hubUrl}`);
+        }
+
+        // Auto-connect to Hub in client mode (handles both existing token and auto-join via teamToken)
+        if (ctx.config.sharing?.enabled && ctx.config.sharing.role === "client") {
+          try {
+            const session = await connectToHub(store, ctx.config, ctx.log);
+            api.logger.info(`memos-local: connected to Hub as "${session.username}" (${session.userId})`);
+          } catch (err) {
+            api.logger.warn(`memos-local: Hub connection failed: ${err}`);
+          }
+        }
+
         try {
           const viewerUrl = await viewer.start();
           api.logger.info(`memos-local: started (embedding: ${embedder.provider})`);
@@ -1250,7 +1657,9 @@ const memosLocalPlugin = {
         );
       },
       stop: async () => {
+        await worker.flush();
         await telemetry.shutdown();
+        await hubServer?.stop();
         viewer.stop();
         store.close();
         api.logger.info("memos-local: stopped");

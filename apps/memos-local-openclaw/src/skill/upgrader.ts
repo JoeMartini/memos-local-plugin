@@ -190,7 +190,7 @@ export class SkillUpgrader {
       .replace("{TASK_ID}", task.id)
       + langInstruction;
 
-    const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillUpgrader.upgrade", { maxTokens: 6000, temperature: 0.2, timeoutMs: 90_000 });
+    const raw = await callLLMWithFallback(chain, prompt, this.ctx.log, "SkillUpgrader.upgrade", { maxTokens: 6000, temperature: 0.2, timeoutMs: 90_000, openclawAPI: this.ctx.openclawAPI });
 
     const changelogSep = raw.indexOf("---CHANGELOG---");
     if (changelogSep !== -1) {
