@@ -319,6 +319,10 @@ const memosLocalPlugin = {
           const { query } = params as { query: string };
           const role = undefined;
           const minScore = undefined;
+          const searchScope = "local";
+          const searchLimit = 10;
+          const hubAddress: string | undefined = undefined;
+          const userToken: string | undefined = undefined;
 
           const agentId = currentAgentId;
           const ownerFilter = [`agent:${agentId}`, "public"];
