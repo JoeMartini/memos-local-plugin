@@ -36,13 +36,33 @@ function loadOpenClawFallbackConfig(log: Logger): SummarizerConfig | undefined {
     const apiKey: string | undefined = providerCfg.apiKey;
     if (!baseUrl || !apiKey) return undefined;
 
-    const endpoint = baseUrl.endsWith("/chat/completions")
-      ? baseUrl
-      : baseUrl.replace(/\/+$/, "") + "/chat/completions";
+    // Detect provider type from provider key or base URL
+    const isAnthropic = providerKey?.toLowerCase().includes("anthropic") ||
+      baseUrl.includes("anthropic.com");
+    const isBedrock = providerKey?.toLowerCase().includes("bedrock") ||
+      baseUrl.includes("bedrock");
 
-    log.debug(`OpenClaw fallback model: ${modelId} via ${baseUrl}`);
+    let provider: SummarizerConfig["provider"];
+    let endpoint: string;
+
+    if (isAnthropic) {
+      provider = "anthropic";
+      endpoint = baseUrl.endsWith("/messages")
+        ? baseUrl
+        : baseUrl.replace(/\/+$/, "") + "/messages";
+    } else if (isBedrock) {
+      provider = "bedrock";
+      endpoint = baseUrl;
+    } else {
+      provider = "openai_compatible";
+      endpoint = baseUrl.endsWith("/chat/completions")
+        ? baseUrl
+        : baseUrl.replace(/\/+$/, "") + "/chat/completions";
+    }
+
+    log.debug(`OpenClaw fallback model: ${modelId} via ${baseUrl} (provider=${provider})`);
     return {
-      provider: "openai_compatible",
+      provider,
       endpoint,
       apiKey,
       model: modelId,

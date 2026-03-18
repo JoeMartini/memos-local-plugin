@@ -992,7 +992,8 @@ export class ViewerServer {
 
   private getOpenClawConfigPath(): string {
     const home = process.env.HOME || process.env.USERPROFILE || "";
-    return path.join(home, ".openclaw", "openclaw.json");
+    const ocHome = process.env.OPENCLAW_STATE_DIR || path.join(home, ".openclaw");
+    return path.join(ocHome, "openclaw.json");
   }
 
   private serveConfig(res: http.ServerResponse): void {
@@ -1438,7 +1439,7 @@ export class ViewerServer {
 
   private getOpenClawHome(): string {
     const home = process.env.HOME || process.env.USERPROFILE || "";
-    return path.join(home, ".openclaw");
+    return process.env.OPENCLAW_STATE_DIR || path.join(home, ".openclaw");
   }
 
   private handleCleanupPolluted(res: http.ServerResponse): void {
