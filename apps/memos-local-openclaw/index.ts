@@ -211,6 +211,18 @@ const memosLocalPlugin = {
 
     api.logger.info(`memos-local: initialized (db: ${ctx.config.storage!.dbPath})`);
 
+    // ─── Check allowPromptInjection policy ───
+    // When allowPromptInjection=false, the prompt mutation fields (such as prependContext) in the hook return value
+    // will be stripped by the framework. Skip auto-recall to avoid unnecessary LLM/embedding calls.
+    const pluginEntry = (api.config as any)?.plugins?.entries?.[api.id];
+    const allowPromptInjection = pluginEntry?.hooks?.allowPromptInjection !== false;
+    if (!allowPromptInjection) {
+      api.logger.info("memos-local: allowPromptInjection=false, auto-recall disabled");
+    }
+    else {
+      api.logger.info("memos-local: allowPromptInjection=true, auto-recall enabled");
+    }
+
     const trackTool = (toolName: string, fn: (...args: any[]) => Promise<any>) =>
       async (...args: any[]) => {
         const t0 = performance.now();
@@ -860,6 +872,7 @@ const memosLocalPlugin = {
     let lastRecalledSummaries: string[] = [];
 
     api.on("before_agent_start", async (event: { prompt?: string; messages?: unknown[]; agentId?: string }) => {
+      if (!allowPromptInjection) return {};
       lastRecalledChunkIds = new Set();
       lastRecalledSummaries = [];
       if (!event.prompt || event.prompt.length < 3) return;
