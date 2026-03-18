@@ -182,6 +182,7 @@ const memosLocalPlugin = {
     const workspaceDir = api.resolvePath("~/.openclaw/workspace");
     const skillCtx = { ...ctx, workspaceDir };
     const skillEvolver = new SkillEvolver(store, engine, skillCtx);
+    skillEvolver.onSkillEvolved = (name, type) => telemetry.trackSkillEvolved(name, type);
     const skillInstaller = new SkillInstaller(store, skillCtx);
 
     let pluginVersion = "0.0.0";
@@ -257,6 +258,7 @@ const memosLocalPlugin = {
           return result;
         } catch (e) {
           ok = false;
+          telemetry.trackError(toolName, (e as Error)?.name ?? "unknown");
           throw e;
         } finally {
           const dur = performance.now() - t0;
@@ -720,6 +722,7 @@ const memosLocalPlugin = {
         parameters: Type.Object({}),
         execute: trackTool("memory_viewer", async () => {
           ctx.log.debug(`memory_viewer called`);
+          telemetry.trackViewerOpened();
           const url = `http://127.0.0.1:${viewerPort}`;
           return {
             content: [
