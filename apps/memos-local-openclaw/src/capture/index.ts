@@ -70,6 +70,7 @@ export function captureMessages(
     if (role === "user") {
       content = stripInboundMetadata(content);
     } else {
+      content = stripThinkingTags(content);
       content = stripEvidenceWrappers(content, evidenceTag);
     }
     if (!content.trim()) continue;
@@ -147,6 +148,13 @@ export function stripInboundMetadata(text: string): string {
   }
 
   return stripEnvelopePrefix(result.join("\n")).trim();
+}
+
+/** Strip <think…>…</think⟩ blocks emitted by DeepSeek-style reasoning models. */
+const THINKING_TAG_RE = /<think[\s>][\s\S]*?<\/think>\s*/gi;
+
+function stripThinkingTags(text: string): string {
+  return text.replace(THINKING_TAG_RE, "");
 }
 
 function stripEnvelopePrefix(text: string): string {
