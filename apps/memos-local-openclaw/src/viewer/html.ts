@@ -5019,6 +5019,7 @@ function openScopeSelectorModal(resourceType, resourceId, currentScope, onConfir
   var existing=document.getElementById('scopeSelectorOverlay');
   if(existing) existing.remove();
   var teamEnabled=sharingStatusCache&&sharingStatusCache.enabled;
+  var teamConnected=teamEnabled&&sharingStatusCache.connection&&sharingStatusCache.connection.connected;
   var overlay=document.createElement('div');
   overlay.id='scopeSelectorOverlay';
   overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);backdrop-filter:blur(6px);z-index:10000;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.12s ease';
@@ -5032,7 +5033,7 @@ function openScopeSelectorModal(resourceType, resourceId, currentScope, onConfir
   for(var i=0;i<scopes.length;i++){
     var sc=scopes[i];
     var isCurrent=sc===currentScope;
-    var isDisabled=sc==='team'&&!teamEnabled;
+    var isDisabled=sc==='team'&&(!teamEnabled||!teamConnected);
     var color=getScopeColor(sc);
     var cursor=isDisabled?'not-allowed':'pointer';
     var opacity=isDisabled?'0.4':'1';

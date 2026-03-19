@@ -1214,7 +1214,6 @@ export class ViewerServer {
         let hubSynced = false;
 
         if (scope === "team") {
-          if (!isLocalShared) this.store.markMemorySharedLocally(chunkId);
           if (!isTeamShared) {
             const hubClient = await this.resolveHubClientAware();
             const refreshedChunk = db.prepare("SELECT * FROM chunks WHERE id = ?").get(chunkId) as any;
@@ -1222,6 +1221,7 @@ export class ViewerServer {
               method: "POST",
               body: JSON.stringify({ memory: { sourceChunkId: refreshedChunk.id, role: refreshedChunk.role, content: refreshedChunk.content, summary: refreshedChunk.summary, kind: refreshedChunk.kind, groupId: null, visibility: "public" } }),
             });
+            if (!isLocalShared) this.store.markMemorySharedLocally(chunkId);
             if (hubClient.userId) {
               const existing = this.store.getHubMemoryBySource(hubClient.userId, chunkId);
               this.store.upsertHubMemory({
@@ -1233,6 +1233,8 @@ export class ViewerServer {
               });
             }
             hubSynced = true;
+          } else {
+            if (!isLocalShared) this.store.markMemorySharedLocally(chunkId);
           }
         } else if (scope === "local") {
           if (isTeamShared) {
@@ -1294,15 +1296,6 @@ export class ViewerServer {
 
         let hubSynced = false;
 
-        if (scope === "local" || scope === "team") {
-          if (!isLocalShared) {
-            const originalOwner = task.owner;
-            const db = (this.store as any).db;
-            db.prepare("INSERT INTO local_shared_tasks (task_id, hub_task_id, original_owner, shared_at) VALUES (?, ?, ?, ?) ON CONFLICT(task_id) DO UPDATE SET original_owner = excluded.original_owner, shared_at = excluded.shared_at").run(taskId, "", originalOwner, Date.now());
-            db.prepare("UPDATE tasks SET owner = 'public' WHERE id = ?").run(taskId);
-          }
-        }
-
         if (scope === "team") {
           if (!isTeamShared) {
             const chunks = this.store.getChunksByTask(taskId);
@@ -1325,6 +1318,21 @@ export class ViewerServer {
               });
             }
             hubSynced = true;
+          }
+          if (!isLocalShared) {
+            const originalOwner = task.owner;
+            const db = (this.store as any).db;
+            db.prepare("INSERT INTO local_shared_tasks (task_id, hub_task_id, original_owner, shared_at) VALUES (?, ?, ?, ?) ON CONFLICT(task_id) DO UPDATE SET original_owner = excluded.original_owner, shared_at = excluded.shared_at").run(taskId, "", originalOwner, Date.now());
+            db.prepare("UPDATE tasks SET owner = 'public' WHERE id = ?").run(taskId);
+          }
+        }
+
+        if (scope === "local") {
+          if (!isLocalShared) {
+            const originalOwner = task.owner;
+            const db = (this.store as any).db;
+            db.prepare("INSERT INTO local_shared_tasks (task_id, hub_task_id, original_owner, shared_at) VALUES (?, ?, ?, ?) ON CONFLICT(task_id) DO UPDATE SET original_owner = excluded.original_owner, shared_at = excluded.shared_at").run(taskId, "", originalOwner, Date.now());
+            db.prepare("UPDATE tasks SET owner = 'public' WHERE id = ?").run(taskId);
           }
         }
 
@@ -1395,10 +1403,6 @@ export class ViewerServer {
 
         let hubSynced = false;
 
-        if (scope === "local" || scope === "team") {
-          if (!isLocalShared) this.store.setSkillVisibility(skillId, "public");
-        }
-
         if (scope === "team") {
           if (!isTeamShared) {
             const bundle = buildSkillBundleForHub(this.store, skillId);
@@ -1420,6 +1424,11 @@ export class ViewerServer {
             }
             hubSynced = true;
           }
+          if (!isLocalShared) this.store.setSkillVisibility(skillId, "public");
+        }
+
+        if (scope === "local") {
+          if (!isLocalShared) this.store.setSkillVisibility(skillId, "public");
         }
 
         if (scope === "local" && isTeamShared) {
