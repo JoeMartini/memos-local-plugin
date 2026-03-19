@@ -105,6 +105,9 @@ export class RecallEngine {
           }
         }
       } catch { /* best-effort */ }
+      if (hubMemFtsRanked.length > 0 || hubMemVecRanked.length > 0) {
+        this.ctx.log.debug(`recall: hub_memories candidates: fts=${hubMemFtsRanked.length}, vec=${hubMemVecRanked.length}`);
+      }
     }
 
     // Step 2: RRF fusion

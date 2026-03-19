@@ -2577,6 +2577,15 @@ export class ViewerServer {
           const newRole = merged.role as string | undefined;
           const newEnabled = Boolean(merged.enabled);
 
+          // Detect disabling sharing or switching away from hub mode
+          const wasHub = oldSharingEnabled && oldSharingRole === "hub";
+          const isHub = newEnabled && newRole === "hub";
+          if (wasHub && !isHub) {
+            await this.notifyHubShutdown();
+            this.stopHubHeartbeat();
+            this.log.info("Hub shutting down: notified connected clients");
+          }
+
           // Detect disabling sharing or switching away from client mode
           const wasClient = oldSharingEnabled && oldSharingRole === "client";
           const isClient = newEnabled && newRole === "client";
@@ -2667,6 +2676,41 @@ export class ViewerServer {
       }
     } catch (e) {
       this.log.warn(`Failed to notify Hub of leave: ${e}`);
+    }
+  }
+
+  private async notifyHubShutdown(): Promise<void> {
+    try {
+      const sharing = this.ctx?.config.sharing;
+      if (!sharing || sharing.role !== "hub") return;
+      const hubPort = sharing.hub?.port ?? 18800;
+      const authPath = path.join(this.dataDir, "hub-auth.json");
+      let adminToken: string | undefined;
+      try {
+        const authData = JSON.parse(fs.readFileSync(authPath, "utf8"));
+        adminToken = authData?.bootstrapAdminToken;
+      } catch { return; }
+      if (!adminToken) return;
+
+      const users = this.store.listHubUsers("active");
+      const { v4: uuidv4 } = require("uuid");
+      for (const u of users) {
+        try {
+          this.store.insertHubNotification({
+            id: uuidv4(),
+            userId: u.id,
+            type: "hub_shutdown",
+            resource: "hub",
+            title: "Hub is shutting down",
+            message: "The Hub server is shutting down. You may be disconnected.",
+          });
+        } catch (e) {
+          this.log.warn(`Failed to insert shutdown notification for user ${u.id}: ${e}`);
+        }
+      }
+      this.log.info(`Hub shutdown: notified ${users.length} approved user(s)`);
+    } catch (e) {
+      this.log.warn(`notifyHubShutdown error: ${e}`);
     }
   }
 

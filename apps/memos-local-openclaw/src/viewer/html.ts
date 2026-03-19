@@ -2026,6 +2026,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 <script>
 let activeSession=null,activeRole='',editingId=null,searchTimer=null,memoryCache={},currentPage=1,totalPages=1,totalCount=0,PAGE_SIZE=40,metricsDays=30;
 let memorySearchScope='local',skillSearchScope='local',taskSearchScope='local';
+let _lastMemoriesFingerprint='',_lastTasksFingerprint='',_lastSkillsFingerprint='';
 let _embeddingWarningShown=false;
 let _currentAgentOwner='agent:main';
 
@@ -2711,6 +2712,8 @@ const I18N={
     'sharing.disable.confirm.hub':'You are about to shut down the team server.\\n\\nWhat will happen:\\n\\u2022 All connected team members will be disconnected\\n\\u2022 They will no longer be able to sync memories, tasks, or skills\\n\\u2022 Shared data is preserved and will be available when you re-enable\\n\\nAre you sure?',
     'sharing.disable.confirm.client':'You are about to disconnect from the team.\\n\\nWhat will happen:\\n\\u2022 You will no longer receive shared memories, tasks, or skills from the team\\n\\u2022 Your local data is preserved and will not be affected\\n\\u2022 You can reconnect later by re-enabling sharing\\n\\nAre you sure?',
     'sharing.disable.restartAlert':'Sharing has been disabled. Please restart the OpenClaw gateway for the change to take effect.\\n\\nRun: openclaw gateway stop && openclaw gateway start',
+    'sharing.switch.hubToClient':'You are about to switch from Server to Client mode.\\n\\nWhat will happen:\\n\\u2022 The Hub server will shut down after restart\\n\\u2022 All connected team members will be disconnected\\n\\u2022 Shared data on the Hub is preserved for future use\\n\\u2022 You will join the specified remote team as a client\\n\\nAre you sure?',
+    'sharing.switch.clientToHub':'You are about to switch from Client to Server mode.\\n\\nWhat will happen:\\n\\u2022 You will disconnect from the current team\\n\\u2022 A new Hub server will start after restart\\n\\u2022 Your local data is not affected\\n\\nAre you sure?',
     'admin.notEnabled.title':'Team sharing is not enabled',
     'admin.notEnabled.desc':'The Admin Panel is used to manage team members, shared memories, tasks, and skills. To use this feature, you need to enable team sharing first.',
     'admin.notEnabled.setupHub':'Set Up as Team Server',
@@ -3418,6 +3421,8 @@ const I18N={
     'sharing.disable.confirm.hub':'你即将关闭团队服务。\\n\\n关闭后将会：\\n\\u2022 所有已连接的团队成员将断开连接\\n\\u2022 他们将无法继续同步记忆、任务和技能\\n\\u2022 已共享的数据会保留，重新开启后仍可使用\\n\\n确定要关闭吗？',
     'sharing.disable.confirm.client':'你即将断开与团队的连接。\\n\\n断开后将会：\\n\\u2022 你将无法再接收团队共享的记忆、任务和技能\\n\\u2022 你的本地数据不受影响，会完整保留\\n\\u2022 之后可以随时重新开启共享来恢复连接\\n\\n确定要断开吗？',
     'sharing.disable.restartAlert':'共享已关闭。请重启 OpenClaw 网关使更改生效。\\n\\n执行命令：openclaw gateway stop && openclaw gateway start',
+    'sharing.switch.hubToClient':'你即将从服务端模式切换为客户端模式。\\n\\n切换后将会：\\n\\u2022 Hub 服务将在重启后关闭\\n\\u2022 所有已连接的团队成员将断开连接\\n\\u2022 Hub 上的共享数据会保留，以后可恢复使用\\n\\u2022 你将作为客户端加入指定的远程团队\\n\\n确定要切换吗？',
+    'sharing.switch.clientToHub':'你即将从客户端模式切换为服务端模式。\\n\\n切换后将会：\\n\\u2022 你将断开与当前团队的连接\\n\\u2022 重启后将启动新的 Hub 服务\\n\\u2022 你的本地数据不受影响\\n\\n确定要切换吗？',
     'admin.notEnabled.title':'团队共享尚未开启',
     'admin.notEnabled.desc':'管理面板用于管理团队成员、共享的记忆、任务和技能。使用此功能前，需要先开启团队共享。',
     'admin.notEnabled.setupHub':'配置为团队服务端',
@@ -3680,6 +3685,9 @@ function switchView(view){
 
 function onMemoryScopeChange(){
   memorySearchScope=document.getElementById('memorySearchScope')?.value||'local';
+  currentPage=1;
+  activeSession=null;activeRole='';
+  _lastMemoriesFingerprint='';
   var isHub=memorySearchScope==='hub';
   var isLocal=memorySearchScope==='local';
   var ownerSel=document.getElementById('filterOwner');
@@ -3916,7 +3924,8 @@ async function retryHubJoin(){
     var d=await r.json();
     if(d.ok){
       toast(t('sharing.retryJoin.success'),'success');
-      setTimeout(function(){location.reload();},1500);
+      _lastSidebarFingerprint='';_lastSettingsFingerprint='';_lastSharingConnStatus='';
+      setTimeout(function(){loadSharingStatus(true);},800);
     }else{
       toast(d.error||t('sharing.retryJoin.fail'),'error');
     }
@@ -4033,6 +4042,7 @@ function guideGoToHub(role){
 
 /* ─── Hub Admin Panel ─── */
 var adminDataCache={users:[],groups:[],tasks:[],skills:[],memories:[]};
+var _lastAdminFingerprint='';
 var hubTasksCache=[];
 var hubSkillsCache=[];
 var ADMIN_PAGE_SIZE=20;
@@ -4129,11 +4139,23 @@ async function loadAdminData(){
       ]);
     }
     var usersR=fetches[0],tasksR=fetches[1],skillsR=fetches[2],pendingR=fetches[3],memoriesR=fetches[4];
-    adminDataCache.users=Array.isArray(usersR.users)?usersR.users:[];
-    adminDataCache.tasks=Array.isArray(tasksR.tasks)?tasksR.tasks:[];
-    adminDataCache.skills=Array.isArray(skillsR.skills)?skillsR.skills:[];
-    adminDataCache.memories=Array.isArray(memoriesR.memories)?memoriesR.memories:[];
+    var _newUsers=Array.isArray(usersR.users)?usersR.users:[];
+    var _newTasks=Array.isArray(tasksR.tasks)?tasksR.tasks:[];
+    var _newSkills=Array.isArray(skillsR.skills)?skillsR.skills:[];
+    var _newMemories=Array.isArray(memoriesR.memories)?memoriesR.memories:[];
     var pending=isAdmin?(Array.isArray(pendingR.users)?pendingR.users:[]):[];
+    var _fp=_newUsers.length+':'+_newTasks.length+':'+_newSkills.length+':'+_newMemories.length+':'+pending.length
+      +':'+_newUsers.map(function(u){return u.id+'|'+(u.isOnline?1:0)+'|'+(u.role||'')}).join(',')
+      +':'+_newMemories.map(function(m){return m.id}).join(',')
+      +':'+_newTasks.map(function(t){return t.id+'|'+(t.status||'')}).join(',')
+      +':'+_newSkills.map(function(s){return s.id+'|'+(s.status||'')}).join(',')
+      +':'+pending.map(function(p){return p.id}).join(',');
+    if(_fp===_lastAdminFingerprint) return;
+    _lastAdminFingerprint=_fp;
+    adminDataCache.users=_newUsers;
+    adminDataCache.tasks=_newTasks;
+    adminDataCache.skills=_newSkills;
+    adminDataCache.memories=_newMemories;
     adminDataCache._pending=pending;
     var badge=document.getElementById('adminPendingBadge');
     if(badge){if(pending.length>0){badge.textContent=pending.length;badge.style.display='inline';}else{badge.style.display='none';}}
@@ -4176,11 +4198,15 @@ function updateAdminTabsVisibility(){
   if(subEl) subEl.textContent=isAdmin?t('admin.subtitle'):t('admin.subtitle.member');
 }
 
+var _lastAdminStatsFp='';
 function renderAdminStats(pendingCount){
   var el=document.getElementById('adminStats');
   if(!el) return;
   var isAdmin=!!window._isHubAdmin;
   var onlineCount=adminDataCache.users.filter(function(u){return !!u.isOnline;}).length;
+  var sfp=onlineCount+':'+adminDataCache.users.length+':'+pendingCount+':'+(adminDataCache.memories||[]).length+':'+adminDataCache.tasks.length+':'+adminDataCache.skills.length+':'+isAdmin;
+  if(sfp===_lastAdminStatsFp) return;
+  _lastAdminStatsFp=sfp;
   el.innerHTML=
     (isAdmin?'<div class="admin-stat-box"><span class="as-icon">\u{1F465}</span><div class="val">'+onlineCount+' / '+adminDataCache.users.length+'</div><div class="lbl">'+t('admin.stat.activeUsers')+'</div></div>'+
     '<div class="admin-stat-box"><span class="as-icon">\u{23F3}</span><div class="val">'+pendingCount+'</div><div class="lbl">'+t('admin.stat.pending')+'</div></div>':'')+
@@ -5591,6 +5617,14 @@ async function loadTasks(silent){
       fetch('/api/tasks?status=completed&limit=1&offset=0&'+baseP).then(r=>r.json()),
       fetch('/api/tasks?status=skipped&limit=1&offset=0&'+baseP).then(r=>r.json())
     ]);
+    if(silent){
+      var fp=JSON.stringify((data.tasks||[]).map(function(tk){return tk.id+'|'+tk.status+'|'+(tk.updatedAt||tk.startedAt)}));
+      fp+=':'+allD.total+':'+activeD.total+':'+compD.total+':'+skipD.total;
+      if(fp===_lastTasksFingerprint) return;
+      _lastTasksFingerprint=fp;
+    }else{
+      _lastTasksFingerprint='';
+    }
     document.getElementById('tasksTotalCount').textContent=formatNum(allD.total);
     document.getElementById('tasksActiveCount').textContent=formatNum(activeD.total);
     document.getElementById('tasksCompletedCount').textContent=formatNum(compD.total);
@@ -5909,6 +5943,13 @@ async function loadSkills(silent){
         const haystack=[skill.name,skill.description,skill.tags].filter(Boolean).join(' ').toLowerCase();
         return haystack.includes(q);
       });
+    }
+    if(silent){
+      var fp=JSON.stringify(localSkills.map(function(s){return s.id+'|'+s.status+'|'+s.version+'|'+(s.visibility||'')}));
+      if(fp===_lastSkillsFingerprint) return;
+      _lastSkillsFingerprint=fp;
+    }else{
+      _lastSkillsFingerprint='';
     }
 
     const renderLocalCards=function(skills){
@@ -6646,6 +6687,10 @@ async function saveHubConfig(){
     var confirmMsg=prevRole==='hub'?t('sharing.disable.confirm.hub'):t('sharing.disable.confirm.client');
     if(!(await confirmModal(confirmMsg,{danger:true}))){done();return;}
   }
+  if(prevSharingEnabled&&sharingEnabled&&prevRole&&prevRole!==_sharingRole){
+    var switchMsg=prevRole==='hub'?t('sharing.switch.hubToClient'):t('sharing.switch.clientToHub');
+    if(!(await confirmModal(switchMsg,{danger:true}))){done();return;}
+  }
 
   var ok=await doSaveConfig(cfg, saveBtn, 'hubSaved');
   if(ok){
@@ -6657,14 +6702,12 @@ async function saveHubConfig(){
     }
     _lastSidebarFingerprint='';
     _lastSettingsFingerprint='';
-    loadSharingStatus(false);
-    var enabledChanged=(!!prevSharingEnabled)!==(!!sharingEnabled);
-    var roleChanged=prevRole!==_sharingRole;
-    var needsRestart=enabledChanged||roleChanged;
+    _lastSharingConnStatus='';
+    _lastAdminFingerprint='';
+    _lastAdminStatsFp='';
     if(sharingEnabled) updateHubShareInfo();
-    if(needsRestart){
-      setTimeout(function(){showRestartOverlay(t('settings.restart.waiting'));},300);
-    }
+    loadSharingStatus(true);
+    if(_activeView==='admin') loadAdminData();
   }
 }
 
@@ -7088,16 +7131,29 @@ var _livePollBusy=false;
 async function _livePollTick(){
   if(_livePollBusy||document.hidden) return;
   _livePollBusy=true;
+  var _savedScrollY=window.scrollY;
+  var _scrollTargets=['memoryList','tasksList','skillsList','adminUsersPanel','adminMemoriesPanel','adminTasksPanel','adminSkillsPanel'];
+  var _savedScrollMap={};
+  _scrollTargets.forEach(function(id){var el=document.getElementById(id);if(el&&el.scrollTop)_savedScrollMap[id]=el.scrollTop;});
   try{
     if(sharingStatusCache&&sharingStatusCache.enabled&&_lastSharingConnStatus!=='rejected') loadSharingStatus(false);
     if(!_notifSSEConnected) pollNotifCount();
     pollAdminPending();
     if(_activeView==='admin') loadAdminData();
-    else if(_activeView==='memories'){loadStats();loadMemories(null,true);}
+    else if(_activeView==='memories'){
+      var _searchVal=(document.getElementById('searchInput')||{}).value||'';
+      if(!_searchVal.trim()){
+        if(memorySearchScope==='hub') loadHubMemories(true);
+        else{loadStats();loadMemories(null,true);}
+      }
+    }
     else if(_activeView==='tasks') loadTasks(true);
     else if(_activeView==='skills') loadSkills(true);
     else if(_activeView==='analytics') loadMetrics();
   }catch(e){}
+  await new Promise(function(r){requestAnimationFrame(r);});
+  window.scrollTo(0,_savedScrollY);
+  for(var _sid in _savedScrollMap){var _sel=document.getElementById(_sid);if(_sel)_sel.scrollTop=_savedScrollMap[_sid];}
   _livePollBusy=false;
 }
 
@@ -7317,6 +7373,7 @@ async function loadAll(){
   startLivePoller();
 }
 
+var _lastStatsFp='';
 async function loadStats(ownerFilter){
   let d;
   try{
@@ -7331,12 +7388,6 @@ async function loadStats(ownerFilter){
   const dedupB=d.dedupBreakdown||{};
   const activeCount=dedupB.active||tm;
   const inactiveCount=(dedupB.duplicate||0)+(dedupB.merged||0);
-  document.getElementById('statTotal').textContent=tm;
-  if(inactiveCount>0){
-    document.getElementById('statTotal').title=activeCount+' '+t('stat.active')+', '+inactiveCount+' '+t('stat.deduped');
-  }
-  document.getElementById('statSessions').textContent=d.totalSessions||0;
-  document.getElementById('statEmbeddings').textContent=d.totalEmbeddings||0;
   let days=0;
   if(d.timeRange&&d.timeRange.earliest!=null&&d.timeRange.latest!=null){
     let e=Number(d.timeRange.earliest), l=Number(d.timeRange.latest);
@@ -7348,6 +7399,15 @@ async function loadStats(ownerFilter){
       if(days===0) days=1;
     }
   }
+  var sfp=tm+':'+(d.totalSessions||0)+':'+(d.totalEmbeddings||0)+':'+days+':'+(d.embeddingProvider||'none')+':'+(ownerFilter||'');
+  if(sfp===_lastStatsFp) return;
+  _lastStatsFp=sfp;
+  document.getElementById('statTotal').textContent=tm;
+  if(inactiveCount>0){
+    document.getElementById('statTotal').title=activeCount+' '+t('stat.active')+', '+inactiveCount+' '+t('stat.deduped');
+  }
+  document.getElementById('statSessions').textContent=d.totalSessions||0;
+  document.getElementById('statEmbeddings').textContent=d.totalEmbeddings||0;
   document.getElementById('statTimeSpan').textContent=days;
 
   const provEl=document.getElementById('embeddingStatus');
@@ -7460,42 +7520,68 @@ async function loadMemories(page,silent){
     p.set('page',currentPage);
     const r=await fetch('/api/memories?'+p.toString());
     const d=await r.json();
+    var items=d.memories||[];
+    if(silent){
+      var fp=JSON.stringify(items.map(function(m){return m.id+'|'+m.updated_at}));
+      if(fp===_lastMemoriesFingerprint) return;
+      _lastMemoriesFingerprint=fp;
+    }else{
+      _lastMemoriesFingerprint=JSON.stringify(items.map(function(m){return m.id+'|'+m.updated_at}));
+    }
     totalPages=d.totalPages||1;
     totalCount=d.total||0;
     document.getElementById('searchMeta').textContent=totalCount+t('search.meta.total');
-    renderMemories(d.memories||[]);
+    renderMemories(items);
     renderPagination();
   }catch(e){
     if(!silent){
       list.innerHTML='';
       totalPages=1;totalCount=0;
+      _lastMemoriesFingerprint='';
       renderMemories([]);
       renderPagination();
     }
   }
 }
 
-async function loadHubMemories(){
+async function loadHubMemories(silent){
   const list=document.getElementById('memoryList');
-  list.innerHTML='<div class="spinner"></div>';
+  if(!silent) list.innerHTML='<div class="spinner"></div>';
   try{
     const r=await fetch('/api/sharing/memories/list?limit='+PAGE_SIZE);
     const d=await r.json();
     const items=d.memories||[];
+    if(silent){
+      var fp=JSON.stringify(items.map(function(m){return m.id+'|'+(m.updated_at||m.created_at)}));
+      if(fp===_lastMemoriesFingerprint) return;
+      _lastMemoriesFingerprint=fp;
+    }else{
+      _lastMemoriesFingerprint=JSON.stringify(items.map(function(m){return m.id+'|'+(m.updated_at||m.created_at)}));
+    }
+    totalPages=1;totalCount=items.length;currentPage=1;
     document.getElementById('searchMeta').textContent=items.length+t('search.meta.total');
     document.getElementById('sharingSearchMeta').textContent='';
     renderMemories(items);
     document.getElementById('pagination').innerHTML='';
   }catch(e){
-    document.getElementById('searchMeta').textContent='0'+t('search.meta.results');
-    renderMemories([]);
-    document.getElementById('pagination').innerHTML='';
+    if(!silent){
+      _lastMemoriesFingerprint='';
+      document.getElementById('searchMeta').textContent='0'+t('search.meta.results');
+      renderMemories([]);
+      document.getElementById('pagination').innerHTML='';
+    }
   }
 }
 
 async function doSearch(query){
   query=(query||'').trim();
-  if(!query){loadMemories();return;}
+  if(!query){
+    currentPage=1;
+    if(memorySearchScope==='hub') loadHubMemories();
+    else loadMemories();
+    return;
+  }
+  currentPage=1;
   var scope=document.getElementById('memorySearchScope')?.value||memorySearchScope||'local';
   var list=document.getElementById('memoryList');
   list.innerHTML='<div class="spinner"></div>';
@@ -7507,6 +7593,7 @@ async function doSearch(query){
         body:JSON.stringify({query:query,scope:scope,maxResults:20,role:activeRole||undefined})
       });
       var data=await r.json();
+      totalPages=1;totalCount=(data.results||[]).length;
       renderSharingMemorySearchResults(data,query);
     }catch(e){
       document.getElementById('searchMeta').textContent='0'+t('search.meta.results');
@@ -7521,6 +7608,7 @@ async function doSearch(query){
       var r=await fetch('/api/search?'+p.toString());
       var d=await r.json();
       var total=d.total||0;
+      totalPages=1;totalCount=total;
       var meta=[];
       if(d.vectorCount>0) meta.push(d.vectorCount+t('search.meta.semantic'));
       if(d.ftsCount>0) meta.push(d.ftsCount+t('search.meta.text'));
@@ -7715,7 +7803,8 @@ function renderPagination(){
 function goPage(p){
   if(p<1||p>totalPages||p===currentPage) return;
   currentPage=p;
-  loadMemories();
+  if(memorySearchScope==='hub') loadHubMemories();
+  else loadMemories();
   document.getElementById('memoryList').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
@@ -8596,9 +8685,12 @@ async function checkForUpdate(){
     const d=await r.json();
     if(!d.updateAvailable)return;
     const pkgSpec=d.installCommand?d.installCommand.replace(/^(?:npx\s+)?openclaw\s+plugins\s+install\s+/,''):(d.packageName+'@'+d.latest);
+    var bannerWrap=document.createElement('div');
+    bannerWrap.id='updateBannerWrap';
+    bannerWrap.style.cssText='width:100%;background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.06));border-bottom:1px solid rgba(99,102,241,.18);backdrop-filter:blur(8px);animation:slideIn .3s ease';
     var banner=document.createElement('div');
     banner.id='updateBanner';
-    banner.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 32px;max-width:1400px;margin:0 auto;width:100%;font-size:13px;font-weight:500;box-sizing:border-box;animation:slideIn .3s ease;background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.06));color:var(--pri);border-bottom:1px solid rgba(99,102,241,.18);backdrop-filter:blur(8px)';
+    banner.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 32px;max-width:1400px;margin:0 auto;width:100%;font-size:13px;font-weight:500;box-sizing:border-box;color:var(--pri)';
     var textNode=document.createElement('div');
     textNode.style.cssText='display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:13px';
     textNode.innerHTML='<span style="font-size:15px">\u2728</span> '+t('update.available')+' <span style="padding:2px 8px;border-radius:6px;background:rgba(99,102,241,.1);font-size:12px;font-weight:600">v'+esc(d.current)+'</span> <span style="opacity:.5">\u2192</span> <span style="padding:2px 8px;border-radius:6px;background:rgba(52,211,153,.12);color:var(--green);font-size:12px;font-weight:600">v'+esc(d.latest)+'</span>';
@@ -8618,20 +8710,21 @@ async function checkForUpdate(){
     btnClose.innerHTML='&times;';
     btnClose.onmouseenter=function(){this.style.opacity='1'};
     btnClose.onmouseleave=function(){this.style.opacity='.5'};
-    btnClose.onclick=function(){banner.remove()};
+    btnClose.onclick=function(){bannerWrap.remove()};
     banner.appendChild(textNode);
     banner.appendChild(statusDiv);
     banner.appendChild(spacer);
     banner.appendChild(btnClose);
+    bannerWrap.appendChild(banner);
     var tb=document.querySelector('.topbar');
-    if(tb&&tb.parentNode){tb.parentNode.insertBefore(banner,tb);}
-    else{document.body.insertBefore(banner,document.body.firstChild);}
+    if(tb&&tb.parentNode){tb.parentNode.insertBefore(bannerWrap,tb);}
+    else{document.body.insertBefore(bannerWrap,document.body.firstChild);}
   }catch(e){}
 }
 
 /* ─── Init ─── */
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target.id==='modalOverlay')closeModal()});
-document.getElementById('searchInput').addEventListener('keydown',e=>{if(e.key==='Escape'){e.target.value='';loadMemories()}});
+document.getElementById('searchInput').addEventListener('keydown',e=>{if(e.key==='Escape'){e.target.value='';currentPage=1;if(memorySearchScope==='hub')loadHubMemories();else loadMemories();}});
 applyI18n();
 checkAuth();
 </script>
