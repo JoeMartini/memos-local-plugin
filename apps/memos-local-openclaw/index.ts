@@ -11,6 +11,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { buildContext } from "./src/config";
 import type { HostModelsConfig } from "./src/openclaw-api";
+import { ensureSqliteBinding } from "./src/storage/ensure-binding";
 import { SqliteStore } from "./src/storage/sqlite";
 import { Embedder } from "./src/embedding";
 import { IngestWorker } from "./src/ingest/worker";
@@ -195,6 +196,8 @@ const memosLocalPlugin = {
       warn: (msg: string) => api.logger.warn(msg),
       error: (msg: string) => api.logger.warn(`[error] ${msg}`),
     }, hostModels);
+
+    ensureSqliteBinding(ctx.log);
 
     const store = new SqliteStore(ctx.config.storage!.dbPath!, ctx.log);
     const embedder = new Embedder(ctx.config.embedding, ctx.log, ctx.openclawAPI);
