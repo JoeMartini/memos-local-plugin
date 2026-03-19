@@ -98,11 +98,12 @@ describe("SqliteStore", () => {
     expect(Array.isArray(results)).toBe(true);
   });
 
-  it("should handle FTS query containing date with hyphens", () => {
-    store.insertChunk(makeChunk({ id: "c-date", content: "Release date is 2026-03-14", summary: "release note" }));
+  it("should handle FTS query containing date separators", () => {
+    store.insertChunk(makeChunk({ id: "c1", content: "release date 2026-03-14", summary: "release note" }));
 
     const results = store.ftsSearch("2026-03-14", 10);
     expect(Array.isArray(results)).toBe(true);
+    expect(results.length).toBeGreaterThanOrEqual(1);
   });
 
   it("should get neighbor chunks", () => {
