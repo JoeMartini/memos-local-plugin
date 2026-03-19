@@ -992,7 +992,8 @@ export class ViewerServer {
 
   private getOpenClawConfigPath(): string {
     const home = process.env.HOME || process.env.USERPROFILE || "";
-    return path.join(home, ".openclaw", "openclaw.json");
+    const ocHome = process.env.OPENCLAW_STATE_DIR || path.join(home, ".openclaw");
+    return path.join(ocHome, "openclaw.json");
   }
 
   private serveConfig(res: http.ServerResponse): void {
@@ -1438,7 +1439,29 @@ export class ViewerServer {
 
   private getOpenClawHome(): string {
     const home = process.env.HOME || process.env.USERPROFILE || "";
-    return path.join(home, ".openclaw");
+    return process.env.OPENCLAW_STATE_DIR || path.join(home, ".openclaw");
+  }
+
+  private handleCleanupPolluted(res: http.ServerResponse): void {
+    try {
+      const polluted = this.store.findPollutedUserChunks();
+      let deleted = 0;
+      for (const { id, reason } of polluted) {
+        if (this.store.deleteChunk(id)) {
+          deleted++;
+          this.log.info(`Cleaned polluted chunk ${id}: ${reason}`);
+        }
+      }
+      const fixed = this.store.fixMixedUserChunks();
+      this.log.info(`Cleanup: removed ${deleted} polluted, fixed ${fixed} mixed chunks`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ deleted, fixed, total: polluted.length }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.log.error(`handleCleanupPolluted error: ${msg}`);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: msg }));
+    }
   }
 
   private handleCleanupPolluted(res: http.ServerResponse): void {

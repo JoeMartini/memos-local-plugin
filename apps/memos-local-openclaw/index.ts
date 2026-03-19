@@ -9,6 +9,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { Type } from "@sinclair/typebox";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import { buildContext } from "./src/config";
 import { ensureSqliteBinding } from "./src/storage/ensure-binding";
 import { SqliteStore } from "./src/storage/sqlite";
@@ -77,13 +78,20 @@ const memosLocalPlugin = {
 
   register(api: OpenClawPluginApi) {
     // ─── Ensure better-sqlite3 native module is available ───
-    const pluginDir = path.dirname(new URL(import.meta.url).pathname);
+    const pluginDir = path.dirname(fileURLToPath(import.meta.url));
+
+    function normalizeFsPath(p: string): string {
+      return path.resolve(p).replace(/\\/g, "/").toLowerCase();
+    }
+
     let sqliteReady = false;
 
     function trySqliteLoad(): boolean {
       try {
         const resolved = require.resolve("better-sqlite3", { paths: [pluginDir] });
-        if (!resolved.startsWith(pluginDir)) {
+        const resolvedNorm = normalizeFsPath(resolved);
+        const pluginNorm = normalizeFsPath(pluginDir);
+        if (!resolvedNorm.startsWith(pluginNorm + "/") && resolvedNorm !== pluginNorm) {
           api.logger.warn(`memos-local: better-sqlite3 resolved outside plugin dir: ${resolved}`);
           return false;
         }
@@ -185,6 +193,7 @@ const memosLocalPlugin = {
     const workspaceDir = api.resolvePath("~/.openclaw/workspace");
     const skillCtx = { ...ctx, workspaceDir };
     const skillEvolver = new SkillEvolver(store, engine, skillCtx);
+    skillEvolver.onSkillEvolved = (name, type) => telemetry.trackSkillEvolved(name, type);
     const skillInstaller = new SkillInstaller(store, skillCtx);
 
     let pluginVersion = "0.0.0";
@@ -272,6 +281,7 @@ const memosLocalPlugin = {
           return result;
         } catch (e) {
           ok = false;
+          telemetry.trackError(toolName, (e as Error)?.name ?? "unknown");
           throw e;
         } finally {
           const dur = performance.now() - t0;
@@ -735,6 +745,7 @@ const memosLocalPlugin = {
         parameters: Type.Object({}),
         execute: trackTool("memory_viewer", async () => {
           ctx.log.debug(`memory_viewer called`);
+          telemetry.trackViewerOpened();
           const url = `http://127.0.0.1:${viewerPort}`;
           return {
             content: [

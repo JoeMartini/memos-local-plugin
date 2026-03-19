@@ -14,8 +14,6 @@ Thumbs.db
 # Generated / non-essential
 package-lock.json
 .installed-version
-www/
-docs/
 ppt/
 
 # Prebuilt native binaries (included in npm package via `files`, not in git)
