@@ -1219,7 +1219,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <div class="stat-card pri"><div class="stat-value" id="statTotal">-</div><div class="stat-label" data-i18n="stat.memories">Memories</div></div>
         <div class="stat-card green"><div class="stat-value" id="statSessions">-</div><div class="stat-label" data-i18n="stat.sessions">Sessions</div></div>
         <div class="stat-card amber"><div class="stat-value" id="statEmbeddings">-</div><div class="stat-label" data-i18n="stat.embeddings">Embeddings</div></div>
-        <div class="stat-card rose"><div class="stat-value" id="statTimeSpan">-</div><div class="stat-label" data-i18n="stat.days">Days</div></div>
+        <div class="stat-card rose"><div class="stat-value" id="statAgents">-</div><div class="stat-label" data-i18n="stat.agents">Agents</div></div>
       </div>
       <div id="sidebarSharingSection" style="display:none">
         <div class="sharing-sidebar-card">
@@ -2126,7 +2126,7 @@ const I18N={
     'stat.memories':'Memories',
     'stat.sessions':'Sessions',
     'stat.embeddings':'Embeddings',
-    'stat.days':'Days',
+    'stat.agents':'Agents',
     'stat.active':'active',
     'stat.deduped':'deduped',
     'sidebar.sessions':'Sessions',
@@ -2835,7 +2835,7 @@ const I18N={
     'stat.memories':'记忆',
     'stat.sessions':'会话',
     'stat.embeddings':'嵌入',
-    'stat.days':'天数',
+    'stat.agents':'智能体',
     'stat.active':'活跃',
     'stat.deduped':'已去重',
     'sidebar.sessions':'会话列表',
@@ -7392,18 +7392,8 @@ async function loadStats(ownerFilter){
   const dedupB=d.dedupBreakdown||{};
   const activeCount=dedupB.active||tm;
   const inactiveCount=(dedupB.duplicate||0)+(dedupB.merged||0);
-  let days=0;
-  if(d.timeRange&&d.timeRange.earliest!=null&&d.timeRange.latest!=null){
-    let e=Number(d.timeRange.earliest), l=Number(d.timeRange.latest);
-    if(Number.isFinite(e)&&Number.isFinite(l)){
-      if(e<1e12) e*=1000;
-      if(l<1e12) l*=1000;
-      days=Math.round((l-e)/86400000);
-      days=Math.max(0,Math.min(36500,days));
-      if(days===0) days=1;
-    }
-  }
-  var sfp=tm+':'+(d.totalSessions||0)+':'+(d.totalEmbeddings||0)+':'+days+':'+(d.embeddingProvider||'none')+':'+(ownerFilter||'');
+  var agentCount=(d.owners&&d.owners.length)?d.owners.length:1;
+  var sfp=tm+':'+(d.totalSessions||0)+':'+(d.totalEmbeddings||0)+':'+agentCount+':'+(d.embeddingProvider||'none')+':'+(ownerFilter||'');
   if(sfp===_lastStatsFp) return;
   _lastStatsFp=sfp;
   document.getElementById('statTotal').textContent=tm;
@@ -7412,7 +7402,7 @@ async function loadStats(ownerFilter){
   }
   document.getElementById('statSessions').textContent=d.totalSessions||0;
   document.getElementById('statEmbeddings').textContent=d.totalEmbeddings||0;
-  document.getElementById('statTimeSpan').textContent=days;
+  document.getElementById('statAgents').textContent=agentCount;
 
   const provEl=document.getElementById('embeddingStatus');
   if(d.embeddingProvider && d.embeddingProvider!=='none'){
