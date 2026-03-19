@@ -115,22 +115,22 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
           : undefined;
       })(),
     } : undefined,
-    sharing: {
-      enabled: cfg.sharing?.enabled ?? false,
-      role: cfg.sharing?.role ?? "client",
-      hub: {
+    sharing: (() => {
+      const role = cfg.sharing?.role ?? "client";
+      const enabled = cfg.sharing?.enabled ?? false;
+      const hub = role === "hub" ? {
         port: cfg.sharing?.hub?.port ?? 18800,
         teamName: cfg.sharing?.hub?.teamName ?? "",
         teamToken: cfg.sharing?.hub?.teamToken ?? "",
-      },
-      client: {
+      } : { port: 18800, teamName: "", teamToken: "" };
+      const client = role === "client" ? {
         hubAddress: cfg.sharing?.client?.hubAddress ?? "",
         userToken: cfg.sharing?.client?.userToken ?? "",
         teamToken: cfg.sharing?.client?.teamToken ?? "",
         pendingUserId: cfg.sharing?.client?.pendingUserId ?? "",
-      },
-      capabilities: sharingCapabilities,
-    },
+      } : { hubAddress: "", userToken: "", teamToken: "", pendingUserId: "" };
+      return { enabled, role, hub, client, capabilities: sharingCapabilities };
+    })(),
   };
 }
 

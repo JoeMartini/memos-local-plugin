@@ -74,10 +74,46 @@ export class RecallEngine {
       score: 1 / (i + 1),
     }));
 
+    // Step 1c: Hub memories search (when sharing is enabled and hub_memories exist)
+    let hubMemFtsRanked: Array<{ id: string; score: number }> = [];
+    let hubMemVecRanked: Array<{ id: string; score: number }> = [];
+    if (query && this.ctx.config.sharing?.enabled) {
+      try {
+        const hubFtsHits = this.store.searchHubMemories(query, { maxResults: candidatePool });
+        hubMemFtsRanked = hubFtsHits.map(({ hit }, i) => ({
+          id: `hubmem:${hit.id}`, score: 1 / (i + 1),
+        }));
+      } catch { /* hub_memories table may not exist */ }
+      try {
+        const hubMemEmbs = this.store.getVisibleHubMemoryEmbeddings("");
+        if (hubMemEmbs.length > 0) {
+          const qv = await this.embedder.embedQuery(query).catch(() => null);
+          if (qv) {
+            const scored: Array<{ id: string; score: number }> = [];
+            for (const e of hubMemEmbs) {
+              let dot = 0, nA = 0, nB = 0;
+              for (let i = 0; i < qv.length && i < e.vector.length; i++) {
+                dot += qv[i] * e.vector[i]; nA += qv[i] * qv[i]; nB += e.vector[i] * e.vector[i];
+              }
+              const sim = nA > 0 && nB > 0 ? dot / (Math.sqrt(nA) * Math.sqrt(nB)) : 0;
+              if (sim > 0.3) {
+                scored.push({ id: `hubmem:${e.memoryId}`, score: sim });
+              }
+            }
+            scored.sort((a, b) => b.score - a.score);
+            hubMemVecRanked = scored.slice(0, candidatePool);
+          }
+        }
+      } catch { /* best-effort */ }
+    }
+
     // Step 2: RRF fusion
     const ftsRanked = ftsCandidates.map((c) => ({ id: c.chunkId, score: c.score }));
     const vecRanked = vecCandidates.map((c) => ({ id: c.chunkId, score: c.score }));
-    const rrfScores = rrfFuse([ftsRanked, vecRanked, patternRanked], recallCfg.rrfK);
+    const allRankedLists = [ftsRanked, vecRanked, patternRanked];
+    if (hubMemFtsRanked.length > 0) allRankedLists.push(hubMemFtsRanked);
+    if (hubMemVecRanked.length > 0) allRankedLists.push(hubMemVecRanked);
+    const rrfScores = rrfFuse(allRankedLists, recallCfg.rrfK);
 
     if (rrfScores.size === 0) {
       this.recordQuery(query, maxResults, minScore, 0);
@@ -101,6 +137,11 @@ export class RecallEngine {
 
     // Step 4: Time decay
     const withTs = mmrResults.map((r) => {
+      if (r.id.startsWith("hubmem:")) {
+        const memId = r.id.slice(7);
+        const mem = this.store.getHubMemoryById(memId);
+        return { ...r, createdAt: mem?.createdAt ?? 0 };
+      }
       const chunk = this.store.getChunk(r.id);
       return { ...r, createdAt: chunk?.createdAt ?? 0 };
     });
@@ -128,6 +169,34 @@ export class RecallEngine {
     const hits: SearchHit[] = [];
     for (const candidate of normalized) {
       if (hits.length >= maxResults) break;
+
+      if (candidate.id.startsWith("hubmem:")) {
+        const memId = candidate.id.slice(7);
+        const mem = this.store.getHubMemoryById(memId);
+        if (!mem) continue;
+        if (roleFilter && mem.role !== roleFilter) continue;
+        hits.push({
+          summary: mem.summary || mem.content.slice(0, 200),
+          original_excerpt: mem.content,
+          ref: {
+            sessionKey: `hub-shared:${mem.sourceUserId}`,
+            chunkId: mem.id,
+            turnId: "",
+            seq: 0,
+          },
+          score: Math.round(candidate.score * 1000) / 1000,
+          taskId: null,
+          skillId: null,
+          owner: `hub-user:${mem.sourceUserId}`,
+          source: {
+            ts: mem.createdAt,
+            role: (mem.role || "assistant") as any,
+            sessionKey: `hub-shared:${mem.sourceUserId}`,
+          },
+        });
+        continue;
+      }
+
       const chunk = this.store.getChunk(candidate.id);
       if (!chunk) continue;
       if (roleFilter && chunk.role !== roleFilter) continue;

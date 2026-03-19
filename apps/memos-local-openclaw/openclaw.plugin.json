@@ -3,7 +3,7 @@
   "name": "MemOS Local Memory",
   "description": "Full-write local conversation memory with hybrid search (RRF + MMR + recency). Provides memory_search, memory_get, task_summary, memory_timeline, memory_viewer for layered retrieval.",
   "kind": "memory",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "skills": [
     "skill/memos-memory-guide"
   ],

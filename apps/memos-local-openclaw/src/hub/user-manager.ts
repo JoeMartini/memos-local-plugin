@@ -1,10 +1,10 @@
 import { randomUUID, createHash } from "crypto";
-import { issueUserToken } from "./auth";
+import { issueUserToken, verifyUserToken } from "./auth";
 import type { Logger } from "../types";
 import type { UserInfo } from "../sharing/types";
 import type { SqliteStore } from "../storage/sqlite";
 
-type ManagedHubUser = UserInfo & { tokenHash: string; createdAt: number; approvedAt: number | null };
+type ManagedHubUser = UserInfo & { tokenHash: string; createdAt: number; approvedAt: number | null; lastIp: string; lastActiveAt: number | null };
 
 export class HubUserManager {
   constructor(private store: SqliteStore, private log: Logger) {}
@@ -20,6 +20,8 @@ export class HubUserManager {
       tokenHash: "",
       createdAt: Date.now(),
       approvedAt: null,
+      lastIp: "",
+      lastActiveAt: null,
     };
     this.store.upsertHubUser(user);
     return user;
@@ -46,7 +48,7 @@ export class HubUserManager {
     if (bootstrapUserId) {
       const bootstrapUser = this.store.getHubUser(bootstrapUserId);
       if (bootstrapUser && bootstrapUser.role === "admin" && bootstrapUser.status === "active") {
-        if (bootstrapToken && bootstrapUser.tokenHash === createHash("sha256").update(bootstrapToken).digest("hex")) {
+        if (bootstrapToken && bootstrapUser.tokenHash === createHash("sha256").update(bootstrapToken).digest("hex") && verifyUserToken(bootstrapToken, secret)) {
           return { user: bootstrapUser, token: bootstrapToken };
         }
         const refreshedToken = issueUserToken(
@@ -88,6 +90,8 @@ export class HubUserManager {
       tokenHash: "",
       createdAt: Date.now(),
       approvedAt: Date.now(),
+      lastIp: "",
+      lastActiveAt: null,
     };
     const token = issueUserToken(
       { userId: user.id, username: user.username, role: user.role, status: user.status },
@@ -99,6 +103,19 @@ export class HubUserManager {
     return { user, token };
   }
 
+  isUsernameTaken(username: string, excludeUserId?: string): boolean {
+    const users = this.store.listHubUsers();
+    return users.some(u => u.username === username && u.id !== excludeUserId);
+  }
+
+  updateUsername(userId: string, newUsername: string): ManagedHubUser | null {
+    const user = this.store.getHubUser(userId);
+    if (!user) return null;
+    const updated = { ...user, username: newUsername };
+    this.store.upsertHubUser(updated);
+    return updated;
+  }
+
   rejectUser(userId: string): ManagedHubUser | null {
     const user = this.store.getHubUser(userId);
     if (!user) return null;
@@ -106,6 +123,19 @@ export class HubUserManager {
       ...user,
       status: "rejected" as const,
       approvedAt: Date.now(),
+    };
+    this.store.upsertHubUser(updated);
+    return updated;
+  }
+
+  resetToPending(userId: string): ManagedHubUser | null {
+    const user = this.store.getHubUser(userId);
+    if (!user) return null;
+    const updated = {
+      ...user,
+      status: "pending" as const,
+      tokenHash: "",
+      approvedAt: null,
     };
     this.store.upsertHubUser(updated);
     return updated;

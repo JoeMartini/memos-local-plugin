@@ -23,7 +23,7 @@ import { ViewerServer } from "./src/viewer/server";
 import { HubServer } from "./src/hub/server";
 import { hubGetMemoryDetail, hubRequestJson, hubSearchMemories, hubSearchSkills, resolveHubClient } from "./src/client/hub";
 import { getHubStatus, connectToHub } from "./src/client/connector";
-import { fetchHubSkillBundle, publishSkillBundleToHub, restoreSkillBundleFromHub } from "./src/client/skill-sync";
+import { fetchHubSkillBundle, publishSkillBundleToHub, restoreSkillBundleFromHub, unpublishSkillBundleFromHub } from "./src/client/skill-sync";
 import { SkillEvolver } from "./src/skill/evolver";
 import { SkillInstaller } from "./src/skill/installer";
 import { Summarizer } from "./src/ingest/providers";
@@ -326,6 +326,89 @@ const memosLocalPlugin = {
         }
       };
 
+    const getCurrentOwner = () => `agent:${currentAgentId}`;
+    const resolveMemorySearchScope = (scope?: string): "local" | "group" | "all" =>
+      scope === "group" || scope === "all" ? scope : "local";
+    const resolveMemoryShareTarget = (target?: string): "agents" | "hub" | "both" =>
+      target === "hub" || target === "both" ? target : "agents";
+    const resolveMemoryUnshareTarget = (target?: string): "agents" | "hub" | "all" =>
+      target === "agents" || target === "hub" ? target : "all";
+    const resolveSkillPublishTarget = (target?: string, scope?: string): "agents" | "hub" => {
+      if (target === "hub") return "hub";
+      if (target === "agents") return "agents";
+      return scope === "public" || scope === "group" ? "hub" : "agents";
+    };
+    const resolveSkillHubVisibility = (visibility?: string, scope?: string): "public" | "group" =>
+      visibility === "group" || scope === "group" ? "group" : "public";
+    const resolveSkillUnpublishTarget = (target?: string): "agents" | "hub" | "all" =>
+      target === "hub" || target === "all" ? target : "agents";
+
+    const shareMemoryToHub = async (
+      chunkId: string,
+      input?: { visibility?: "public" | "group"; groupId?: string; hubAddress?: string; userToken?: string },
+    ): Promise<{ memoryId: string; visibility: "public" | "group"; groupId: string | null }> => {
+      const chunk = store.getChunk(chunkId);
+      if (!chunk) {
+        throw new Error(`Memory not found: ${chunkId}`);
+      }
+
+      const visibility = input?.visibility === "group" ? "group" : "public";
+      const groupId = visibility === "group" ? (input?.groupId ?? null) : null;
+      const hubClient = await resolveHubClient(store, ctx, { hubAddress: input?.hubAddress, userToken: input?.userToken });
+      const response = await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/memories/share", {
+        method: "POST",
+        body: JSON.stringify({
+          memory: {
+            sourceChunkId: chunk.id,
+            role: chunk.role,
+            content: chunk.content,
+            summary: chunk.summary,
+            kind: chunk.kind,
+            groupId,
+            visibility,
+          },
+        }),
+      }) as { memoryId?: string; visibility?: "public" | "group" };
+
+      const now = Date.now();
+      const existing = store.getHubMemoryBySource(hubClient.userId, chunk.id);
+      store.upsertHubMemory({
+        id: response?.memoryId ?? existing?.id ?? `${chunk.id}-hub`,
+        sourceChunkId: chunk.id,
+        sourceUserId: hubClient.userId,
+        role: chunk.role,
+        content: chunk.content,
+        summary: chunk.summary ?? "",
+        kind: chunk.kind,
+        groupId,
+        visibility,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
+
+      return {
+        memoryId: response?.memoryId ?? existing?.id ?? `${chunk.id}-hub`,
+        visibility,
+        groupId,
+      };
+    };
+
+    const unshareMemoryFromHub = async (
+      chunkId: string,
+      input?: { hubAddress?: string; userToken?: string },
+    ): Promise<void> => {
+      const chunk = store.getChunk(chunkId);
+      if (!chunk) {
+        throw new Error(`Memory not found: ${chunkId}`);
+      }
+      const hubClient = await resolveHubClient(store, ctx, { hubAddress: input?.hubAddress, userToken: input?.userToken });
+      await hubRequestJson(hubClient.hubUrl, hubClient.userToken, "/api/v1/hub/memories/unshare", {
+        method: "POST",
+        body: JSON.stringify({ sourceChunkId: chunk.id }),
+      });
+      store.deleteHubMemoryBySource(hubClient.userId, chunk.id);
+    };
+
     // ─── Tool: memory_search ───
 
     api.registerTool(
@@ -334,24 +417,43 @@ const memosLocalPlugin = {
         label: "Memory Search",
         description:
           "Search long-term conversation memory for past conversations, user preferences, decisions, and experiences. " +
-          "Relevant memories are automatically injected at the start of each turn, but call this tool when you need " +
-          "to search with a different query or the auto-recalled context is insufficient. " +
-          "Pass only a short natural-language query (2-5 key words).",
+          "Use scope='local' for this agent plus local shared memories, or scope='group'/'all' to include Hub-shared memories. " +
+          "Supports optional maxResults, minScore, and role filtering when you need tighter control.",
         parameters: Type.Object({
           query: Type.String({ description: "Short natural language search query (2-5 key words)" }),
+          scope: Type.Optional(Type.String({ description: "Search scope: 'local' (default), 'group', or 'all'. Use group/all to include Hub-shared memories." })),
+          maxResults: Type.Optional(Type.Number({ description: "Maximum results to return. Default 10, max 20." })),
+          minScore: Type.Optional(Type.Number({ description: "Minimum score threshold for local recall. Default 0.45, floor 0.35." })),
+          role: Type.Optional(Type.String({ description: "Optional local role filter: 'user', 'assistant', 'tool', or 'system'." })),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for group/all search." })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for group/all search." })),
         }),
         execute: trackTool("memory_search", async (_toolCallId: any, params: any) => {
-          const { query } = params as { query: string };
-          const role = undefined;
-          const minScore = undefined;
-          const searchScope = "local";
-          const searchLimit = 10;
-          const hubAddress: string | undefined = undefined;
-          const userToken: string | undefined = undefined;
+          const {
+            query,
+            scope: rawScope,
+            maxResults,
+            minScore: rawMinScore,
+            role: rawRole,
+            hubAddress,
+            userToken,
+          } = params as {
+            query: string;
+            scope?: string;
+            maxResults?: number;
+            minScore?: number;
+            role?: string;
+            hubAddress?: string;
+            userToken?: string;
+          };
+          const role = rawRole === "user" || rawRole === "assistant" || rawRole === "tool" || rawRole === "system" ? rawRole : undefined;
+          const minScore = typeof rawMinScore === "number" ? Math.max(0.35, Math.min(1, rawMinScore)) : undefined;
+          const searchScope = resolveMemorySearchScope(rawScope);
+          const searchLimit = typeof maxResults === "number" ? Math.max(1, Math.min(20, Math.round(maxResults))) : 10;
 
           const agentId = currentAgentId;
-          const ownerFilter = [`agent:${agentId}`, "public"];
-          const effectiveMaxResults = 10;
+          const ownerFilter = [getCurrentOwner(), "public"];
+          const effectiveMaxResults = searchLimit;
           ctx.log.debug(`memory_search query="${query}" maxResults=${effectiveMaxResults} minScore=${minScore ?? 0.45} role=${role ?? "all"} owner=agent:${agentId}`);
           const result = await engine.search({ query, maxResults: effectiveMaxResults, minScore, role, ownerFilter });
           ctx.log.debug(`memory_search raw candidates: ${result.hits.length}`);
@@ -364,7 +466,7 @@ const memosLocalPlugin = {
             original_excerpt: (h.original_excerpt ?? "").slice(0, 200),
           }));
 
-          if (result.hits.length === 0) {
+          if (result.hits.length === 0 && searchScope === "local") {
             return {
               content: [{ type: "text", text: result.meta.note ?? "No relevant memories found." }],
               details: { candidates: [], meta: result.meta },
@@ -388,11 +490,13 @@ const memosLocalPlugin = {
               const indexSet = new Set(filterResult.relevant);
               filteredHits = result.hits.filter((_, i) => indexSet.has(i + 1));
               ctx.log.debug(`memory_search LLM filter: ${result.hits.length} → ${filteredHits.length} hits, sufficient=${sufficient}`);
-            } else {
+            } else if (searchScope === "local") {
               return {
                 content: [{ type: "text", text: "No relevant memories found for this query." }],
                 details: { candidates: rawCandidates, filtered: [], meta: result.meta },
               };
+            } else {
+              filteredHits = [];
             }
           }
 
@@ -868,7 +972,9 @@ ${detail.content}`,
       {
         name: "network_team_info",
         label: "Network Team Info",
-        description: "Show current Hub connection status, signed-in user, role, and group memberships.",
+        description:
+          "Show current Hub connection status, signed-in user, role, and group memberships. " +
+          "Use this as a preflight check before any Hub share/unshare or Hub pull operation.",
         parameters: Type.Object({}),
         execute: trackTool("network_team_info", async () => {
           const status = await getHubStatus(store, ctx.config);
@@ -1044,12 +1150,13 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
     api.registerTool(
       {
         name: "memory_write_public",
-        label: "Write Public Memory",
+        label: "Write Local Shared Memory",
         description:
-          "Write a piece of information to public memory. Public memories are visible to all agents during memory_search. " +
-          "Use this for shared knowledge, team decisions, or cross-agent coordination information.",
+          "Write a piece of information to local shared memory for all agents in this OpenClaw workspace. " +
+          "Use this when you are creating a new shared note from scratch. This does not publish to Hub. " +
+          "If you already have a memory chunk and want to expose it, use memory_share instead.",
         parameters: Type.Object({
-          content: Type.String({ description: "The content to write to public memory" }),
+          content: Type.String({ description: "The content to write to local shared memory" }),
           summary: Type.Optional(Type.String({ description: "Optional short summary of the content" })),
         }),
         execute: trackTool("memory_write_public", async (_toolCallId: any, params: any) => {
@@ -1094,12 +1201,170 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
           }
 
           return {
-            content: [{ type: "text", text: `Public memory written successfully (id: ${chunkId}).` }],
+            content: [{ type: "text", text: `Memory shared to local agents successfully (id: ${chunkId}).` }],
             details: { chunkId, owner: "public" },
           };
         }),
       },
       { name: "memory_write_public" },
+    );
+
+    api.registerTool(
+      {
+        name: "memory_share",
+        label: "Share Memory",
+        description:
+          "Share an existing memory either with local OpenClaw agents, to the Hub team, or to both targets. " +
+          "Use this only for an existing chunkId. Use target='agents' for local multi-agent sharing, target='hub' for team sharing, or target='both' for both. " +
+          "If you need to create a brand new shared memory instead of exposing an existing one, use memory_write_public.",
+        parameters: Type.Object({
+          chunkId: Type.String({ description: "Existing local memory chunk ID to share" }),
+          target: Type.Optional(Type.String({ description: "Share target: 'agents' (default), 'hub', or 'both'" })),
+          visibility: Type.Optional(Type.String({ description: "Hub visibility when target includes hub: 'public' (default) or 'group'" })),
+          groupId: Type.Optional(Type.String({ description: "Optional Hub group ID when visibility='group'" })),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override" })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override" })),
+        }),
+        execute: trackTool("memory_share", async (_toolCallId: any, params: any) => {
+          const {
+            chunkId,
+            target: rawTarget,
+            visibility: rawVisibility,
+            groupId,
+            hubAddress,
+            userToken,
+          } = params as {
+            chunkId: string;
+            target?: string;
+            visibility?: string;
+            groupId?: string;
+            hubAddress?: string;
+            userToken?: string;
+          };
+
+          const chunk = store.getChunk(chunkId);
+          if (!chunk) {
+            return { content: [{ type: "text", text: `Memory not found: ${chunkId}` }], details: { error: "not_found", chunkId } };
+          }
+
+          const target = resolveMemoryShareTarget(rawTarget);
+          const visibility = rawVisibility === "group" ? "group" : "public";
+          const details: Record<string, unknown> = { chunkId, target };
+          const messages: string[] = [];
+
+          if (target === "agents" || target === "both") {
+            const local = store.markMemorySharedLocally(chunkId);
+            if (!local.ok) {
+              return { content: [{ type: "text", text: `Failed to share memory ${chunkId} to local agents.` }], details: { error: local.reason ?? "local_share_failed", chunkId, target } };
+            }
+            details.local = {
+              shared: true,
+              owner: local.owner,
+              originalOwner: local.originalOwner ?? null,
+            };
+            messages.push("shared to local agents");
+          }
+
+          if (target === "hub" || target === "both") {
+            const hub = await shareMemoryToHub(chunkId, { visibility, groupId, hubAddress, userToken });
+            details.hub = {
+              shared: true,
+              memoryId: hub.memoryId,
+              visibility: hub.visibility,
+              groupId: hub.groupId,
+            };
+            messages.push(`shared to Hub (${hub.visibility})`);
+          }
+
+          return {
+            content: [{ type: "text", text: `Memory "${chunk.summary || chunk.id}" ${messages.join(" and ")}.` }],
+            details,
+          };
+        }),
+      },
+      { name: "memory_share" },
+    );
+
+    api.registerTool(
+      {
+        name: "memory_unshare",
+        label: "Unshare Memory",
+        description:
+          "Remove sharing from an existing memory. Use target='agents' to stop local multi-agent sharing, target='hub' to remove it from Hub, or target='all' (default) to remove both. " +
+          "privateOwner is only needed for older public memories that were never tracked with an original owner.",
+        parameters: Type.Object({
+          chunkId: Type.String({ description: "Existing local memory chunk ID to unshare" }),
+          target: Type.Optional(Type.String({ description: "Unshare target: 'agents', 'hub', or 'all' (default)" })),
+          privateOwner: Type.Optional(Type.String({ description: "Optional owner to restore when converting a public memory back to private and no original owner was tracked" })),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override" })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override" })),
+        }),
+        execute: trackTool("memory_unshare", async (_toolCallId: any, params: any) => {
+          const {
+            chunkId,
+            target: rawTarget,
+            privateOwner,
+            hubAddress,
+            userToken,
+          } = params as {
+            chunkId: string;
+            target?: string;
+            privateOwner?: string;
+            hubAddress?: string;
+            userToken?: string;
+          };
+
+          const chunk = store.getChunk(chunkId);
+          if (!chunk) {
+            return { content: [{ type: "text", text: `Memory not found: ${chunkId}` }], details: { error: "not_found", chunkId } };
+          }
+
+          const target = resolveMemoryUnshareTarget(rawTarget);
+          const details: Record<string, unknown> = { chunkId, target };
+          const messages: string[] = [];
+
+          if (target === "agents" || target === "all") {
+            const local = store.unmarkMemorySharedLocally(chunkId, privateOwner);
+            if (!local.ok) {
+              return {
+                content: [{
+                  type: "text",
+                  text: local.reason === "original_owner_missing"
+                    ? `Cannot restore memory "${chunk.summary || chunk.id}" to a private owner automatically. Pass privateOwner to unshare it locally.`
+                    : `Failed to stop local sharing for memory ${chunkId}.`,
+                }],
+                details: { error: local.reason ?? "local_unshare_failed", chunkId, target },
+              };
+            }
+            details.local = {
+              shared: false,
+              owner: local.owner,
+            };
+            messages.push("removed from local agent sharing");
+          }
+
+          if (target === "hub" || target === "all") {
+            try {
+              await unshareMemoryFromHub(chunkId, { hubAddress, userToken });
+              details.hub = { shared: false };
+              messages.push("removed from Hub");
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              if (target === "all" && msg.includes("hub client connection is not configured")) {
+                details.hub = { shared: false, skipped: true, reason: "hub_not_configured" };
+              } else {
+                throw err;
+              }
+            }
+          }
+
+          return {
+            content: [{ type: "text", text: `Memory "${chunk.summary || chunk.id}" ${messages.join(" and ")}.` }],
+            details,
+          };
+        }),
+      },
+      { name: "memory_unshare" },
     );
 
     // ─── Tool: skill_search ───
@@ -1109,16 +1374,16 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
         name: "skill_search",
         label: "Skill Search",
         description:
-          "Search available skills by natural language. Searches local skills by default, or local + Hub skills when scope=group/all. " +
-          "Use when you need a capability or guide and don't have a matching skill at hand.",
+          "Search available skills by natural language. Use scope='mix' (default) for this agent plus local shared skills, 'self' for this agent only, 'public' for local shared skills only, or 'group'/'all' to include Hub skills as well. " +
+          "Use this when you need a capability or guide and don't have a matching skill at hand.",
         parameters: Type.Object({
           query: Type.String({ description: "Natural language description of the needed skill" }),
-          scope: Type.Optional(Type.String({ description: "Search scope: 'mix'/'self'/'public' for local search, or 'group'/'all' for local + Hub search" })),
+          scope: Type.Optional(Type.String({ description: "Search scope: 'mix' (default), 'self', 'public', 'group', or 'all'." })),
         }),
         execute: trackTool("skill_search", async (_toolCallId: any, params: any, context?: any) => {
           const { query: skillQuery, scope: rawScope } = params as { query: string; scope?: string };
           const scope = (rawScope === "self" || rawScope === "public") ? rawScope : "mix";
-          const currentOwner = `agent:${currentAgentId}`;
+          const currentOwner = getCurrentOwner();
 
           if (rawScope === "group" || rawScope === "all") {
             const [localHits, hub] = await Promise.all([
@@ -1134,7 +1399,7 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
             }
 
             const localText = localHits.length > 0
-              ? localHits.map((h, i) => `${i + 1}. [${h.name}] ${h.description.slice(0, 150)}${h.visibility === "public" ? " (public)" : ""}`).join("\n")
+              ? localHits.map((h, i) => `${i + 1}. [${h.name}] ${h.description.slice(0, 150)}${h.visibility === "public" ? " (shared to local agents)" : ""}`).join("\n")
               : "(none)";
             const hubText = hub.hits.length > 0
               ? hub.hits.map((h, i) => `${i + 1}. [${h.name}] ${h.description.slice(0, 150)} (${h.visibility}${h.groupName ? `:${h.groupName}` : ""}, owner=${h.ownerName})`).join("\n")
@@ -1156,7 +1421,7 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
           }
 
           const text = hits.map((h, i) =>
-            `${i + 1}. [${h.name}] ${h.description}${h.visibility === "public" ? " (public)" : ""}`,
+            `${i + 1}. [${h.name}] ${h.description}${h.visibility === "public" ? " (shared to local agents)" : ""}`,
           ).join("\n");
 
           return {
@@ -1174,31 +1439,54 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
       {
         name: "skill_publish",
         label: "Publish Skill",
-        description: "Make a skill public so other agents can discover and install it via skill_search.",
+        description:
+          "Share a skill with local agents or publish it to the Hub. " +
+          "Use target='agents' for local sharing, or target='hub' with visibility='public'/'group' for Hub publishing. " +
+          "The old scope parameter is still accepted for backward compatibility.",
         parameters: Type.Object({
           skillId: Type.String({ description: "The skill ID to publish" }),
-          scope: Type.Optional(Type.String({ description: "Publish scope: omit for local public, or use 'public' / 'group' to publish to Hub" })),
+          target: Type.Optional(Type.String({ description: "Publish target: 'agents' (default) or 'hub'." })),
+          visibility: Type.Optional(Type.String({ description: "Hub visibility when target='hub': 'public' (default) or 'group'." })),
+          scope: Type.Optional(Type.String({ description: "Deprecated alias: omit for local agents, or use 'public' / 'group' to publish to Hub." })),
           groupId: Type.Optional(Type.String({ description: "Optional group ID when scope='group'" })),
           hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for tests or manual routing" })),
           userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for tests" })),
         }),
         execute: trackTool("skill_publish", async (_toolCallId: any, params: any) => {
-          const { skillId: pubSkillId, scope, groupId, hubAddress, userToken } = params as { skillId: string; scope?: string; groupId?: string; hubAddress?: string; userToken?: string };
+          const {
+            skillId: pubSkillId,
+            target: rawTarget,
+            visibility: rawVisibility,
+            scope,
+            groupId,
+            hubAddress,
+            userToken,
+          } = params as {
+            skillId: string;
+            target?: string;
+            visibility?: string;
+            scope?: string;
+            groupId?: string;
+            hubAddress?: string;
+            userToken?: string;
+          };
           const skill = store.getSkill(pubSkillId);
           if (!skill) {
             return { content: [{ type: "text", text: `Skill not found: ${pubSkillId}` }] };
           }
-          if (scope === "public" || scope === "group") {
-            const published = await publishSkillBundleToHub(store, ctx, { skillId: pubSkillId, visibility: scope, groupId, hubAddress, userToken });
+          const target = resolveSkillPublishTarget(rawTarget, scope);
+          const visibility = resolveSkillHubVisibility(rawVisibility, scope);
+          if (target === "hub") {
+            const published = await publishSkillBundleToHub(store, ctx, { skillId: pubSkillId, visibility, groupId, hubAddress, userToken });
             return {
-              content: [{ type: "text", text: `Skill "${skill.name}" published to hub (${published.visibility}).` }],
-              details: { skillId: pubSkillId, name: skill.name, publishedToHub: true, hubSkillId: published.skillId, visibility: published.visibility },
+              content: [{ type: "text", text: `Skill "${skill.name}" shared to Hub (${published.visibility}).` }],
+              details: { skillId: pubSkillId, name: skill.name, target, publishedToHub: true, hubSkillId: published.skillId, visibility: published.visibility },
             };
           }
           store.setSkillVisibility(pubSkillId, "public");
           return {
-            content: [{ type: "text", text: `Skill "${skill.name}" is now public.` }],
-            details: { skillId: pubSkillId, name: skill.name, visibility: "public", publishedToHub: false },
+            content: [{ type: "text", text: `Skill "${skill.name}" is now shared with local agents.` }],
+            details: { skillId: pubSkillId, name: skill.name, target, visibility: "public", publishedToHub: false },
           };
         }),
       },
@@ -1211,20 +1499,46 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
       {
         name: "skill_unpublish",
         label: "Unpublish Skill",
-        description: "Make a skill private. Other agents will no longer be able to discover it.",
+        description:
+          "Stop sharing a skill with local agents, remove it from the Hub, or do both. " +
+          "Use target='agents' (default), 'hub', or 'all'.",
         parameters: Type.Object({
           skillId: Type.String({ description: "The skill ID to unpublish" }),
+          target: Type.Optional(Type.String({ description: "Unpublish target: 'agents' (default), 'hub', or 'all'." })),
+          hubAddress: Type.Optional(Type.String({ description: "Optional Hub address override for tests or manual routing" })),
+          userToken: Type.Optional(Type.String({ description: "Optional Hub bearer token override for tests" })),
         }),
         execute: trackTool("skill_unpublish", async (_toolCallId: any, params: any) => {
-          const { skillId: unpubSkillId } = params as { skillId: string };
+          const { skillId: unpubSkillId, target, hubAddress, userToken } = params as { skillId: string; target?: string; hubAddress?: string; userToken?: string };
           const skill = store.getSkill(unpubSkillId);
           if (!skill) {
             return { content: [{ type: "text", text: `Skill not found: ${unpubSkillId}` }] };
           }
-          store.setSkillVisibility(unpubSkillId, "private");
+          const resolvedTarget = resolveSkillUnpublishTarget(target);
+          const messages: string[] = [];
+          const details: Record<string, unknown> = { skillId: unpubSkillId, name: skill.name, target: resolvedTarget };
+          if (resolvedTarget === "hub" || resolvedTarget === "all") {
+            try {
+              await unpublishSkillBundleFromHub(store, ctx, { skillId: unpubSkillId, hubAddress, userToken });
+              details.hub = { unpublished: true };
+              messages.push("removed from Hub sharing");
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              if (resolvedTarget === "all" && msg.includes("hub client connection is not configured")) {
+                details.hub = { unpublished: false, skipped: true, reason: "hub_not_configured" };
+              } else {
+                throw err;
+              }
+            }
+          }
+          if (resolvedTarget === "agents" || resolvedTarget === "all") {
+            store.setSkillVisibility(unpubSkillId, "private");
+            details.local = { visibility: "private" };
+            messages.push("limited to this agent");
+          }
           return {
-            content: [{ type: "text", text: `Skill "${skill.name}" is now private.` }],
-            details: { skillId: unpubSkillId, name: skill.name, visibility: "private" },
+            content: [{ type: "text", text: `Skill "${skill.name}" ${messages.join(" and ")}.` }],
+            details,
           };
         }),
       },

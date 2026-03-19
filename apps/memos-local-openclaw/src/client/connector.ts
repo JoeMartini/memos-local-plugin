@@ -1,5 +1,5 @@
 import type { Logger, MemosLocalConfig } from "../types";
-import type { GroupInfo, UserRole, UserStatus } from "../sharing/types";
+import type { UserRole, UserStatus } from "../sharing/types";
 import type { SqliteStore } from "../storage/sqlite";
 import { hubRequestJson, normalizeHubUrl } from "./hub";
 
@@ -20,7 +20,6 @@ export interface HubStatusInfo {
     username: string;
     role: UserRole;
     status: UserStatus | string;
-    groups: GroupInfo[];
   };
 }
 
@@ -35,6 +34,41 @@ export async function connectToHub(store: SqliteStore, config: MemosLocalConfig,
 
   if (!userToken && config.sharing?.client?.teamToken) {
     if (!log) throw new Error("hub client connection is not configured (no userToken, has teamToken but no logger for auto-join)");
+
+    // If DB has a pending connection (userId exists, no token), check registration-status first
+    const persisted = store.getClientHubConnection();
+    if (persisted?.userId && !persisted.userToken && hubAddress) {
+      const hubUrl = normalizeHubUrl(hubAddress);
+      const teamToken = config.sharing.client!.teamToken!;
+      try {
+        const result = await hubRequestJson(hubUrl, "", "/api/v1/hub/registration-status", {
+          method: "POST",
+          body: JSON.stringify({ teamToken, userId: persisted.userId }),
+        }) as any;
+        if (result.status === "active" && result.userToken) {
+          log.info(`Pending user approved! Connecting with token. userId=${persisted.userId}`);
+          store.setClientHubConnection({
+            hubUrl,
+            userId: persisted.userId,
+            username: persisted.username || "",
+            userToken: result.userToken,
+            role: "member",
+            connectedAt: Date.now(),
+          });
+          return store.getClientHubConnection()!;
+        }
+        if (result.status === "pending") {
+          throw new PendingApprovalError(persisted.userId);
+        }
+        if (result.status === "rejected") {
+          throw new Error("Join request was rejected by the Hub admin.");
+        }
+      } catch (err) {
+        if (err instanceof PendingApprovalError) throw err;
+        log.warn(`registration-status check failed, falling back to autoJoinHub: ${err}`);
+      }
+    }
+
     return autoJoinHub(store, config, log);
   }
 
@@ -57,29 +91,100 @@ export async function connectToHub(store: SqliteStore, config: MemosLocalConfig,
 
 export async function getHubStatus(store: SqliteStore, config: MemosLocalConfig): Promise<HubStatusInfo> {
   const conn = store.getClientHubConnection();
-  const hubAddress = conn?.hubUrl || config.sharing?.client?.hubAddress || "";
+  const configHubAddress = config.sharing?.client?.hubAddress || "";
+  const hubAddress = conn?.hubUrl || (configHubAddress ? normalizeHubUrl(configHubAddress) : "");
   const userToken = conn?.userToken || config.sharing?.client?.userToken || "";
+
+  // If DB has a connection to a different Hub than config, the DB data is stale
+  if (conn && configHubAddress && conn.hubUrl && normalizeHubUrl(configHubAddress) !== conn.hubUrl) {
+    store.clearClientHubConnection();
+    return { connected: false, user: null };
+  }
+
+  if (conn && conn.userId && (!userToken || userToken === "")) {
+    const teamToken = config.sharing?.client?.teamToken ?? "";
+    if (hubAddress && teamToken) {
+      try {
+        const result = await hubRequestJson(normalizeHubUrl(hubAddress), "", "/api/v1/hub/registration-status", {
+          method: "POST",
+          body: JSON.stringify({ teamToken, userId: conn.userId }),
+        }) as any;
+        if (result.status === "pending") {
+          return {
+            connected: false,
+            hubUrl: normalizeHubUrl(hubAddress),
+            user: {
+              id: conn.userId,
+              username: conn.username || "",
+              role: "member",
+              status: "pending",
+            },
+          };
+        }
+        if (result.status === "active" && result.userToken) {
+          store.setClientHubConnection({
+            hubUrl: normalizeHubUrl(hubAddress),
+            userId: conn.userId,
+            username: conn.username || "",
+            userToken: result.userToken,
+            role: "member",
+            connectedAt: Date.now(),
+          });
+          const me = await hubRequestJson(normalizeHubUrl(hubAddress), result.userToken, "/api/v1/hub/me", { method: "GET" }) as any;
+          return {
+            connected: true,
+            hubUrl: normalizeHubUrl(hubAddress),
+            user: {
+              id: String(me.id),
+              username: String(me.username ?? ""),
+              role: String(me.role ?? "member") as UserRole,
+              status: String(me.status ?? "active"),
+            },
+          };
+        }
+        if (result.status === "rejected") {
+          return {
+            connected: false,
+            hubUrl: normalizeHubUrl(hubAddress),
+            user: {
+              id: conn.userId,
+              username: conn.username || "",
+              role: "member",
+              status: "rejected",
+            },
+          };
+        }
+      } catch { /* fall through */ }
+    }
+    return { connected: false, user: null };
+  }
+
   if (!hubAddress || !userToken) {
     return { connected: false, user: null };
   }
 
   try {
     const me = await hubRequestJson(normalizeHubUrl(hubAddress), userToken, "/api/v1/hub/me", { method: "GET" }) as any;
+    const latestUsername = String(me.username ?? "");
+    const latestRole = String(me.role ?? "member") as UserRole;
+    if (conn && (conn.username !== latestUsername || conn.role !== latestRole)) {
+      store.setClientHubConnection({
+        hubUrl: conn.hubUrl,
+        userId: conn.userId,
+        username: latestUsername,
+        userToken: conn.userToken,
+        role: latestRole,
+        connectedAt: conn.connectedAt,
+      });
+    }
     return {
       connected: true,
       hubUrl: normalizeHubUrl(hubAddress),
       user: {
         id: String(me.id),
-        username: String(me.username ?? ""),
-        role: String(me.role ?? "member") as UserRole,
+        username: latestUsername,
+        role: latestRole,
         status: String(me.status ?? "active"),
-        groups: Array.isArray(me.groups)
-          ? me.groups.map((group: any) => ({
-              id: String(group.id),
-              name: String(group.name),
-              description: typeof group.description === "string" ? group.description : undefined,
-            }))
-          : [],
       },
     };
   } catch {
@@ -98,14 +203,43 @@ export async function autoJoinHub(
     throw new Error("hubAddress and teamToken are required for auto-join");
   }
   const hubUrl = normalizeHubUrl(hubAddress);
-  const hostname = typeof globalThis.process !== "undefined" ? (await import("os")).hostname() : "unknown";
-  const username = typeof globalThis.process !== "undefined" ? (await import("os")).userInfo().username : "user";
+  const osModule = typeof globalThis.process !== "undefined" ? await import("os") : null;
+  const hostname = osModule ? osModule.hostname() : "unknown";
+  const nickname = config.sharing?.client?.nickname;
+  const username = nickname || (osModule ? osModule.userInfo().username : "user");
+  let clientIp = "";
+  if (osModule) {
+    const nets = osModule.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] ?? []) {
+        if (net.family === "IPv4" && !net.internal) { clientIp = net.address; break; }
+      }
+      if (clientIp) break;
+    }
+  }
 
   log.info(`Joining Hub at ${hubUrl} as "${username}"...`);
   const result = await hubRequestJson(hubUrl, "", "/api/v1/hub/join", {
     method: "POST",
-    body: JSON.stringify({ teamToken, username, deviceName: hostname }),
+    body: JSON.stringify({ teamToken, username, deviceName: hostname, clientIp }),
   }) as any;
+
+  if (result.status === "pending") {
+    log.info(`Join request submitted, awaiting admin approval. userId=${result.userId}`);
+    store.setClientHubConnection({
+      hubUrl,
+      userId: String(result.userId),
+      username,
+      userToken: "",
+      role: "member",
+      connectedAt: Date.now(),
+    });
+    throw new PendingApprovalError(result.userId);
+  }
+
+  if (result.status === "rejected") {
+    throw new Error(`Join request was rejected by the Hub admin.`);
+  }
 
   if (!result.userToken) {
     throw new Error(`Hub join failed: ${JSON.stringify(result)}`);
@@ -121,4 +255,13 @@ export async function autoJoinHub(
     connectedAt: Date.now(),
   });
   return store.getClientHubConnection()!;
+}
+
+export class PendingApprovalError extends Error {
+  public readonly userId: string;
+  constructor(userId: string) {
+    super("Awaiting admin approval");
+    this.name = "PendingApprovalError";
+    this.userId = userId;
+  }
 }

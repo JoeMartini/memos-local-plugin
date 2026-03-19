@@ -1,14 +1,14 @@
-# Hub Sharing Guide
+# Team Sharing Guide
 
-This guide explains how to use the v4 Hub sharing workflow in `memos-local-openclaw`: how to create a team Hub, join from another machine, get approved, search shared memory, share tasks, publish skills, and pull skills back to local use.
+This guide explains how to use the v4 team sharing workflow in `memos-local-openclaw`: how to create a team server, join from another machine, get approved, search shared memory, share tasks, publish skills, and pull skills back to local use.
 
 ## What v4 adds
 
-The plugin now supports a **Hub-Spoke** sharing model:
+The plugin now supports a **Server-Client** sharing model:
 
 - **Local memory stays local** unless you explicitly share it
-- **One Hub server** stores team-shared tasks, memories, and skills
-- **Clients connect to the Hub** with a user token
+- **One team server** stores team-shared tasks, memories, and skills
+- **Clients connect to the server** with a user token
 - **Admins approve users** before they can access team data
 - **Search scope** can be `local`, `group`, or `all`
 - **Shared skills** can be published to a group or to the whole team
@@ -18,7 +18,7 @@ The plugin now supports a **Hub-Spoke** sharing model:
 ### Search scope
 
 - `local` — search only your local SQLite data
-- `group` — search local data + Hub data visible to your groups + public Hub data
+- `group` — search local data + team data visible to your groups + public team data
 - `all` — same effective permissions as `group`; use it when you want “everything I am allowed to see”
 
 ### Visibility
@@ -26,18 +26,18 @@ The plugin now supports a **Hub-Spoke** sharing model:
 There are two different “public” concepts in the plugin:
 
 - Local `owner="public"` memory — shared **inside the current local instance** across agents
-- Hub `visibility="public"` — shared **to the whole team** through the Hub
+- Team `visibility="public"` — shared **to the whole team** through the server
 
-For Hub sharing, the important visibility values are:
+For team sharing, the important visibility values are:
 
 - `private` — local only
-- `group` — visible to members of a group on the Hub
-- `public` — visible to all approved team members on the Hub
+- `group` — visible to members of a group on the team server
+- `public` — visible to all approved team members on the team server
 
 ### What gets stored where
 
 - **Private memories and private skills** stay in your local SQLite database
-- **Shared tasks, shared chunks, and published skill bundles** are stored in the Hub database
+- **Shared tasks, shared chunks, and published skill bundles** are stored in the team server database
 - **Pulled skills** are restored back into your local `skills-store/` for offline use
 
 ## Before you start
@@ -47,14 +47,14 @@ You need:
 - OpenClaw installed and working
 - This plugin installed and enabled
 - OpenClaw built-in memory search disabled in `openclaw.json`
-- A machine that can stay online if you want to run the Hub there
+- A machine that can stay online if you want to run the team server there
 
 ## Deployment modes
 
 The plugin runs in one of two sharing roles:
 
-- `hub` — starts the Hub server and manages team membership
-- `client` — connects to an existing Hub
+- `hub` — starts the team server and manages team membership
+- `client` — connects to an existing team server
 
 You enable sharing with:
 
@@ -78,7 +78,7 @@ or:
 }
 ```
 
-## Option A: Create a team Hub
+## Option A: Create a team server
 
 Use this on the first machine in the team.
 
@@ -109,21 +109,21 @@ Use this on the first machine in the team.
 
 ### What happens
 
-- The plugin starts the Hub HTTP server
+- The plugin starts the team server
 - The first bootstrap user becomes the team admin
-- The Hub stores user approvals, groups, shared tasks, shared chunks, and shared skills
-- The Viewer shows Hub admin controls in **Settings → Hub & Team**
+- The server stores user approvals, groups, shared tasks, shared chunks, and shared skills
+- The Viewer shows admin controls in **Settings → Team Sharing**
 
 ### Admin responsibilities
 
-The Hub admin can:
+The team admin can:
 
 - approve or reject join requests
 - review pending users
-- see Hub connection and team information
+- see team connection and server information
 - manage who can access shared team data
 
-## Option B: Join an existing team Hub
+## Option B: Join an existing team server
 
 Use this on every other machine.
 
@@ -153,16 +153,16 @@ Use this on every other machine.
 
 ### Important note about joining
 
-In the current implementation, the **join and approval flow exists at the Hub API level and Viewer admin UI**, but the client still needs a valid `userToken` to operate as a connected client.
+In the current implementation, the **join and approval flow exists at the server API level and Viewer admin UI**, but the client still needs a valid `userToken` to operate as a connected client.
 
 That means the usual rollout is:
 
-1. Admin starts the Hub
+1. Admin starts the server
 2. Admin creates or issues a user token for the client environment
 3. Client configures `hubAddress` + `userToken`
 4. Viewer shows the connected team / role / groups
 
-If you are testing the raw Hub API directly, the public join endpoint is:
+If you are testing the raw server API directly, the public join endpoint is:
 
 - `POST /api/v1/hub/join`
 
@@ -174,15 +174,15 @@ Admin review endpoints are:
 
 ## Viewer walkthrough
 
-### 1. Hub & Team panel
+### 1. Team Sharing panel
 
 Open the Memory Viewer and go to **Settings**.
 
-The **Hub & Team** panel shows:
+The **Team Sharing** panel shows:
 
 - whether sharing is enabled
-- whether you are in `hub` or `client` mode
-- which Hub you are connected to
+- whether you are in `hub` (server) or `client` mode
+- which server you are connected to
 - your team, username, role, and groups
 - pending user approvals if you are an admin
 
@@ -197,9 +197,9 @@ In the **Memories** tab, the search scope selector now supports:
 Result behavior:
 
 - local hits stay in the normal local result format
-- Hub hits are shown in a separate section
-- Hub hits include extra context like owner and group
-- use the **View Detail** action on a Hub result to fetch full shared memory content
+- team hits are shown in a separate section
+- team hits include extra context like owner and group
+- use the **View Detail** action on a team result to fetch full shared memory content
 
 ### 3. Task sharing
 
@@ -209,7 +209,7 @@ In the **Tasks** tab:
 - use the share controls in the header
 - choose `Share to Group` or `Share to Public`
 - click **Share**
-- click **Unshare** to remove the task from the Hub
+- click **Unshare** to remove the task from the team
 
 What gets shared:
 
@@ -223,10 +223,10 @@ In the **Skills** tab:
 
 - search locally as usual
 - switch scope to `Group` or `All`
-- local and Hub skill results are shown separately
-- click **Pull to Local** on a Hub skill to restore the bundle locally
+- local and team skill results are shown separately
+- click **Pull to Local** on a team skill to restore the bundle locally
 
-Pulled skills are written into your local skills store, so they remain usable even if the Hub is offline later.
+Pulled skills are written into your local skills store, so they remain usable even if the server is offline later.
 
 ## Agent tools for team sharing
 
@@ -236,18 +236,18 @@ These are the main tools you will use with v4 sharing:
 
 - `memory_search(query, scope)`
   - `scope: "local" | "group" | "all"`
-  - returns local results and, for shared scopes, a separate Hub result section
+  - returns local results and, for shared scopes, a separate team result section
 - `network_memory_detail(remoteHitId)`
-  - fetches the full content for a Hub memory hit
+  - fetches the full content for a team memory hit
 - `memory_get` / `memory_timeline`
   - still work for **local** hits only
 
 ### Task sharing tools
 
 - `task_share(taskId, visibility)`
-  - shares a task to the Hub
+  - shares a task to the team
 - `task_unshare(taskId)`
-  - removes that task from the Hub
+  - removes that task from the team
 
 ### Skill tools
 
@@ -256,16 +256,16 @@ These are the main tools you will use with v4 sharing:
 - `skill_publish(skillId, scope)`
   - publish a skill to `public` or a group-facing scope supported by your current flow
 - `skill_unpublish(skillId)`
-  - remove a previously published skill from Hub sharing
+  - remove a previously published skill from team sharing
 - `network_skill_pull(skillId)`
-  - pull a Hub skill bundle into local storage
+  - pull a team skill bundle into local storage
 - `skill_get` / `skill_install`
   - continue to work for local skills
 
 ### Team info
 
 - `network_team_info()`
-  - shows Hub URL, connected user, role, team, and groups
+  - shows team server URL, connected user, role, team, and groups
 
 ## End-to-end example workflow
 
@@ -274,8 +274,8 @@ These are the main tools you will use with v4 sharing:
 1. Open a new task in OpenClaw
 2. Ask the agent to search with `scope: "group"`
 3. Review local results first
-4. Review Hub hits with owner/group context
-5. Use `network_memory_detail` if a Hub hit looks relevant
+4. Review team hits with owner/group context
+5. Use `network_memory_detail` if a team hit looks relevant
 
 ### Example 2: Share a task
 
@@ -288,19 +288,19 @@ These are the main tools you will use with v4 sharing:
 ### Example 3: Publish and pull a skill
 
 1. Publish a polished local skill with `skill_publish`
-2. Another teammate searches Hub skills with `scope: "all"`
+2. Another teammate searches team skills with `scope: "all"`
 3. They click **Pull to Local** in Viewer, or call `network_skill_pull`
 4. The bundle is restored locally for reuse
 
-## What happens if the Hub is down
+## What happens if the server is down
 
 The intended behavior is graceful degradation:
 
 - local memory still works
 - local skills still work
 - Viewer still opens
-- shared searches fall back to local results with an empty Hub section
-- share / pull actions fail cleanly until the Hub is back
+- shared searches fall back to local results with an empty team section
+- share / pull actions fail cleanly until the server is back
 
 ## Model configuration and current fallback behavior
 
@@ -349,17 +349,17 @@ Check:
 
 Check:
 
-- the Hub server is running
+- the team server is running
 - `sharing.client.hubAddress` is correct
 - `sharing.client.userToken` is valid
-- the Hub machine is reachable on the configured port
+- the server machine is reachable on the configured port
 
-### I can see local results but no Hub results
+### I can see local results but no team results
 
 Check:
 
 - you selected `Group` or `All`, not `Local`
-- the Hub actually contains shared tasks or skills
+- the server actually contains shared tasks or skills
 - your user belongs to the required group
 - the admin approved your access
 
@@ -368,8 +368,8 @@ Check:
 Usually this means one of the following:
 
 - the hit was generated from another user token/session context
-- the Hub-side `remoteHitId` expired
-- the Hub is unavailable
+- the server-side `remoteHitId` expired
+- the server is unavailable
 
 Run a fresh search and try the detail action again.
 
@@ -377,18 +377,18 @@ Run a fresh search and try the detail action again.
 
 Check:
 
-- the Hub skill still exists
+- the team skill still exists
 - your token is valid
 - the bundle passes local safety validation
 - your local skills directory is writable
 
 ## Recommended rollout for a small team
 
-1. Pick one stable machine as the Hub host
+1. Pick one stable machine as the server host
 2. Enable `sharing.role = "hub"` there
-3. Confirm the admin can open Viewer and see Hub status
+3. Confirm the admin can open Viewer and see team status
 4. Configure one client machine with `hubAddress` + `userToken`
 5. Verify `network_team_info()` works
-6. Share one task, search it from another machine, and open Hub memory detail
+6. Share one task, search it from another machine, and open team memory detail
 7. Publish one skill and pull it from another machine
 8. Only then roll the config out to the rest of the team

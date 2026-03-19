@@ -1,7 +1,7 @@
 {
   "name": "@memtensor/memos-local-openclaw-plugin",
-  "version": "1.0.3",
-  "description": "MemOS Local memory plugin for OpenClaw \u2014 full-write, hybrid-recall, progressive retrieval",
+  "version": "1.0.4-beta.8",
+  "description": "MemOS Local memory plugin for OpenClaw — full-write, hybrid-recall, progressive retrieval",
   "type": "module",
   "main": "index.ts",
   "types": "dist/index.d.ts",

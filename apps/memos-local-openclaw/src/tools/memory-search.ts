@@ -24,7 +24,7 @@ function emptyHubResult(scope: HubScope): HubSearchResult {
   };
 }
 
-export function createMemorySearchTool(engine: RecallEngine, store?: SqliteStore, ctx?: PluginContext): ToolDefinition {
+export function createMemorySearchTool(engine: RecallEngine, store?: SqliteStore, ctx?: PluginContext, sharedState?: { lastSearchTime: number }): ToolDefinition {
   return {
     name: "memory_search",
     description:
@@ -60,6 +60,7 @@ export function createMemorySearchTool(engine: RecallEngine, store?: SqliteStore
       },
     },
     handler: async (input) => {
+      if (sharedState) sharedState.lastSearchTime = Date.now();
       const query = (input.query as string) ?? "";
       const maxResults = input.maxResults as number | undefined;
       const minScore = input.minScore as number | undefined;

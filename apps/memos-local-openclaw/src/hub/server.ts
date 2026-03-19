@@ -34,6 +34,11 @@ export class HubServer {
   private static readonly RATE_LIMIT_SEARCH = 30;
   private rateBuckets = new Map<string, { count: number; windowStart: number }>();
 
+  private static readonly OFFLINE_THRESHOLD_MS = 2 * 60 * 1000;
+  private static readonly OFFLINE_CHECK_INTERVAL_MS = 30 * 1000;
+  private offlineCheckTimer?: ReturnType<typeof setInterval>;
+  private knownOnlineUsers = new Set<string>();
+
   constructor(private opts: HubServerOptions) {
     this.userManager = new HubUserManager(opts.store, opts.log);
     this.authStatePath = path.join(opts.dataDir, "hub-auth.json");
@@ -101,10 +106,14 @@ export class HubServer {
       this.opts.log.info(`memos-local: bootstrap admin token persisted to ${this.authStatePath}`);
     }
 
+    this.initOnlineTracking();
+    this.offlineCheckTimer = setInterval(() => this.checkOfflineUsers(), HubServer.OFFLINE_CHECK_INTERVAL_MS);
+
     return `http://127.0.0.1:${this.port}`;
   }
 
   async stop(): Promise<void> {
+    if (this.offlineCheckTimer) { clearInterval(this.offlineCheckTimer); this.offlineCheckTimer = undefined; }
     if (!this.server) return;
     const server = this.server;
     this.server = undefined;
@@ -192,17 +201,44 @@ export class HubServer {
         return this.json(res, 403, { error: "invalid_team_token" });
       }
       const username = String(body.username || `user-${randomUUID().slice(0, 8)}`);
+      const joinIp = (typeof body.clientIp === "string" && body.clientIp)
+        || (req.headers["x-client-ip"] as string)?.trim()
+        || (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+        || req.socket.remoteAddress || "";
+      const existingUsers = this.opts.store.listHubUsers();
+      const existingUser = existingUsers.find(u => u.username === username);
+      if (existingUser) {
+        try { this.opts.store.updateHubUserActivity(existingUser.id, joinIp); } catch { /* best-effort */ }
+        if (existingUser.status === "active") {
+          const token = issueUserToken(
+            { userId: existingUser.id, username: existingUser.username, role: existingUser.role, status: "active" },
+            this.authSecret,
+          );
+          this.userManager.approveUser(existingUser.id, token);
+          return this.json(res, 200, { status: "active", userId: existingUser.id, userToken: token });
+        }
+        if (existingUser.status === "pending") {
+          this.notifyAdmins("user_join_request", "user", username, "", { dedup: true });
+          return this.json(res, 200, { status: "pending", userId: existingUser.id });
+        }
+        if (existingUser.status === "rejected") {
+          if (body.reapply === true) {
+            this.userManager.resetToPending(existingUser.id);
+            this.notifyAdmins("user_join_request", "user", username, "");
+            this.opts.log.info(`Hub: rejected user "${username}" (${existingUser.id}) re-applied, reset to pending`);
+            return this.json(res, 200, { status: "pending", userId: existingUser.id });
+          }
+          return this.json(res, 200, { status: "rejected", userId: existingUser.id });
+        }
+      }
       const user = this.userManager.createPendingUser({
         username,
         deviceName: typeof body.deviceName === "string" ? body.deviceName : undefined,
       });
-      const token = issueUserToken(
-        { userId: user.id, username, role: "member", status: "active" },
-        this.authSecret,
-      );
-      this.userManager.approveUser(user.id, token);
-      this.opts.log.info(`Hub: auto-approved user "${username}" (${user.id})`);
-      return this.json(res, 200, { status: "active", userId: user.id, userToken: token });
+      try { this.opts.store.updateHubUserActivity(user.id, joinIp); } catch { /* best-effort */ }
+      this.opts.log.info(`Hub: user "${username}" (${user.id}) registered as pending, awaiting admin approval`);
+      this.notifyAdmins("user_join_request", "user", username, "");
+      return this.json(res, 200, { status: "pending", userId: user.id });
     }
 
     if (req.method === "POST" && routePath === "/api/v1/hub/registration-status") {
@@ -239,10 +275,47 @@ export class HubServer {
       return this.json(res, 429, { error: "rate_limit_exceeded", retryAfterMs: HubServer.RATE_WINDOW_MS });
     }
 
+    if (req.method === "POST" && routePath === "/api/v1/hub/heartbeat") {
+      return this.json(res, 200, { ok: true });
+    }
+
+    if (req.method === "POST" && routePath === "/api/v1/hub/leave") {
+      try {
+        this.opts.store.updateHubUserActivity(auth.userId, "", 0);
+      } catch { /* best-effort */ }
+      this.knownOnlineUsers.delete(auth.userId);
+      this.notifyAdmins("user_offline", "user", auth.username, auth.userId);
+      this.opts.log.info(`Hub: user "${auth.username}" (${auth.userId}) left voluntarily`);
+      return this.json(res, 200, { ok: true });
+    }
+
     if (req.method === "GET" && routePath === "/api/v1/hub/me") {
       const user = this.opts.store.getHubUser(auth.userId);
       if (!user) return this.json(res, 401, { error: "unauthorized" });
       return this.json(res, 200, user);
+    }
+
+    if (req.method === "POST" && routePath === "/api/v1/hub/me/update-profile") {
+      const body = await this.readJson(req);
+      if (!body) return this.json(res, 400, { error: "invalid_body" });
+      const newUsername = String(body.username || "").trim();
+      if (!newUsername || newUsername.length < 2 || newUsername.length > 32) {
+        return this.json(res, 400, { error: "invalid_username", message: "Username must be 2-32 characters" });
+      }
+      if (this.userManager.isUsernameTaken(newUsername, auth.userId)) {
+        return this.json(res, 409, { error: "username_taken", message: "Username already in use" });
+      }
+      const updated = this.userManager.updateUsername(auth.userId, newUsername);
+      if (!updated) return this.json(res, 404, { error: "not_found" });
+      const ttlMs = updated.role === "admin" ? 3650 * 24 * 60 * 60 * 1000 : undefined;
+      const newToken = issueUserToken(
+        { userId: updated.id, username: newUsername, role: updated.role, status: updated.status },
+        this.authSecret,
+        ttlMs,
+      );
+      this.userManager.approveUser(updated.id, newToken);
+      this.opts.log.info(`Hub: user "${auth.userId}" renamed to "${newUsername}"`);
+      return this.json(res, 200, { ok: true, username: newUsername, userToken: newToken });
     }
 
     if (req.method === "GET" && routePath === "/api/v1/hub/admin/pending-users") {
@@ -256,6 +329,7 @@ export class HubServer {
       const token = issueUserToken({ userId: String(body.userId), username: String(body.username || ""), role: "member", status: "active" }, this.authSecret);
       const approved = this.userManager.approveUser(String(body.userId), token);
       if (!approved) return this.json(res, 404, { error: "not_found" });
+      try { this.opts.store.updateHubUserActivity(String(body.userId), ""); } catch { /* best-effort */ }
       return this.json(res, 200, { status: "active", token });
     }
 
@@ -270,95 +344,85 @@ export class HubServer {
     if (req.method === "GET" && routePath === "/api/v1/hub/admin/users") {
       if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
       const users = this.opts.store.listHubUsers().filter(u => u.status === "active");
-      return this.json(res, 200, { users: users.map(u => ({ id: u.id, username: u.username, role: u.role, status: u.status })) });
+      const contribs = this.opts.store.getHubUserContributions();
+      const ownerId = this.authState.bootstrapAdminUserId || "";
+      const now = Date.now();
+      return this.json(res, 200, { users: users.map(u => {
+        const c = contribs[u.id] || { memoryCount: 0, taskCount: 0, skillCount: 0 };
+        const isOnline = u.id === ownerId || (!!u.lastActiveAt && now - u.lastActiveAt < HubServer.OFFLINE_THRESHOLD_MS);
+        return {
+          id: u.id, username: u.username, role: u.role, status: u.status,
+          deviceName: u.deviceName, createdAt: u.createdAt, approvedAt: u.approvedAt,
+          lastIp: u.lastIp || "", lastActiveAt: u.lastActiveAt,
+          isOwner: u.id === ownerId, isOnline,
+          memoryCount: c.memoryCount, taskCount: c.taskCount, skillCount: c.skillCount,
+        };
+      }) });
     }
 
-    // ── Group management ──
-
-    if (req.method === "GET" && routePath === "/api/v1/hub/groups") {
-      const groups = this.opts.store.listHubGroups();
-      return this.json(res, 200, { groups });
-    }
-
-    if (req.method === "POST" && routePath === "/api/v1/hub/groups") {
+    if (req.method === "POST" && routePath === "/api/v1/hub/admin/change-role") {
       if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
       const body = await this.readJson(req);
-      const name = String(body.name || "").trim();
-      if (!name) return this.json(res, 400, { error: "name_required" });
-      const groupId = randomUUID();
-      this.opts.store.upsertHubGroup({
-        id: groupId,
-        name,
-        description: String(body.description || ""),
-        createdAt: Date.now(),
-      });
-      return this.json(res, 201, { id: groupId, name });
+      const userId = String(body?.userId || "");
+      const newRole = String(body?.role || "");
+      if (!userId || (newRole !== "admin" && newRole !== "member")) return this.json(res, 400, { error: "invalid_params" });
+      if (newRole === "member" && userId === this.authState.bootstrapAdminUserId) {
+        return this.json(res, 403, { error: "cannot_demote_owner", message: "The hub owner cannot be demoted" });
+      }
+      const user = this.opts.store.getHubUser(userId);
+      if (!user || user.status !== "active") return this.json(res, 404, { error: "not_found" });
+      const updatedUser = { ...user, role: newRole as "admin" | "member" };
+      this.opts.store.upsertHubUser(updatedUser);
+      this.opts.log.info(`Hub: admin "${auth.userId}" changed role of "${userId}" to "${newRole}"`);
+      return this.json(res, 200, { ok: true, role: newRole });
     }
 
-    const groupDetailMatch = routePath.match(/^\/api\/v1\/hub\/groups\/([^/]+)$/);
-    if (groupDetailMatch) {
-      const groupId = decodeURIComponent(groupDetailMatch[1]);
-
-      if (req.method === "GET") {
-        const group = this.opts.store.getHubGroupById(groupId);
-        if (!group) return this.json(res, 404, { error: "not_found" });
-        const members = this.opts.store.listHubGroupMembers(groupId);
-        return this.json(res, 200, { ...group, members });
+    if (req.method === "POST" && routePath === "/api/v1/hub/admin/rename-user") {
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const body = await this.readJson(req);
+      const userId = String(body?.userId || "");
+      const newUsername = String(body?.username || "").trim();
+      if (!userId || !newUsername || newUsername.length < 2 || newUsername.length > 32) {
+        return this.json(res, 400, { error: "invalid_params", message: "userId and username (2-32 chars) required" });
       }
-
-      if (req.method === "PUT") {
-        if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
-        const existing = this.opts.store.getHubGroupById(groupId);
-        if (!existing) return this.json(res, 404, { error: "not_found" });
-        const body = await this.readJson(req);
-        this.opts.store.upsertHubGroup({
-          id: groupId,
-          name: String(body.name || existing.name).trim(),
-          description: String(body.description ?? existing.description),
-          createdAt: existing.createdAt,
-        });
-        return this.json(res, 200, { ok: true });
+      if (this.userManager.isUsernameTaken(newUsername, userId)) {
+        return this.json(res, 409, { error: "username_taken", message: "Username already in use" });
       }
-
-      if (req.method === "DELETE") {
-        if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
-        const deleted = this.opts.store.deleteHubGroup(groupId);
-        if (!deleted) return this.json(res, 404, { error: "not_found" });
-        return this.json(res, 200, { ok: true });
-      }
+      const user = this.opts.store.getHubUser(userId);
+      if (!user || user.status !== "active") return this.json(res, 404, { error: "not_found" });
+      const ttlMs = user.role === "admin" ? 3650 * 24 * 60 * 60 * 1000 : undefined;
+      const newToken = issueUserToken(
+        { userId: user.id, username: newUsername, role: user.role, status: user.status },
+        this.authSecret,
+        ttlMs,
+      );
+      this.userManager.approveUser(user.id, newToken);
+      const updated = this.opts.store.getHubUser(userId)!;
+      const finalUser = { ...updated, username: newUsername };
+      this.opts.store.upsertHubUser(finalUser);
+      this.opts.log.info(`Hub: admin "${auth.userId}" renamed user "${userId}" to "${newUsername}"`);
+      return this.json(res, 200, { ok: true, username: newUsername });
     }
 
-    const groupMembersMatch = routePath.match(/^\/api\/v1\/hub\/groups\/([^/]+)\/members$/);
-    if (groupMembersMatch) {
-      const groupId = decodeURIComponent(groupMembersMatch[1]);
-
-      if (req.method === "POST") {
-        if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
-        const group = this.opts.store.getHubGroupById(groupId);
-        if (!group) return this.json(res, 404, { error: "group_not_found" });
-        const body = await this.readJson(req);
-        const userId = String(body.userId || "");
-        if (!userId) return this.json(res, 400, { error: "userId_required" });
-        const user = this.opts.store.getHubUser(userId);
-        if (!user) return this.json(res, 404, { error: "user_not_found" });
-        this.opts.store.addHubGroupMember(groupId, userId);
-        return this.json(res, 200, { ok: true });
-      }
-
-      if (req.method === "DELETE") {
-        if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
-        const body = await this.readJson(req);
-        const userId = String(body.userId || "");
-        if (!userId) return this.json(res, 400, { error: "userId_required" });
-        this.opts.store.removeHubGroupMember(groupId, userId);
-        return this.json(res, 200, { ok: true });
-      }
+    if (req.method === "POST" && routePath === "/api/v1/hub/admin/remove-user") {
+      if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
+      const body = await this.readJson(req);
+      const userId = String(body?.userId || "");
+      if (!userId) return this.json(res, 400, { error: "missing_user_id" });
+      if (userId === auth.userId) return this.json(res, 400, { error: "cannot_remove_self" });
+      if (userId === this.authState.bootstrapAdminUserId) return this.json(res, 403, { error: "cannot_remove_owner", message: "The hub owner cannot be removed" });
+      const cleanResources = body?.cleanResources === true;
+      const deleted = this.opts.store.deleteHubUser(userId, cleanResources);
+      if (!deleted) return this.json(res, 404, { error: "not_found" });
+      this.opts.log.info(`Hub: admin "${auth.userId}" removed user "${userId}" (cleanResources=${cleanResources})`);
+      return this.json(res, 200, { ok: true });
     }
 
     if (req.method === "POST" && routePath === "/api/v1/hub/tasks/share") {
       const body = await this.readJson(req);
       if (!body?.task) return this.json(res, 400, { error: "invalid_payload" });
       const task = { ...body.task, sourceUserId: auth.userId };
+      const existingTask = task.sourceTaskId ? this.opts.store.getHubTaskBySource(auth.userId, task.sourceTaskId) : null;
       this.opts.store.upsertHubTask(task);
       const chunks = Array.isArray(body.chunks) ? body.chunks : [];
       const chunkIds: string[] = [];
@@ -366,16 +430,23 @@ export class HubServer {
         this.opts.store.upsertHubChunk({ ...chunk, sourceUserId: auth.userId });
         chunkIds.push(chunk.id);
       }
-      // Async embedding: don't block the response
       if (this.opts.embedder && chunkIds.length > 0) {
         this.embedChunksAsync(chunkIds, chunks);
+      }
+      if (!existingTask) {
+        this.notifyAdmins("resource_shared", "task", String(task.title || task.sourceTaskId || ""), auth.userId);
       }
       return this.json(res, 200, { ok: true, chunks: chunkIds.length });
     }
 
     if (req.method === "POST" && routePath === "/api/v1/hub/tasks/unshare") {
       const body = await this.readJson(req);
-      this.opts.store.deleteHubTaskBySource(auth.userId, String(body.sourceTaskId));
+      const srcTaskId = String(body.sourceTaskId);
+      const existing = this.opts.store.getHubTaskBySource(auth.userId, srcTaskId);
+      this.opts.store.deleteHubTaskBySource(auth.userId, srcTaskId);
+      if (existing) {
+        this.notifyAdmins("resource_unshared", "task", existing.title || srcTaskId, auth.userId);
+      }
       return this.json(res, 200, { ok: true });
     }
 
@@ -387,15 +458,8 @@ export class HubServer {
       if (!sourceChunkId) return this.json(res, 400, { error: "missing_source_chunk_id" });
       const existing = this.opts.store.getHubMemoryBySource(auth.userId, sourceChunkId);
       const memoryId = existing?.id ?? randomUUID();
-      const visibility = m.visibility === "group" ? "group" : "public";
-      let resolvedGroupId: string | null = null;
-      if (visibility === "group") {
-        const gid = String(m.groupId || "");
-        if (!gid) return this.json(res, 400, { error: "missing_group_id" });
-        const group = this.opts.store.getHubGroupById(gid);
-        if (!group) return this.json(res, 404, { error: "group_not_found" });
-        resolvedGroupId = gid;
-      }
+      const visibility = "public";
+      const resolvedGroupId: string | null = null;
       const now = Date.now();
       this.opts.store.upsertHubMemory({
         id: memoryId,
@@ -413,6 +477,9 @@ export class HubServer {
       if (this.opts.embedder) {
         this.embedMemoryAsync(memoryId, String(m.summary || ""), String(m.content || ""));
       }
+      if (!existing) {
+        this.notifyAdmins("resource_shared", "memory", String(m.summary || m.content?.slice(0, 60) || memoryId), auth.userId);
+      }
       return this.json(res, 200, { ok: true, memoryId, visibility });
     }
 
@@ -420,7 +487,11 @@ export class HubServer {
       const body = await this.readJson(req);
       const sourceChunkId = String(body?.sourceChunkId || "");
       if (!sourceChunkId) return this.json(res, 400, { error: "missing_source_chunk_id" });
+      const existing = this.opts.store.getHubMemoryBySource(auth.userId, sourceChunkId);
       this.opts.store.deleteHubMemoryBySource(auth.userId, sourceChunkId);
+      if (existing) {
+        this.notifyAdmins("resource_unshared", "memory", existing.summary || existing.content?.slice(0, 60) || sourceChunkId, auth.userId);
+      }
       return this.json(res, 200, { ok: true });
     }
 
@@ -555,7 +626,7 @@ export class HubServer {
       if (!sourceSkillId) return this.json(res, 400, { error: "missing_skill_id" });
       const existing = this.opts.store.getHubSkillBySource(auth.userId, sourceSkillId);
       const skillId = existing?.id ?? randomUUID();
-      const visibility = body?.visibility === "group" ? "group" : "public";
+      const visibility = "public";
       this.opts.store.upsertHubSkill({
         id: skillId,
         sourceSkillId,
@@ -563,13 +634,16 @@ export class HubServer {
         name: String(metadata.name || sourceSkillId),
         description: String(metadata.description || ""),
         version: Number(metadata.version || 1),
-        groupId: visibility === "group" ? String(body?.groupId || "") || null : null,
+        groupId: null,
         visibility,
         bundle: JSON.stringify(body?.bundle ?? {}),
         qualityScore: metadata.qualityScore == null ? null : Number(metadata.qualityScore),
         createdAt: existing?.createdAt ?? Date.now(),
         updatedAt: Date.now(),
       });
+      if (!existing) {
+        this.notifyAdmins("resource_shared", "skill", String(metadata.name || sourceSkillId), auth.userId);
+      }
       return this.json(res, 200, { ok: true, skillId, visibility });
     }
 
@@ -577,10 +651,6 @@ export class HubServer {
     if (skillBundleMatch) {
       const skill = this.opts.store.getHubSkillById(decodeURIComponent(skillBundleMatch[1]));
       if (!skill) return this.json(res, 404, { error: "not_found" });
-      const user = this.opts.store.getHubUser(auth.userId);
-      const groups = new Set((user?.groups ?? []).map((group) => group.id));
-      const allowed = skill.visibility === "public" || (skill.groupId != null && groups.has(skill.groupId));
-      if (!allowed) return this.json(res, 403, { error: "forbidden" });
       return this.json(res, 200, {
         skillId: skill.id,
         metadata: {
@@ -596,7 +666,12 @@ export class HubServer {
 
     if (req.method === "POST" && routePath === "/api/v1/hub/skills/unpublish") {
       const body = await this.readJson(req);
-      this.opts.store.deleteHubSkillBySource(auth.userId, String(body?.sourceSkillId || ""));
+      const srcSkillId = String(body?.sourceSkillId || "");
+      const existing = this.opts.store.getHubSkillBySource(auth.userId, srcSkillId);
+      this.opts.store.deleteHubSkillBySource(auth.userId, srcSkillId);
+      if (existing) {
+        this.notifyAdmins("resource_unshared", "skill", existing.name || srcSkillId, auth.userId);
+      }
       return this.json(res, 200, { ok: true });
     }
 
@@ -608,12 +683,48 @@ export class HubServer {
       return this.json(res, 200, { tasks });
     }
 
+    const hubTaskDetailMatch = req.method === "GET" ? routePath.match(/^\/api\/v1\/hub\/shared-tasks\/([^/]+)\/detail$/) : null;
+    if (hubTaskDetailMatch) {
+      const taskId = decodeURIComponent(hubTaskDetailMatch[1]);
+      const task = this.opts.store.getHubTaskById(taskId);
+      if (!task) return this.json(res, 404, { error: "not_found" });
+      const chunks = this.opts.store.listHubChunksByTaskId(taskId);
+      return this.json(res, 200, {
+        id: task.id, title: task.title, summary: task.summary,
+        startedAt: task.createdAt, endedAt: task.updatedAt,
+        chunks: chunks.map(c => ({ role: c.role, content: c.content, summary: c.summary, kind: c.kind, createdAt: c.createdAt })),
+      });
+    }
+
+    const hubSkillDetailMatch = req.method === "GET" ? routePath.match(/^\/api\/v1\/hub\/shared-skills\/([^/]+)\/detail$/) : null;
+    if (hubSkillDetailMatch) {
+      const skillId = decodeURIComponent(hubSkillDetailMatch[1]);
+      const skill = this.opts.store.getHubSkillById(skillId);
+      if (!skill) return this.json(res, 404, { error: "not_found" });
+      let files: Array<{ path: string; type: string; size: number }> = [];
+      try {
+        const bundle = JSON.parse(skill.bundle || "{}");
+        if (Array.isArray(bundle.files)) {
+          files = bundle.files.map((f: any) => ({ path: f.path ?? f.name ?? "unknown", type: f.type ?? "file", size: f.size ?? (f.content ? f.content.length : 0) }));
+        }
+      } catch { /* ignore parse error */ }
+      return this.json(res, 200, {
+        skill: { id: skill.id, name: skill.name, description: skill.description, version: skill.version, qualityScore: skill.qualityScore, status: "published" },
+        files,
+        versions: [],
+      });
+    }
+
     const adminTaskDeleteMatch = req.method === "DELETE" ? routePath.match(/^\/api\/v1\/hub\/admin\/shared-tasks\/([^/]+)$/) : null;
     if (adminTaskDeleteMatch) {
       if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
       const taskId = decodeURIComponent(adminTaskDeleteMatch[1]);
+      const taskInfo = this.opts.store.getHubTaskById(taskId);
       const deleted = this.opts.store.deleteHubTaskById(taskId);
       if (!deleted) return this.json(res, 404, { error: "not_found" });
+      if (taskInfo) {
+        this.opts.store.insertHubNotification({ id: randomUUID(), userId: taskInfo.sourceUserId, type: "resource_removed", resource: "task", title: taskInfo.title });
+      }
       return this.json(res, 200, { ok: true });
     }
 
@@ -627,8 +738,12 @@ export class HubServer {
     if (adminSkillDeleteMatch) {
       if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
       const skillId = decodeURIComponent(adminSkillDeleteMatch[1]);
+      const skillInfo = this.opts.store.getHubSkillById(skillId);
       const deleted = this.opts.store.deleteHubSkillById(skillId);
       if (!deleted) return this.json(res, 404, { error: "not_found" });
+      if (skillInfo) {
+        this.opts.store.insertHubNotification({ id: randomUUID(), userId: skillInfo.sourceUserId, type: "resource_removed", resource: "skill", title: skillInfo.name });
+      }
       return this.json(res, 200, { ok: true });
     }
 
@@ -642,8 +757,12 @@ export class HubServer {
     if (adminMemoryDeleteMatch) {
       if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
       const memoryId = decodeURIComponent(adminMemoryDeleteMatch[1]);
+      const memInfo = this.opts.store.getHubMemoryById(memoryId);
       const deleted = this.opts.store.deleteHubMemoryById(memoryId);
       if (!deleted) return this.json(res, 404, { error: "not_found" });
+      if (memInfo) {
+        this.opts.store.insertHubNotification({ id: randomUUID(), userId: memInfo.sourceUserId, type: "resource_removed", resource: "memory", title: memInfo.summary || memInfo.id });
+      }
       return this.json(res, 200, { ok: true });
     }
 
@@ -666,7 +785,85 @@ export class HubServer {
       });
     }
 
+    if (req.method === "GET" && routePath === "/api/v1/hub/notifications") {
+      const unread = (new URL(req.url!, `http://${req.headers.host}`)).searchParams.get("unread") === "1";
+      const list = this.opts.store.listHubNotifications(auth.userId, { unreadOnly: unread, limit: 50 });
+      const unreadCount = this.opts.store.countUnreadHubNotifications(auth.userId);
+      return this.json(res, 200, { notifications: list, unreadCount });
+    }
+
+    if (req.method === "POST" && routePath === "/api/v1/hub/notifications/read") {
+      const body = await this.readJson(req);
+      const ids = Array.isArray(body.ids) ? body.ids as string[] : undefined;
+      this.opts.store.markHubNotificationsRead(auth.userId, ids);
+      return this.json(res, 200, { ok: true });
+    }
+
+    if (req.method === "POST" && routePath === "/api/v1/hub/notifications/clear") {
+      this.opts.store.clearHubNotifications(auth.userId);
+      return this.json(res, 200, { ok: true });
+    }
+
     return this.json(res, 404, { error: "not_found" });
+  }
+
+  private notifyAdmins(type: string, resource: string, title: string, fromUserId: string, opts?: { dedup?: boolean; deduoWindowMs?: number }): void {
+    try {
+      const admins = this.opts.store.listHubUsers("active").filter(u => u.role === "admin" && u.id !== fromUserId);
+      for (const admin of admins) {
+        if (opts?.dedup && this.opts.store.hasRecentHubNotification(admin.id, type, resource, opts.deduoWindowMs ?? 300_000)) {
+          continue;
+        }
+        this.opts.store.insertHubNotification({ id: randomUUID(), userId: admin.id, type, resource, title });
+      }
+    } catch { /* best-effort */ }
+  }
+
+  private initOnlineTracking(): void {
+    try {
+      const ownerId = this.authState.bootstrapAdminUserId || "";
+      const users = this.opts.store.listHubUsers("active");
+      const now = Date.now();
+      for (const u of users) {
+        if (u.id === ownerId) continue;
+        if (u.lastActiveAt && now - u.lastActiveAt < HubServer.OFFLINE_THRESHOLD_MS) {
+          this.knownOnlineUsers.add(u.id);
+        }
+      }
+    } catch { /* best-effort */ }
+  }
+
+  private checkOfflineUsers(): void {
+    try {
+      const ownerId = this.authState.bootstrapAdminUserId || "";
+      const users = this.opts.store.listHubUsers("active");
+      const now = Date.now();
+      const currentlyOnline = new Set<string>();
+      for (const u of users) {
+        if (u.id === ownerId) continue;
+        if (u.lastActiveAt && now - u.lastActiveAt < HubServer.OFFLINE_THRESHOLD_MS) {
+          currentlyOnline.add(u.id);
+        }
+      }
+      for (const uid of this.knownOnlineUsers) {
+        if (!currentlyOnline.has(uid)) {
+          const user = users.find(u => u.id === uid);
+          if (user) {
+            this.notifyAdmins("user_offline", "user", user.username, uid);
+            this.opts.log.info(`Hub: user "${user.username}" (${uid}) went offline`);
+          }
+        }
+      }
+      for (const uid of currentlyOnline) {
+        if (!this.knownOnlineUsers.has(uid)) {
+          const user = users.find(u => u.id === uid);
+          if (user) {
+            this.notifyAdmins("user_online", "user", user.username, uid);
+          }
+        }
+      }
+      this.knownOnlineUsers = currentlyOnline;
+    } catch { /* best-effort */ }
   }
 
   private authenticate(req: http.IncomingMessage) {
@@ -679,6 +876,10 @@ export class HubServer {
     if (!user || user.status !== "active") return null;
     const hash = createHash("sha256").update(token).digest("hex");
     if (user.tokenHash !== hash) return null;
+    const clientIp = (req.headers["x-client-ip"] as string)?.trim()
+      || (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+      || req.socket.remoteAddress || "";
+    try { this.opts.store.updateHubUserActivity(user.id, clientIp); } catch { /* best-effort */ }
     return {
       userId: user.id,
       username: user.username,

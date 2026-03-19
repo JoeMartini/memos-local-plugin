@@ -64,8 +64,10 @@ export function initPlugin(opts: PluginInitOptions = {}): MemosLocalPlugin {
   const worker = new IngestWorker(store, embedder, ctx);
   const engine = new RecallEngine(store, embedder, ctx);
 
+  const sharedState = { lastSearchTime: 0 };
+
   const tools: ToolDefinition[] = [
-    createMemorySearchTool(engine, store, ctx),
+    createMemorySearchTool(engine, store, ctx, sharedState),
     createMemoryTimelineTool(store),
     createMemoryGetTool(store),
     createNetworkMemoryDetailTool(store, ctx),
@@ -87,7 +89,10 @@ export function initPlugin(opts: PluginInitOptions = {}): MemosLocalPlugin {
       const turnId = uuid();
       const tag = ctx.config.capture?.evidenceWrapperTag ?? "STORED_MEMORY";
 
-      const captured = captureMessages(messages, session, turnId, tag, ctx.log, owner);
+      const userSearchTime = sharedState.lastSearchTime || 0;
+      sharedState.lastSearchTime = 0;
+
+      const captured = captureMessages(messages, session, turnId, tag, ctx.log, owner, userSearchTime);
       if (captured.length > 0) {
         worker.enqueue(captured);
       }

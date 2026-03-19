@@ -89,6 +89,20 @@ export async function publishSkillBundleToHub(
   }) as Promise<{ skillId: string; visibility: "public" | "group" }>;
 }
 
+export async function unpublishSkillBundleFromHub(
+  store: SqliteStore,
+  ctx: PluginContext,
+  input: { skillId: string; hubAddress?: string; userToken?: string },
+): Promise<{ ok: boolean }> {
+  const client = await resolveHubClient(store, ctx, { hubAddress: input.hubAddress, userToken: input.userToken });
+  return hubRequestJson(client.hubUrl, client.userToken, "/api/v1/hub/skills/unpublish", {
+    method: "POST",
+    body: JSON.stringify({
+      sourceSkillId: input.skillId,
+    }),
+  }) as Promise<{ ok: boolean }>;
+}
+
 export async function fetchHubSkillBundle(
   store: SqliteStore,
   ctx: PluginContext,

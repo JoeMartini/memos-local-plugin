@@ -275,6 +275,7 @@ export interface ClientModeConfig {
   hubAddress?: string;
   userToken?: string;
   teamToken?: string;
+  nickname?: string;
   pendingUserId?: string;
 }
 

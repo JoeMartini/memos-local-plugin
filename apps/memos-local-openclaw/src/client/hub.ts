@@ -134,16 +134,57 @@ export async function hubGetMemoryDetail(
   };
 }
 
+export async function hubUpdateUsername(
+  store: SqliteStore,
+  ctx: PluginContext,
+  newUsername: string,
+): Promise<{ ok: boolean; username: string; userToken: string }> {
+  const client = await resolveHubClient(store, ctx);
+  const result = await hubRequestJson(client.hubUrl, client.userToken, "/api/v1/hub/me/update-profile", {
+    method: "POST",
+    body: JSON.stringify({ username: newUsername }),
+  }) as { ok: boolean; username: string; userToken: string };
+  if (result.ok && result.userToken) {
+    store.setClientHubConnection({
+      hubUrl: client.hubUrl,
+      userId: client.userId,
+      username: result.username,
+      userToken: result.userToken,
+      role: client.role as "admin" | "member",
+      connectedAt: Date.now(),
+    });
+  }
+  return result;
+}
+
+let _cachedClientIp: string | null = null;
+function getClientIp(): string {
+  if (_cachedClientIp !== null) return _cachedClientIp;
+  try {
+    const os = require("os");
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] ?? []) {
+        if (net.family === "IPv4" && !net.internal) { _cachedClientIp = net.address; return _cachedClientIp!; }
+      }
+    }
+  } catch { /* browser or no os module */ }
+  _cachedClientIp = "";
+  return "";
+}
+
 export async function hubRequestJson(
   hubUrl: string,
   userToken: string,
   route: string,
   init: RequestInit = {},
 ): Promise<unknown> {
+  const clientIp = getClientIp();
   const res = await fetch(`${normalizeHubUrl(hubUrl)}${route}`, {
     ...init,
     headers: {
       authorization: `Bearer ${userToken}`,
+      ...(clientIp ? { "x-client-ip": clientIp } : {}),
       ...(init.body ? { "content-type": "application/json" } : {}),
       ...(init.headers ?? {}),
     },

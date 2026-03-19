@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type { Chunk, ChunkRef, DedupStatus, Task, TaskStatus, Skill, SkillStatus, SkillVisibility, SkillVersion, TaskSkillLink, TaskSkillRelation, Logger } from "../types";
-import type { GroupInfo, SharedVisibility, UserInfo, UserRole, UserStatus } from "../sharing/types";
+import type { SharedVisibility, UserInfo, UserRole, UserStatus } from "../sharing/types";
 
 export class SqliteStore {
   private db: Database.Database;
@@ -112,11 +112,22 @@ export class SqliteStore {
     this.migrateSkillEmbeddingsAndFts();
     this.migrateFtsToTrigram();
     this.migrateHubTables();
+    this.migrateLocalSharedTasksOwner();
     this.log.debug("Database schema initialized");
   }
 
   private migrateChunksIndexesForRecall(): void {
     this.db.exec("CREATE INDEX IF NOT EXISTS idx_chunks_dedup_created ON chunks(dedup_status, created_at DESC)");
+  }
+
+  private migrateLocalSharedTasksOwner(): void {
+    try {
+      const cols = this.db.prepare("PRAGMA table_info(local_shared_tasks)").all() as Array<{ name: string }>;
+      if (cols.length > 0 && !cols.some((c) => c.name === "original_owner")) {
+        this.db.exec("ALTER TABLE local_shared_tasks ADD COLUMN original_owner TEXT NOT NULL DEFAULT 'agent:main'");
+        this.log.info("Migrated: added original_owner column to local_shared_tasks");
+      }
+    } catch { /* table may not exist yet */ }
   }
 
   private migrateOwnerFields(): void {
@@ -516,12 +527,13 @@ export class SqliteStore {
     ).run(toolName, Math.round(durationMs), success ? 1 : 0, Date.now());
   }
 
-  getToolMetrics(minutes: number): {
+  getToolMetrics(minutes: number, fromMs?: number, toMs?: number): {
     tools: string[];
     series: Array<{ minute: string; [tool: string]: number | string }>;
     aggregated: Array<{ tool: string; totalCalls: number; avgMs: number; p95Ms: number; errorCount: number }>;
   } {
-    const since = Date.now() - minutes * 60 * 1000;
+    const since = fromMs ?? (Date.now() - minutes * 60 * 1000);
+    const until = toMs ?? Date.now();
 
     const rows = this.db.prepare(
       `SELECT tool_name,
@@ -529,9 +541,9 @@ export class SqliteStore {
               success,
               strftime('%Y-%m-%d %H:%M', called_at/1000, 'unixepoch', 'localtime') as minute_key
        FROM tool_calls
-       WHERE called_at >= ?
+       WHERE called_at >= ? AND called_at <= ?
        ORDER BY called_at`,
-    ).all(since) as Array<{ tool_name: string; duration_ms: number; success: number; minute_key: string }>;
+    ).all(since, until) as Array<{ tool_name: string; duration_ms: number; success: number; minute_key: string }>;
 
     const toolSet = new Set<string>();
     const minuteMap = new Map<string, Map<string, { total: number; count: number }>>();
@@ -683,33 +695,26 @@ export class SqliteStore {
         shared_at     INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS local_shared_memories (
+        chunk_id        TEXT PRIMARY KEY REFERENCES chunks(id) ON DELETE CASCADE,
+        original_owner  TEXT NOT NULL,
+        shared_at       INTEGER NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS hub_users (
-        id          TEXT PRIMARY KEY,
-        username    TEXT NOT NULL UNIQUE,
-        device_name TEXT NOT NULL DEFAULT '',
-        role        TEXT NOT NULL,
-        status      TEXT NOT NULL,
-        token_hash  TEXT NOT NULL DEFAULT '',
-        created_at  INTEGER NOT NULL,
-        approved_at INTEGER
+        id             TEXT PRIMARY KEY,
+        username       TEXT NOT NULL UNIQUE,
+        device_name    TEXT NOT NULL DEFAULT '',
+        role           TEXT NOT NULL,
+        status         TEXT NOT NULL,
+        token_hash     TEXT NOT NULL DEFAULT '',
+        created_at     INTEGER NOT NULL,
+        approved_at    INTEGER,
+        last_ip        TEXT NOT NULL DEFAULT '',
+        last_active_at INTEGER
       );
       CREATE INDEX IF NOT EXISTS idx_hub_users_status ON hub_users(status);
       CREATE INDEX IF NOT EXISTS idx_hub_users_role ON hub_users(role);
-
-      CREATE TABLE IF NOT EXISTS hub_groups (
-        id          TEXT PRIMARY KEY,
-        name        TEXT NOT NULL UNIQUE,
-        description TEXT NOT NULL DEFAULT '',
-        created_at  INTEGER NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS hub_group_members (
-        group_id    TEXT NOT NULL REFERENCES hub_groups(id) ON DELETE CASCADE,
-        user_id     TEXT NOT NULL REFERENCES hub_users(id) ON DELETE CASCADE,
-        joined_at   INTEGER NOT NULL,
-        PRIMARY KEY (group_id, user_id)
-      );
-      CREATE INDEX IF NOT EXISTS idx_hub_group_members_user ON hub_group_members(user_id);
 
       CREATE TABLE IF NOT EXISTS hub_tasks (
         id             TEXT PRIMARY KEY,
@@ -872,6 +877,32 @@ export class SqliteStore {
         VALUES (new.rowid, new.summary, new.content);
       END;
     `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS hub_notifications (
+        id          TEXT PRIMARY KEY,
+        user_id     TEXT NOT NULL,
+        type        TEXT NOT NULL,
+        resource    TEXT NOT NULL,
+        title       TEXT NOT NULL,
+        message     TEXT NOT NULL DEFAULT '',
+        read        INTEGER NOT NULL DEFAULT 0,
+        created_at  INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_hub_notif_user ON hub_notifications(user_id, read, created_at DESC);
+    `);
+
+    try {
+      const cols = this.db.prepare("PRAGMA table_info(hub_users)").all() as Array<{ name: string }>;
+      if (cols.length > 0 && !cols.some(c => c.name === "last_ip")) {
+        this.db.exec("ALTER TABLE hub_users ADD COLUMN last_ip TEXT NOT NULL DEFAULT ''");
+        this.log.info("Migrated: added last_ip column to hub_users");
+      }
+      if (cols.length > 0 && !cols.some(c => c.name === "last_active_at")) {
+        this.db.exec("ALTER TABLE hub_users ADD COLUMN last_active_at INTEGER");
+        this.log.info("Migrated: added last_active_at column to hub_users");
+      }
+    } catch { /* table may not exist yet */ }
   }
 
   // ─── Write ───
@@ -1213,6 +1244,8 @@ export class SqliteStore {
       "skill_embeddings",
       "skill_versions",
       "skills",
+      "local_shared_memories",
+      "local_shared_tasks",
       "embeddings",
       "chunks",
       "tasks",
@@ -1684,6 +1717,67 @@ export class SqliteStore {
     return rows.map(r => ({ taskId: r.task_id, hubTaskId: r.hub_task_id, visibility: r.visibility, groupId: r.group_id, syncedChunks: r.synced_chunks }));
   }
 
+  // ─── Local Shared Memories (client-side tracking) ───
+
+  markMemorySharedLocally(chunkId: string): { ok: boolean; owner?: string; originalOwner?: string; sharedAt?: number; reason?: string } {
+    const chunk = this.getChunk(chunkId);
+    if (!chunk) return { ok: false, reason: "not_found" };
+    if (chunk.owner === "public") {
+      const existing = this.getLocalSharedMemory(chunkId);
+      return {
+        ok: true,
+        owner: "public",
+        originalOwner: existing?.originalOwner ?? undefined,
+        sharedAt: existing?.sharedAt ?? undefined,
+      };
+    }
+
+    const sharedAt = Date.now();
+    this.db.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO local_shared_memories (chunk_id, original_owner, shared_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(chunk_id) DO UPDATE SET
+          original_owner = excluded.original_owner,
+          shared_at = excluded.shared_at
+      `).run(chunkId, chunk.owner, sharedAt);
+      this.updateChunk(chunkId, { owner: "public" });
+    })();
+
+    return { ok: true, owner: "public", originalOwner: chunk.owner, sharedAt };
+  }
+
+  unmarkMemorySharedLocally(chunkId: string, fallbackOwner?: string): { ok: boolean; owner?: string; originalOwner?: string; reason?: string } {
+    const chunk = this.getChunk(chunkId);
+    if (!chunk) return { ok: false, reason: "not_found" };
+    if (chunk.owner !== "public") {
+      return { ok: true, owner: chunk.owner };
+    }
+
+    const existing = this.getLocalSharedMemory(chunkId);
+    const restoreOwner = existing?.originalOwner ?? fallbackOwner;
+    if (!restoreOwner || restoreOwner === "public") {
+      return { ok: false, reason: "original_owner_missing" };
+    }
+
+    this.db.transaction(() => {
+      this.updateChunk(chunkId, { owner: restoreOwner });
+      this.db.prepare("DELETE FROM local_shared_memories WHERE chunk_id = ?").run(chunkId);
+    })();
+
+    return { ok: true, owner: restoreOwner, originalOwner: restoreOwner };
+  }
+
+  getLocalSharedMemory(chunkId: string): { chunkId: string; originalOwner: string; sharedAt: number } | null {
+    const row = this.db.prepare("SELECT chunk_id, original_owner, shared_at FROM local_shared_memories WHERE chunk_id = ?").get(chunkId) as any;
+    if (!row) return null;
+    return {
+      chunkId: row.chunk_id,
+      originalOwner: row.original_owner,
+      sharedAt: row.shared_at,
+    };
+  }
+
   // ─── Hub Users / Groups ───
 
   upsertHubUser(user: HubUserRecord): void {
@@ -1704,74 +1798,39 @@ export class SqliteStore {
   getHubUser(userId: string): HubUserRecord | null {
     const row = this.db.prepare('SELECT * FROM hub_users WHERE id = ?').get(userId) as HubUserRow | undefined;
     if (!row) return null;
-    return this.attachGroupsToHubUser(rowToHubUser(row));
+    return rowToHubUser(row);
   }
 
   listHubUsers(status?: UserStatus): HubUserRecord[] {
     const rows = status
       ? this.db.prepare('SELECT * FROM hub_users WHERE status = ? ORDER BY created_at').all(status) as HubUserRow[]
       : this.db.prepare('SELECT * FROM hub_users ORDER BY created_at').all() as HubUserRow[];
-    return rows.map((row) => this.attachGroupsToHubUser(rowToHubUser(row)));
+    return rows.map(rowToHubUser);
   }
 
-  upsertHubGroup(group: HubGroupRecord): void {
-    this.db.prepare(`
-      INSERT INTO hub_groups (id, name, description, created_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        name = excluded.name,
-        description = excluded.description,
-        created_at = excluded.created_at
-    `).run(group.id, group.name, group.description, group.createdAt);
-  }
-
-  listHubGroups(): HubGroupRecord[] {
-    const rows = this.db.prepare('SELECT * FROM hub_groups ORDER BY name').all() as HubGroupRow[];
-    return rows.map(rowToHubGroup);
-  }
-
-  addHubGroupMember(groupId: string, userId: string, joinedAt = Date.now()): void {
-    this.db.prepare(`
-      INSERT INTO hub_group_members (group_id, user_id, joined_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(group_id, user_id) DO UPDATE SET joined_at = excluded.joined_at
-    `).run(groupId, userId, joinedAt);
-  }
-
-  getHubGroupById(groupId: string): HubGroupRecord | undefined {
-    const row = this.db.prepare('SELECT * FROM hub_groups WHERE id = ?').get(groupId) as HubGroupRow | undefined;
-    return row ? rowToHubGroup(row) : undefined;
-  }
-
-  deleteHubGroup(groupId: string): boolean {
-    const result = this.db.prepare('DELETE FROM hub_groups WHERE id = ?').run(groupId);
+  deleteHubUser(userId: string, cleanResources = false): boolean {
+    if (cleanResources) {
+      this.db.prepare('DELETE FROM hub_tasks WHERE source_user_id = ?').run(userId);
+      this.db.prepare('DELETE FROM hub_skills WHERE source_user_id = ?').run(userId);
+      this.db.prepare('DELETE FROM hub_memories WHERE source_user_id = ?').run(userId);
+    }
+    const result = this.db.prepare('DELETE FROM hub_users WHERE id = ?').run(userId);
     return result.changes > 0;
   }
 
-  listHubGroupMembers(groupId: string): Array<{ userId: string; username: string; joinedAt: number }> {
-    const rows = this.db.prepare(`
-      SELECT gm.user_id, hu.username, gm.joined_at
-      FROM hub_group_members gm
-      JOIN hub_users hu ON hu.id = gm.user_id
-      WHERE gm.group_id = ?
-      ORDER BY gm.joined_at
-    `).all(groupId) as Array<{ user_id: string; username: string; joined_at: number }>;
-    return rows.map(r => ({ userId: r.user_id, username: r.username, joinedAt: r.joined_at }));
+  updateHubUserActivity(userId: string, ip: string, timestamp?: number): void {
+    this.db.prepare('UPDATE hub_users SET last_ip = ?, last_active_at = ? WHERE id = ?').run(ip, timestamp ?? Date.now(), userId);
   }
 
-  removeHubGroupMember(groupId: string, userId: string): void {
-    this.db.prepare('DELETE FROM hub_group_members WHERE group_id = ? AND user_id = ?').run(groupId, userId);
-  }
-
-  getGroupsForHubUser(userId: string): GroupInfo[] {
-    const rows = this.db.prepare(`
-      SELECT g.*
-      FROM hub_group_members gm
-      JOIN hub_groups g ON g.id = gm.group_id
-      WHERE gm.user_id = ?
-      ORDER BY g.name
-    `).all(userId) as HubGroupRow[];
-    return rows.map((row) => ({ id: row.id, name: row.name, description: row.description || undefined }));
+  getHubUserContributions(): Record<string, { memoryCount: number; taskCount: number; skillCount: number }> {
+    const result: Record<string, { memoryCount: number; taskCount: number; skillCount: number }> = {};
+    const memRows = this.db.prepare('SELECT source_user_id, COUNT(*) as cnt FROM hub_memories GROUP BY source_user_id').all() as Array<{ source_user_id: string; cnt: number }>;
+    const taskRows = this.db.prepare('SELECT source_user_id, COUNT(*) as cnt FROM hub_tasks GROUP BY source_user_id').all() as Array<{ source_user_id: string; cnt: number }>;
+    const skillRows = this.db.prepare('SELECT source_user_id, COUNT(*) as cnt FROM hub_skills GROUP BY source_user_id').all() as Array<{ source_user_id: string; cnt: number }>;
+    for (const r of memRows) { if (!result[r.source_user_id]) result[r.source_user_id] = { memoryCount: 0, taskCount: 0, skillCount: 0 }; result[r.source_user_id].memoryCount = r.cnt; }
+    for (const r of taskRows) { if (!result[r.source_user_id]) result[r.source_user_id] = { memoryCount: 0, taskCount: 0, skillCount: 0 }; result[r.source_user_id].taskCount = r.cnt; }
+    for (const r of skillRows) { if (!result[r.source_user_id]) result[r.source_user_id] = { memoryCount: 0, taskCount: 0, skillCount: 0 }; result[r.source_user_id].skillCount = r.cnt; }
+    return result;
   }
 
   // ─── Hub Shared Data ───
@@ -1792,6 +1851,11 @@ export class SqliteStore {
 
   getHubTaskBySource(sourceUserId: string, sourceTaskId: string): HubTaskRecord | null {
     const row = this.db.prepare('SELECT * FROM hub_tasks WHERE source_user_id = ? AND source_task_id = ?').get(sourceUserId, sourceTaskId) as HubTaskRow | undefined;
+    return row ? rowToHubTask(row) : null;
+  }
+
+  getHubTaskById(taskId: string): HubTaskRecord | null {
+    const row = this.db.prepare('SELECT * FROM hub_tasks WHERE id = ?').get(taskId) as HubTaskRow | undefined;
     return row ? rowToHubTask(row) : null;
   }
 
@@ -1874,24 +1938,16 @@ export class SqliteStore {
     const limit = options?.maxResults ?? 10;
     const userId = options?.userId ?? "";
     const rows = this.db.prepare(`
-      SELECT hc.id, hc.content, hc.summary, hc.role, hc.created_at, ht.title as task_title, ht.visibility, hg.name as group_name, hu.username as owner_name,
+      SELECT hc.id, hc.content, hc.summary, hc.role, hc.created_at, ht.title as task_title, ht.visibility, '' as group_name, hu.username as owner_name,
              bm25(hub_chunks_fts) as rank
       FROM hub_chunks_fts f
       JOIN hub_chunks hc ON hc.rowid = f.rowid
       JOIN hub_tasks ht ON ht.id = hc.hub_task_id
-      LEFT JOIN hub_groups hg ON hg.id = ht.group_id
       LEFT JOIN hub_users hu ON hu.id = ht.source_user_id
       WHERE hub_chunks_fts MATCH ?
-        AND (
-          ht.visibility = 'public'
-          OR EXISTS (
-            SELECT 1 FROM hub_group_members gm
-            WHERE gm.group_id = ht.group_id AND gm.user_id = ?
-          )
-        )
       ORDER BY rank
       LIMIT ?
-    `).all(sanitizeFtsQuery(query), userId, limit) as HubSearchRow[];
+    `).all(sanitizeFtsQuery(query), limit) as HubSearchRow[];
     return rows.map((row, idx) => ({ hit: row, rank: idx + 1 }));
   }
 
@@ -1916,12 +1972,7 @@ export class SqliteStore {
       FROM hub_embeddings he
       JOIN hub_chunks hc ON hc.id = he.chunk_id
       JOIN hub_tasks ht ON ht.id = hc.hub_task_id
-      WHERE ht.visibility = 'public'
-         OR EXISTS (
-           SELECT 1 FROM hub_group_members gm
-           WHERE gm.group_id = ht.group_id AND gm.user_id = ?
-         )
-    `).all(userId) as Array<{ chunk_id: string; vector: Buffer; dimensions: number }>;
+    `).all() as Array<{ chunk_id: string; vector: Buffer; dimensions: number }>;
     return rows.map(r => ({
       chunkId: r.chunk_id,
       vector: new Float32Array(r.vector.buffer, r.vector.byteOffset, r.dimensions),
@@ -1930,22 +1981,14 @@ export class SqliteStore {
 
   getVisibleHubSearchHitByChunkId(chunkId: string, userId: string): HubSearchRow | null {
     const row = this.db.prepare(`
-      SELECT hc.id, hc.content, hc.summary, hc.role, hc.created_at, ht.title as task_title, ht.visibility, hg.name as group_name, hu.username as owner_name,
+      SELECT hc.id, hc.content, hc.summary, hc.role, hc.created_at, ht.title as task_title, ht.visibility, '' as group_name, hu.username as owner_name,
              0 as rank
       FROM hub_chunks hc
       JOIN hub_tasks ht ON ht.id = hc.hub_task_id
-      LEFT JOIN hub_groups hg ON hg.id = ht.group_id
       LEFT JOIN hub_users hu ON hu.id = ht.source_user_id
       WHERE hc.id = ?
-        AND (
-          ht.visibility = 'public'
-          OR EXISTS (
-            SELECT 1 FROM hub_group_members gm
-            WHERE gm.group_id = ht.group_id AND gm.user_id = ?
-          )
-        )
       LIMIT 1
-    `).get(chunkId, userId) as HubSearchRow | undefined;
+    `).get(chunkId) as HubSearchRow | undefined;
     return row ?? null;
   }
 
@@ -1961,38 +2004,24 @@ export class SqliteStore {
     let rows: HubSkillSearchRow[];
     if (sanitized) {
       rows = this.db.prepare(`
-        SELECT hs.id, hs.name, hs.description, hs.version, hs.visibility, hg.name AS group_name, hu.username AS owner_name, hs.quality_score,
+        SELECT hs.id, hs.name, hs.description, hs.version, hs.visibility, '' AS group_name, hu.username AS owner_name, hs.quality_score,
                bm25(hub_skills_fts) as rank
         FROM hub_skills_fts f
         JOIN hub_skills hs ON hs.rowid = f.rowid
-        LEFT JOIN hub_groups hg ON hg.id = hs.group_id
         LEFT JOIN hub_users hu ON hu.id = hs.source_user_id
         WHERE hub_skills_fts MATCH ?
-          AND (
-            hs.visibility = 'public'
-            OR EXISTS (
-              SELECT 1 FROM hub_group_members gm
-              WHERE gm.group_id = hs.group_id AND gm.user_id = ?
-            )
-          )
         ORDER BY rank
         LIMIT ?
-      `).all(sanitized, userId, limit) as HubSkillSearchRow[];
+      `).all(sanitized, limit) as HubSkillSearchRow[];
     } else {
       rows = this.db.prepare(`
-        SELECT hs.id, hs.name, hs.description, hs.version, hs.visibility, hg.name AS group_name, hu.username AS owner_name, hs.quality_score,
+        SELECT hs.id, hs.name, hs.description, hs.version, hs.visibility, '' AS group_name, hu.username AS owner_name, hs.quality_score,
                0 as rank
         FROM hub_skills hs
-        LEFT JOIN hub_groups hg ON hg.id = hs.group_id
         LEFT JOIN hub_users hu ON hu.id = hs.source_user_id
-        WHERE hs.visibility = 'public'
-           OR EXISTS (
-             SELECT 1 FROM hub_group_members gm
-             WHERE gm.group_id = hs.group_id AND gm.user_id = ?
-           )
         ORDER BY hs.updated_at DESC
         LIMIT ?
-      `).all(userId, limit) as HubSkillSearchRow[];
+      `).all(limit) as HubSkillSearchRow[];
     }
     return rows.map((row, idx) => ({ hit: row, rank: idx + 1 }));
   }
@@ -2003,19 +2032,13 @@ export class SqliteStore {
 
   listVisibleHubTasks(userId: string, limit = 40): Array<{ id: string; sourceTaskId: string; sourceUserId: string; title: string; summary: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; chunkCount: number; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT t.*, u.username AS owner_name, g.name AS group_name,
+      SELECT t.*, u.username AS owner_name, NULL AS group_name,
         (SELECT COUNT(*) FROM hub_chunks c WHERE c.hub_task_id = t.id) AS chunk_count
       FROM hub_tasks t
       LEFT JOIN hub_users u ON u.id = t.source_user_id
-      LEFT JOIN hub_groups g ON g.id = t.group_id
-      WHERE t.visibility = 'public'
-         OR EXISTS (
-           SELECT 1 FROM hub_group_members gm
-           WHERE gm.group_id = t.group_id AND gm.user_id = ?
-         )
       ORDER BY t.updated_at DESC
       LIMIT ?
-    `).all(userId, limit) as any[];
+    `).all(limit) as any[];
     return rows.map(r => ({
       id: r.id, sourceTaskId: r.source_task_id, sourceUserId: r.source_user_id,
       title: r.title, summary: r.summary, groupId: r.group_id, groupName: r.group_name ?? null,
@@ -2026,19 +2049,23 @@ export class SqliteStore {
 
   listAllHubTasks(): Array<{ id: string; sourceTaskId: string; sourceUserId: string; title: string; summary: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; chunkCount: number; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT t.*, u.username AS owner_name, g.name AS group_name,
+      SELECT t.*, u.username AS owner_name,
         (SELECT COUNT(*) FROM hub_chunks c WHERE c.hub_task_id = t.id) AS chunk_count
       FROM hub_tasks t
       LEFT JOIN hub_users u ON u.id = t.source_user_id
-      LEFT JOIN hub_groups g ON g.id = t.group_id
       ORDER BY t.updated_at DESC
     `).all() as any[];
     return rows.map(r => ({
       id: r.id, sourceTaskId: r.source_task_id, sourceUserId: r.source_user_id,
-      title: r.title, summary: r.summary, groupId: r.group_id, groupName: r.group_name ?? null,
+      title: r.title, summary: r.summary, groupId: r.group_id, groupName: null as string | null,
       visibility: r.visibility, ownerName: r.owner_name ?? "unknown", chunkCount: r.chunk_count ?? 0,
       createdAt: r.created_at, updatedAt: r.updated_at,
     }));
+  }
+
+  listHubChunksByTaskId(hubTaskId: string): HubChunkRecord[] {
+    const rows = this.db.prepare('SELECT * FROM hub_chunks WHERE hub_task_id = ? ORDER BY created_at ASC').all(hubTaskId) as HubChunkRow[];
+    return rows.map(rowToHubChunk);
   }
 
   deleteHubTaskById(taskId: string): boolean {
@@ -2048,18 +2075,12 @@ export class SqliteStore {
 
   listVisibleHubSkills(userId: string, limit = 40): Array<{ id: string; sourceSkillId: string; sourceUserId: string; name: string; description: string; version: number; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; qualityScore: number | null; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT s.*, u.username AS owner_name, g.name AS group_name
+      SELECT s.*, u.username AS owner_name, NULL AS group_name
       FROM hub_skills s
       LEFT JOIN hub_users u ON u.id = s.source_user_id
-      LEFT JOIN hub_groups g ON g.id = s.group_id
-      WHERE s.visibility = 'public'
-         OR EXISTS (
-           SELECT 1 FROM hub_group_members gm
-           WHERE gm.group_id = s.group_id AND gm.user_id = ?
-         )
       ORDER BY s.updated_at DESC
       LIMIT ?
-    `).all(userId, limit) as any[];
+    `).all(limit) as any[];
     return rows.map(r => ({
       id: r.id, sourceSkillId: r.source_skill_id, sourceUserId: r.source_user_id,
       name: r.name, description: r.description, version: r.version,
@@ -2071,16 +2092,15 @@ export class SqliteStore {
 
   listAllHubSkills(): Array<{ id: string; sourceSkillId: string; sourceUserId: string; name: string; description: string; version: number; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; qualityScore: number | null; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT s.*, u.username AS owner_name, g.name AS group_name
+      SELECT s.*, u.username AS owner_name
       FROM hub_skills s
       LEFT JOIN hub_users u ON u.id = s.source_user_id
-      LEFT JOIN hub_groups g ON g.id = s.group_id
       ORDER BY s.updated_at DESC
     `).all() as any[];
     return rows.map(r => ({
       id: r.id, sourceSkillId: r.source_skill_id, sourceUserId: r.source_user_id,
       name: r.name, description: r.description, version: r.version,
-      groupId: r.group_id, groupName: r.group_name ?? null, visibility: r.visibility,
+      groupId: r.group_id, groupName: null as string | null, visibility: r.visibility,
       ownerName: r.owner_name ?? "unknown", qualityScore: r.quality_score,
       createdAt: r.created_at, updatedAt: r.updated_at,
     }));
@@ -2128,6 +2148,47 @@ export class SqliteStore {
     return info.changes > 0;
   }
 
+  // ─── Hub Notifications ───
+
+  insertHubNotification(n: { id: string; userId: string; type: string; resource: string; title: string; message?: string }): void {
+    this.db.prepare(
+      'INSERT INTO hub_notifications (id, user_id, type, resource, title, message, read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)'
+    ).run(n.id, n.userId, n.type, n.resource, n.title, n.message ?? '', Date.now());
+  }
+
+  hasRecentHubNotification(userId: string, type: string, resource: string, windowMs: number = 300_000): boolean {
+    const since = Date.now() - windowMs;
+    const row = this.db.prepare(
+      'SELECT COUNT(*) AS cnt FROM hub_notifications WHERE user_id = ? AND type = ? AND resource = ? AND created_at > ?'
+    ).get(userId, type, resource, since) as { cnt: number };
+    return row.cnt > 0;
+  }
+
+  listHubNotifications(userId: string, opts?: { unreadOnly?: boolean; limit?: number }): Array<{ id: string; userId: string; type: string; resource: string; title: string; message: string; read: boolean; createdAt: number }> {
+    const where = opts?.unreadOnly ? 'WHERE user_id = ? AND read = 0' : 'WHERE user_id = ?';
+    const limit = opts?.limit ?? 50;
+    const rows = this.db.prepare(`SELECT * FROM hub_notifications ${where} ORDER BY created_at DESC LIMIT ?`).all(userId, limit) as any[];
+    return rows.map(r => ({ id: r.id, userId: r.user_id, type: r.type, resource: r.resource, title: r.title, message: r.message, read: !!r.read, createdAt: r.created_at }));
+  }
+
+  countUnreadHubNotifications(userId: string): number {
+    const row = this.db.prepare('SELECT COUNT(*) AS cnt FROM hub_notifications WHERE user_id = ? AND read = 0').get(userId) as { cnt: number };
+    return row.cnt;
+  }
+
+  markHubNotificationsRead(userId: string, ids?: string[]): void {
+    if (ids && ids.length > 0) {
+      const placeholders = ids.map(() => '?').join(',');
+      this.db.prepare(`UPDATE hub_notifications SET read = 1 WHERE user_id = ? AND id IN (${placeholders})`).run(userId, ...ids);
+    } else {
+      this.db.prepare('UPDATE hub_notifications SET read = 1 WHERE user_id = ?').run(userId);
+    }
+  }
+
+  clearHubNotifications(userId: string): void {
+    this.db.prepare('DELETE FROM hub_notifications WHERE user_id = ?').run(userId);
+  }
+
   upsertHubMemoryEmbedding(memoryId: string, vector: Float32Array): void {
     const buf = Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength);
     this.db.prepare(`
@@ -2149,23 +2210,15 @@ export class SqliteStore {
     const sanitized = sanitizeFtsQuery(query);
     if (!sanitized) return [];
     const rows = this.db.prepare(`
-      SELECT hm.id, hm.content, hm.summary, hm.role, hm.created_at, hm.visibility, hg.name as group_name, hu.username as owner_name,
+      SELECT hm.id, hm.content, hm.summary, hm.role, hm.created_at, hm.visibility, '' as group_name, hu.username as owner_name,
              bm25(hub_memories_fts) as rank
       FROM hub_memories_fts f
       JOIN hub_memories hm ON hm.rowid = f.rowid
-      LEFT JOIN hub_groups hg ON hg.id = hm.group_id
       LEFT JOIN hub_users hu ON hu.id = hm.source_user_id
       WHERE hub_memories_fts MATCH ?
-        AND (
-          hm.visibility = 'public'
-          OR EXISTS (
-            SELECT 1 FROM hub_group_members gm
-            WHERE gm.group_id = hm.group_id AND gm.user_id = ?
-          )
-        )
       ORDER BY rank
       LIMIT ?
-    `).all(sanitized, userId, limit) as HubMemorySearchRow[];
+    `).all(sanitized, limit) as HubMemorySearchRow[];
     return rows.map((row, idx) => ({ hit: row, rank: idx + 1 }));
   }
 
@@ -2174,12 +2227,7 @@ export class SqliteStore {
       SELECT hme.memory_id, hme.vector, hme.dimensions
       FROM hub_memory_embeddings hme
       JOIN hub_memories hm ON hm.id = hme.memory_id
-      WHERE hm.visibility = 'public'
-         OR EXISTS (
-           SELECT 1 FROM hub_group_members gm
-           WHERE gm.group_id = hm.group_id AND gm.user_id = ?
-         )
-    `).all(userId) as Array<{ memory_id: string; vector: Buffer; dimensions: number }>;
+    `).all() as Array<{ memory_id: string; vector: Buffer; dimensions: number }>;
     return rows.map(r => ({
       memoryId: r.memory_id,
       vector: new Float32Array(r.vector.buffer, r.vector.byteOffset, r.dimensions),
@@ -2188,58 +2236,43 @@ export class SqliteStore {
 
   getVisibleHubSearchHitByMemoryId(memoryId: string, userId: string): HubMemorySearchRow | null {
     const row = this.db.prepare(`
-      SELECT hm.id, hm.content, hm.summary, hm.role, hm.created_at, hm.visibility, hg.name as group_name, hu.username as owner_name,
+      SELECT hm.id, hm.content, hm.summary, hm.role, hm.created_at, hm.visibility, '' as group_name, hu.username as owner_name,
              0 as rank
       FROM hub_memories hm
-      LEFT JOIN hub_groups hg ON hg.id = hm.group_id
       LEFT JOIN hub_users hu ON hu.id = hm.source_user_id
       WHERE hm.id = ?
-        AND (
-          hm.visibility = 'public'
-          OR EXISTS (
-            SELECT 1 FROM hub_group_members gm
-            WHERE gm.group_id = hm.group_id AND gm.user_id = ?
-          )
-        )
       LIMIT 1
-    `).get(memoryId, userId) as HubMemorySearchRow | undefined;
+    `).get(memoryId) as HubMemorySearchRow | undefined;
     return row ?? null;
   }
 
-  listVisibleHubMemories(userId: string, limit = 40): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; createdAt: number; updatedAt: number }> {
+  listVisibleHubMemories(userId: string, limit = 40): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; content: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT m.*, u.username AS owner_name, g.name AS group_name
+      SELECT m.*, u.username AS owner_name, NULL AS group_name
       FROM hub_memories m
       LEFT JOIN hub_users u ON u.id = m.source_user_id
-      LEFT JOIN hub_groups g ON g.id = m.group_id
-      WHERE m.visibility = 'public'
-         OR EXISTS (
-           SELECT 1 FROM hub_group_members gm
-           WHERE gm.group_id = m.group_id AND gm.user_id = ?
-         )
       ORDER BY m.updated_at DESC
       LIMIT ?
-    `).all(userId, limit) as any[];
+    `).all(limit) as any[];
     return rows.map(r => ({
       id: r.id, sourceChunkId: r.source_chunk_id, sourceUserId: r.source_user_id,
-      role: r.role, summary: r.summary, kind: r.kind,
+      role: r.role, content: r.content ?? "", summary: r.summary, kind: r.kind,
       groupId: r.group_id, groupName: r.group_name ?? null, visibility: r.visibility,
       ownerName: r.owner_name ?? "unknown", createdAt: r.created_at, updatedAt: r.updated_at,
     }));
   }
 
-  listAllHubMemories(): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; createdAt: number; updatedAt: number }> {
+  listAllHubMemories(): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; content: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT m.*, u.username AS owner_name, g.name AS group_name
+      SELECT m.*, u.username AS owner_name
       FROM hub_memories m
       LEFT JOIN hub_users u ON u.id = m.source_user_id
-      LEFT JOIN hub_groups g ON g.id = m.group_id
       ORDER BY m.updated_at DESC
     `).all() as any[];
     return rows.map(r => ({
       id: r.id, sourceChunkId: r.source_chunk_id, sourceUserId: r.source_user_id,
-      role: r.role, summary: r.summary, kind: r.kind,
-      groupId: r.group_id, groupName: r.group_name ?? null, visibility: r.visibility,
+      role: r.role, content: r.content ?? "", summary: r.summary, kind: r.kind,
+      groupId: r.group_id, groupName: null as string | null, visibility: r.visibility,
       ownerName: r.owner_name ?? "unknown", createdAt: r.created_at, updatedAt: r.updated_at,
     }));
   }
@@ -2262,13 +2295,6 @@ export class SqliteStore {
       return bySource.id;
     }
     throw new Error(`source skill not found for skillId=${skillId}`);
-  }
-
-  private attachGroupsToHubUser(user: HubUserRecord): HubUserRecord {
-    return {
-      ...user,
-      groups: this.getGroupsForHubUser(user.id),
-    };
   }
 
   getSessionOwnerMap(sessionKeys: string[]): Map<string, string> {
@@ -2482,6 +2508,8 @@ interface HubUserRecord extends UserInfo {
   tokenHash: string;
   createdAt: number;
   approvedAt: number | null;
+  lastIp: string;
+  lastActiveAt: number | null;
 }
 
 interface HubUserRow {
@@ -2493,6 +2521,8 @@ interface HubUserRow {
   token_hash: string;
   created_at: number;
   approved_at: number | null;
+  last_ip: string;
+  last_active_at: number | null;
 }
 
 function rowToHubUser(row: HubUserRow): HubUserRecord {
@@ -2506,29 +2536,8 @@ function rowToHubUser(row: HubUserRow): HubUserRecord {
     tokenHash: row.token_hash,
     createdAt: row.created_at,
     approvedAt: row.approved_at,
-  };
-}
-
-interface HubGroupRecord {
-  id: string;
-  name: string;
-  description: string;
-  createdAt: number;
-}
-
-interface HubGroupRow {
-  id: string;
-  name: string;
-  description: string;
-  created_at: number;
-}
-
-function rowToHubGroup(row: HubGroupRow): HubGroupRecord {
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    createdAt: row.created_at,
+    lastIp: row.last_ip || "",
+    lastActiveAt: row.last_active_at ?? null,
   };
 }
 
