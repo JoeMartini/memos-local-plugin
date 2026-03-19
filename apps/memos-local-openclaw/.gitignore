@@ -13,8 +13,6 @@ Thumbs.db
 
 # Generated / non-essential
 package-lock.json
-www/
-docs/
 ppt/
 
 # Database files
