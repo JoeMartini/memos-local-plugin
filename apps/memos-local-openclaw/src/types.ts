@@ -251,8 +251,6 @@ export interface SkillEvolutionConfig {
 
 export interface TelemetryConfig {
   enabled?: boolean;
-  posthogApiKey?: string;
-  posthogHost?: string;
 }
 
 export interface MemosLocalConfig {
