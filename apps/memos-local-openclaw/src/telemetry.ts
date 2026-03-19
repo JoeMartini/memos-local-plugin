@@ -18,14 +18,27 @@ export interface TelemetryConfig {
   enabled?: boolean;
 }
 
-const ARMS_ENDPOINT =
-  "https://proj-xtrace-e218d9316b328f196a3c640cc7ca84-cn-hangzhou.cn-hangzhou.log.aliyuncs.com" +
-  "/rum/web/v2" +
-  "?workspace=default-cms-1026429231103299-cn-hangzhou" +
-  "&service_id=a3u72ukxmr@066657d42a13a9a9f337f";
+function loadTelemetryCredentials(): { endpoint: string; pid: string; env: string } {
+  if (process.env.MEMOS_ARMS_ENDPOINT) {
+    return {
+      endpoint: process.env.MEMOS_ARMS_ENDPOINT,
+      pid: process.env.MEMOS_ARMS_PID ?? "",
+      env: process.env.MEMOS_ARMS_ENV ?? "prod",
+    };
+  }
+  try {
+    const credPath = path.resolve(__dirname, "..", "telemetry.credentials.json");
+    const raw = fs.readFileSync(credPath, "utf-8");
+    const creds = JSON.parse(raw);
+    if (creds.endpoint) return { endpoint: creds.endpoint, pid: creds.pid ?? "", env: creds.env ?? "prod" };
+  } catch {}
+  return { endpoint: "", pid: "", env: "prod" };
+}
 
-const ARMS_PID = "a3u72ukxmr@066657d42a13a9a9f337f";
-const ARMS_ENV = "prod";
+const _creds = loadTelemetryCredentials();
+const ARMS_ENDPOINT = _creds.endpoint;
+const ARMS_PID = _creds.pid;
+const ARMS_ENV = _creds.env;
 
 const FLUSH_AT = 10;
 const FLUSH_INTERVAL_MS = 30_000;
@@ -63,8 +76,13 @@ export class Telemetry {
     this.firstSeenDate = this.loadOrCreateFirstSeen(stateDir);
     this.sessionId = this.loadOrCreateSessionId(stateDir);
 
-    if (!this.enabled) {
-      this.log.debug("Telemetry disabled (opt-out via TELEMETRY_ENABLED=false)");
+    if (!this.enabled || !ARMS_ENDPOINT) {
+      this.enabled = false;
+      this.log.debug(
+        !ARMS_ENDPOINT
+          ? "Telemetry disabled (no credentials configured)"
+          : "Telemetry disabled (opt-out)",
+      );
       return;
     }
 

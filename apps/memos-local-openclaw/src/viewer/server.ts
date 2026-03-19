@@ -451,9 +451,8 @@ export class ViewerServer {
     if (session) { conditions.push("session_key = ?"); params.push(session); }
     if (role) { conditions.push("role = ?"); params.push(role); }
     if (owner && owner.startsWith("agent:")) {
-      const agentPrefix = owner + ":";
-      conditions.push("(owner = ? OR (owner = 'public' AND session_key LIKE ?))");
-      params.push(owner, agentPrefix + "%");
+      conditions.push("(owner = ? OR owner = 'public')");
+      params.push(owner);
     } else if (owner) {
       conditions.push("owner = ?"); params.push(owner);
     }
@@ -640,9 +639,8 @@ export class ViewerServer {
       let sessionQuery: string;
       let sessionParams: any[];
       if (ownerFilter && ownerFilter.startsWith("agent:")) {
-        const agentPrefix = ownerFilter + ":";
-        sessionQuery = "SELECT session_key, COUNT(*) as count, MIN(created_at) as earliest, MAX(created_at) as latest FROM chunks WHERE (owner = ? OR (owner = 'public' AND session_key LIKE ?)) GROUP BY session_key ORDER BY latest DESC";
-        sessionParams = [ownerFilter, agentPrefix + "%"];
+        sessionQuery = "SELECT session_key, COUNT(*) as count, MIN(created_at) as earliest, MAX(created_at) as latest FROM chunks WHERE (owner = ? OR owner = 'public') GROUP BY session_key ORDER BY latest DESC";
+        sessionParams = [ownerFilter];
       } else if (ownerFilter) {
         sessionQuery = "SELECT session_key, COUNT(*) as count, MIN(created_at) as earliest, MAX(created_at) as latest FROM chunks WHERE owner = ? GROUP BY session_key ORDER BY latest DESC";
         sessionParams = [ownerFilter];

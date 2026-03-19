@@ -3902,6 +3902,7 @@ async function retryConnection(){
   var result=document.getElementById('retryConnResult');
   if(btn){btn.disabled=true;btn.textContent=t('sharing.retryConnection.loading');}
   if(result) result.innerHTML='<span style="color:var(--text-muted)">'+t('sharing.retryConnection.loading')+'</span>';
+  toast(t('sharing.retryConnection.loading'),'info');
   try{
     await loadSharingStatus(false);
     var d=sharingStatusCache;
@@ -3909,9 +3910,11 @@ async function retryConnection(){
       toast(t('sharing.retryConnection.success'),'success');
       if(result) result.innerHTML='<span style="color:#22c55e">\\u2705 '+t('sharing.retryConnection.success')+'</span>';
     }else{
+      toast(t('sharing.retryConnection.fail'),'error');
       if(result) result.innerHTML='<span style="color:#ef4444">'+t('sharing.retryConnection.fail')+'</span>';
     }
   }catch(e){
+    toast(t('sharing.retryConnection.fail'),'error');
     if(result) result.innerHTML='<span style="color:#ef4444">'+t('sharing.retryConnection.fail')+'</span>';
   }
   if(btn){btn.disabled=false;btn.textContent=t('sharing.retryConnection');}

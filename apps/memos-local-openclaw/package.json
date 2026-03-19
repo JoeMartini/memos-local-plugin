@@ -13,6 +13,7 @@
     "prebuilds",
     "scripts/postinstall.cjs",
     "openclaw.plugin.json",
+    "telemetry.credentials.json",
     "README.md",
     ".env.example"
   ],
