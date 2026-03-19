@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import type { SummarizerConfig, Logger, OpenClawAPI } from "../../types";
+import type { SummarizerConfig, SummaryProvider, Logger, OpenClawAPI } from "../../types";
 import { summarizeOpenAI, summarizeTaskOpenAI, generateTaskTitleOpenAI, judgeNewTopicOpenAI, filterRelevantOpenAI, judgeDedupOpenAI, parseFilterResult, parseDedupResult } from "./openai";
 import type { FilterResult, DedupResult } from "./openai";
 export type { FilterResult, DedupResult } from "./openai";
@@ -9,13 +9,48 @@ import { summarizeGemini, summarizeTaskGemini, generateTaskTitleGemini, judgeNew
 import { summarizeBedrock, summarizeTaskBedrock, generateTaskTitleBedrock, judgeNewTopicBedrock, filterRelevantBedrock, judgeDedupBedrock } from "./bedrock";
 
 /**
+ * Detect provider type from provider key name or base URL.
+ */
+function detectProvider(
+  providerKey: string | undefined,
+  baseUrl: string,
+): SummaryProvider {
+  const key = providerKey?.toLowerCase() ?? "";
+  const url = baseUrl.toLowerCase();
+  if (key.includes("anthropic") || url.includes("anthropic")) return "anthropic";
+  if (key.includes("gemini") || url.includes("generativelanguage.googleapis.com")) {
+    return "gemini";
+  }
+  if (key.includes("bedrock") || url.includes("bedrock")) return "bedrock";
+  return "openai_compatible";
+}
+
+/**
+ * Return the correct endpoint for a given provider and base URL.
+ */
+function normalizeEndpointForProvider(
+  provider: SummaryProvider,
+  baseUrl: string,
+): string {
+  const stripped = baseUrl.replace(/\/+$/, "");
+  if (provider === "anthropic") {
+    if (stripped.endsWith("/v1/messages")) return stripped;
+    return `${stripped}/v1/messages`;
+  }
+  if (stripped.endsWith("/chat/completions")) return stripped;
+  if (stripped.endsWith("/completions")) return stripped;
+  return `${stripped}/chat/completions`;
+}
+
+/**
  * Build a SummarizerConfig from OpenClaw's native model configuration (openclaw.json).
  * This serves as the final fallback when both strongCfg and plugin summarizer fail or are absent.
  */
 function loadOpenClawFallbackConfig(log: Logger): SummarizerConfig | undefined {
   try {
     const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
-    const cfgPath = path.join(home, ".openclaw", "openclaw.json");
+    const ocHome = process.env.OPENCLAW_STATE_DIR || path.join(home, ".openclaw");
+    const cfgPath = path.join(ocHome, "openclaw.json");
     if (!fs.existsSync(cfgPath)) return undefined;
 
     const raw = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
@@ -36,13 +71,12 @@ function loadOpenClawFallbackConfig(log: Logger): SummarizerConfig | undefined {
     const apiKey: string | undefined = providerCfg.apiKey;
     if (!baseUrl || !apiKey) return undefined;
 
-    const endpoint = baseUrl.endsWith("/chat/completions")
-      ? baseUrl
-      : baseUrl.replace(/\/+$/, "") + "/chat/completions";
+    const provider = detectProvider(providerKey, baseUrl);
+    const endpoint = normalizeEndpointForProvider(provider, baseUrl);
 
-    log.debug(`OpenClaw fallback model: ${modelId} via ${baseUrl}`);
+    log.debug(`OpenClaw fallback model: ${modelId} via ${baseUrl} (${provider})`);
     return {
-      provider: "openai_compatible",
+      provider,
       endpoint,
       apiKey,
       model: modelId,

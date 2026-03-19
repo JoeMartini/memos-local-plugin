@@ -112,7 +112,7 @@ try {
 function ensureDependencies() {
   phase(0, "检测核心依赖 / Check core dependencies");
 
-  const coreDeps = ["@sinclair/typebox", "uuid", "posthog-node", "@huggingface/transformers"];
+  const coreDeps = ["@sinclair/typebox", "uuid", "@huggingface/transformers"];
   const missing = [];
   for (const dep of coreDeps) {
     try {

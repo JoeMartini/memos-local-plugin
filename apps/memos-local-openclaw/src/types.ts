@@ -255,8 +255,6 @@ export interface SkillEvolutionConfig {
 
 export interface TelemetryConfig {
   enabled?: boolean;
-  posthogApiKey?: string;
-  posthogHost?: string;
 }
 
 export type SharingRole = "hub" | "client";
