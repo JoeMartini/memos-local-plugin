@@ -3203,7 +3203,7 @@ export class ViewerServer {
     try {
       const ocHome = this.getOpenClawHome();
       const memoryDir = path.join(ocHome, "memory");
-      const sessionsDir = path.join(ocHome, "agents", "main", "sessions");
+      const agentsDir = path.join(ocHome, "agents");
 
       const sqliteFiles: Array<{ file: string; chunks: number }> = [];
       if (fs.existsSync(memoryDir)) {
@@ -3222,31 +3222,36 @@ export class ViewerServer {
 
       let sessionCount = 0;
       let messageCount = 0;
-      if (fs.existsSync(sessionsDir)) {
-        const jsonlFiles = fs.readdirSync(sessionsDir).filter(f => f.includes(".jsonl"));
-        sessionCount = jsonlFiles.length;
-        for (const f of jsonlFiles) {
-          try {
-            const content = fs.readFileSync(path.join(sessionsDir, f), "utf-8");
-            const lines = content.split("\n").filter(l => l.trim());
-            for (const line of lines) {
-              try {
-                const obj = JSON.parse(line);
-                if (obj.type === "message") {
-                  const role = obj.message?.role ?? obj.role;
-                  if (role === "user" || role === "assistant") {
-                    const mc = obj.message?.content ?? obj.content;
-                    let txt = "";
-                    if (typeof mc === "string") txt = mc;
-                    else if (Array.isArray(mc)) txt = mc.filter((p: any) => p.type === "text" && p.text).map((p: any) => p.text).join("\n");
-                    else txt = JSON.stringify(mc);
-                    if (role === "user") txt = stripInboundMetadata(txt);
-                    if (txt && txt.length >= 10) messageCount++;
+      if (fs.existsSync(agentsDir)) {
+        for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const sessDir = path.join(agentsDir, entry.name, "sessions");
+          if (!fs.existsSync(sessDir)) continue;
+          const jsonlFiles = fs.readdirSync(sessDir).filter(f => f.includes(".jsonl"));
+          sessionCount += jsonlFiles.length;
+          for (const f of jsonlFiles) {
+            try {
+              const content = fs.readFileSync(path.join(sessDir, f), "utf-8");
+              const lines = content.split("\n").filter(l => l.trim());
+              for (const line of lines) {
+                try {
+                  const obj = JSON.parse(line);
+                  if (obj.type === "message") {
+                    const role = obj.message?.role ?? obj.role;
+                    if (role === "user" || role === "assistant") {
+                      const mc = obj.message?.content ?? obj.content;
+                      let txt = "";
+                      if (typeof mc === "string") txt = mc;
+                      else if (Array.isArray(mc)) txt = mc.filter((p: any) => p.type === "text" && p.text).map((p: any) => p.text).join("\n");
+                      else txt = JSON.stringify(mc);
+                      if (role === "user") txt = stripInboundMetadata(txt);
+                      if (txt && txt.length >= 10) messageCount++;
+                    }
                   }
-                }
-              } catch { /* skip bad lines */ }
-            }
-          } catch { /* skip unreadable */ }
+                } catch { /* skip bad lines */ }
+              }
+            } catch { /* skip unreadable */ }
+          }
         }
       }
 
