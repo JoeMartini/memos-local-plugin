@@ -187,7 +187,21 @@ export async function getHubStatus(store: SqliteStore, config: MemosLocalConfig)
         status: String(me.status ?? "active"),
       },
     };
-  } catch {
+  } catch (err: any) {
+    const is401 = typeof err?.message === "string" && err.message.includes("(401)");
+    if (is401 && conn) {
+      store.clearClientHubConnection();
+      return {
+        connected: false,
+        hubUrl: normalizeHubUrl(hubAddress),
+        user: {
+          id: conn.userId,
+          username: conn.username || "",
+          role: "member",
+          status: "removed",
+        },
+      };
+    }
     return { connected: false, user: null };
   }
 }

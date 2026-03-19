@@ -77,6 +77,7 @@ export class RecallEngine {
     // Step 1c: Hub memories search (when sharing is enabled and hub_memories exist)
     let hubMemFtsRanked: Array<{ id: string; score: number }> = [];
     let hubMemVecRanked: Array<{ id: string; score: number }> = [];
+    let hubMemPatternRanked: Array<{ id: string; score: number }> = [];
     if (query && this.ctx.config.sharing?.enabled) {
       try {
         const hubFtsHits = this.store.searchHubMemories(query, { maxResults: candidatePool });
@@ -84,6 +85,14 @@ export class RecallEngine {
           id: `hubmem:${hit.id}`, score: 1 / (i + 1),
         }));
       } catch { /* hub_memories table may not exist */ }
+      if (shortTerms.length > 0) {
+        try {
+          const hubPatternHits = this.store.hubMemoryPatternSearch(shortTerms, { limit: candidatePool });
+          hubMemPatternRanked = hubPatternHits.map((h, i) => ({
+            id: `hubmem:${h.memoryId}`, score: 1 / (i + 1),
+          }));
+        } catch { /* best-effort */ }
+      }
       try {
         const hubMemEmbs = this.store.getVisibleHubMemoryEmbeddings("");
         if (hubMemEmbs.length > 0) {
@@ -105,8 +114,9 @@ export class RecallEngine {
           }
         }
       } catch { /* best-effort */ }
-      if (hubMemFtsRanked.length > 0 || hubMemVecRanked.length > 0) {
-        this.ctx.log.debug(`recall: hub_memories candidates: fts=${hubMemFtsRanked.length}, vec=${hubMemVecRanked.length}`);
+      const hubTotal = hubMemFtsRanked.length + hubMemVecRanked.length + hubMemPatternRanked.length;
+      if (hubTotal > 0) {
+        this.ctx.log.debug(`recall: hub_memories candidates: fts=${hubMemFtsRanked.length}, vec=${hubMemVecRanked.length}, pattern=${hubMemPatternRanked.length}`);
       }
     }
 
@@ -116,6 +126,7 @@ export class RecallEngine {
     const allRankedLists = [ftsRanked, vecRanked, patternRanked];
     if (hubMemFtsRanked.length > 0) allRankedLists.push(hubMemFtsRanked);
     if (hubMemVecRanked.length > 0) allRankedLists.push(hubMemVecRanked);
+    if (hubMemPatternRanked.length > 0) allRankedLists.push(hubMemPatternRanked);
     const rrfScores = rrfFuse(allRankedLists, recallCfg.rrfK);
 
     if (rrfScores.size === 0) {
@@ -191,6 +202,7 @@ export class RecallEngine {
           taskId: null,
           skillId: null,
           owner: `hub-user:${mem.sourceUserId}`,
+          origin: "hub-memory",
           source: {
             ts: mem.createdAt,
             role: (mem.role || "assistant") as any,
@@ -217,6 +229,7 @@ export class RecallEngine {
         score: Math.round(candidate.score * 1000) / 1000,
         taskId: chunk.taskId,
         skillId: chunk.skillId,
+        origin: chunk.owner === "public" ? "local-shared" : "local",
         source: {
           ts: chunk.createdAt,
           role: chunk.role,

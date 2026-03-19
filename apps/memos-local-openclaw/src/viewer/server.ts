@@ -461,7 +461,7 @@ export class ViewerServer {
 
     const where = conditions.length > 0 ? " WHERE " + conditions.join(" AND ") : "";
     const totalRow = db.prepare("SELECT COUNT(*) as count FROM chunks" + where).get(...params) as any;
-    const rawMemories = db.prepare("SELECT * FROM chunks" + where + ` ORDER BY created_at ${sortBy} LIMIT ? OFFSET ?`).all(...params, limit, offset);
+    const rawMemories = db.prepare("SELECT * FROM chunks" + where + ` ORDER BY CASE WHEN dedup_status IN ('duplicate','merged') THEN 1 ELSE 0 END ASC, created_at ${sortBy} LIMIT ? OFFSET ?`).all(...params, limit, offset);
     const findMergeSources = db.prepare("SELECT id, summary, role FROM chunks WHERE dedup_target = ? AND (dedup_status = 'merged' OR dedup_status = 'duplicate')");
 
     const chunkIds = rawMemories.map((m: any) => m.id);
@@ -1047,11 +1047,21 @@ export class ViewerServer {
     });
   }
 
-  private handleSkillDelete(res: http.ServerResponse, urlPath: string): void {
+  private async handleSkillDelete(res: http.ServerResponse, urlPath: string): Promise<void> {
     const skillId = urlPath.replace("/api/skill/", "");
     const skill = this.store.getSkill(skillId);
     if (!skill) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "Skill not found" })); return; }
-    // Remove skill directory from disk
+    try {
+      const hub = this.resolveHubConnection();
+      if (hub) {
+        await hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/skills/unpublish", {
+          method: "POST",
+          body: JSON.stringify({ sourceSkillId: skillId }),
+        }).catch(() => {});
+      }
+      const db = (this.store as any).db;
+      db.prepare("DELETE FROM hub_skills WHERE source_skill_id = ?").run(skillId);
+    } catch (_) {}
     try {
       if (skill.dirPath && fs.existsSync(skill.dirPath)) {
         fs.rmSync(skill.dirPath, { recursive: true, force: true });
@@ -1620,6 +1630,9 @@ export class ViewerServer {
       if (status.user?.status === "rejected") {
         output.connection.rejected = true;
       }
+      if (status.user?.status === "removed") {
+        output.connection.removed = true;
+      }
       if (status.connected && status.hubUrl) {
         try {
           const info = await fetch(`${status.hubUrl}/api/v1/hub/info`).then((r) => (r.ok ? r.json() : null)).catch(() => null) as any;
@@ -1737,7 +1750,14 @@ export class ViewerServer {
         });
         this.jsonResponse(res, { ok: true, result });
       } catch (err) {
-        this.jsonResponse(res, { ok: false, error: String(err) });
+        const errStr = String(err);
+        if (errStr.includes("username_taken")) {
+          this.jsonResponse(res, { ok: false, error: "username_taken" });
+        } else if (errStr.includes("invalid_params")) {
+          this.jsonResponse(res, { ok: false, error: "invalid_params" });
+        } else {
+          this.jsonResponse(res, { ok: false, error: errStr });
+        }
       }
     });
   }

@@ -154,7 +154,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .search-bar input::placeholder{color:var(--text-muted)}
 .search-bar input:focus{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-glow)}
 .search-bar .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px;pointer-events:none}
-.search-meta{font-size:12px;color:var(--text-sec);margin-bottom:14px;padding:0 2px}
+.search-meta{font-size:12px;color:var(--text-sec);padding:0 2px}.search-meta:not(:empty){margin-bottom:14px}
 .scope-select{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);color:var(--text);font-size:13px;min-width:110px;outline:none}
 .sharing-inline-meta{font-size:12px;color:var(--text-muted);margin:-8px 0 14px 2px}
 .sharing-sidebar-card{margin:14px 0 18px;border:1px solid var(--border);background:var(--bg-card);border-radius:12px;padding:12px;box-shadow:var(--shadow-sm)}
@@ -248,9 +248,11 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .au-status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle;flex-shrink:0;transition:all .3s}
 .au-status-dot.online{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.6),0 0 16px rgba(34,197,94,.2);animation:dotBreathe 2s ease-in-out infinite}
 .au-status-dot.offline{background:#6b7280;box-shadow:none}
-.au-status-text{font-size:11px;font-weight:600;letter-spacing:.02em}
-.au-status-text.online{color:#22c55e;text-shadow:0 0 8px rgba(34,197,94,.3)}
-.au-status-text.offline{color:#6b7280}
+.au-status-text{font-size:10px;font-weight:600;letter-spacing:.04em;padding:3px 10px;border-radius:6px;white-space:nowrap}
+.au-status-text.online{color:#22c55e;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.18);text-shadow:0 0 8px rgba(34,197,94,.2)}
+.au-status-text.offline{color:#6b7280;background:rgba(107,114,128,.06);border:1px solid rgba(107,114,128,.1)}
+[data-theme="light"] .au-status-text.online{background:rgba(34,197,94,.06);border-color:rgba(34,197,94,.15)}
+[data-theme="light"] .au-status-text.offline{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.06)}
 .au-group-header{font-size:13px;font-weight:700;color:var(--text-sec);margin:20px 0 10px;display:flex;align-items:center;gap:8px;letter-spacing:.02em}
 .au-group-header:first-child{margin-top:0}
 .au-group-header .au-group-dot{display:inline-block;width:8px;height:8px;border-radius:50%}
@@ -285,7 +287,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .admin-card-tag.tag-version{background:rgba(139,92,246,.1);color:#8b5cf6}
 .admin-card-tag.tag-visibility{background:rgba(99,102,241,.08);color:var(--pri)}
 .admin-card-tag.tag-group{background:rgba(139,92,246,.08);color:#8b5cf6}
-.admin-card-preview{font-size:12px;color:var(--text-sec);line-height:1.5;margin:8px 0;padding:10px 12px;background:rgba(99,102,241,.02);border-radius:10px;border:1px solid rgba(99,102,241,.08);max-height:60px;overflow:hidden;white-space:pre-wrap;word-break:break-all}
+.admin-card-preview{font-size:12px;color:var(--text-sec);line-height:1.5;margin:8px 0;padding:10px 12px;background:rgba(99,102,241,.02);border-radius:10px;border:1px solid rgba(99,102,241,.08);max-height:120px;overflow:hidden;white-space:pre-wrap;word-break:break-all;position:relative;-webkit-mask-image:linear-gradient(to bottom,#000 70%,transparent 100%);mask-image:linear-gradient(to bottom,#000 70%,transparent 100%)}
 .admin-card-actions{display:inline-flex;gap:6px;margin-left:auto;align-items:center;flex-shrink:0}
 .admin-card-time{font-size:11px;color:var(--text-muted)}
 .admin-card-detail{display:none;margin-top:0;padding:20px 24px 24px;border-top:1px dashed rgba(99,102,241,.12);background:linear-gradient(180deg,rgba(99,102,241,.02) 0%,transparent 60%);animation:adminDetailIn .25s ease}
@@ -328,17 +330,21 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .admin-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 .admin-toolbar h3{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;margin:0;margin-right:auto;line-height:32px}
 .admin-toolbar select{box-sizing:border-box;height:32px;font-size:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text);vertical-align:middle;margin:0;padding:0 10px}
-.admin-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;letter-spacing:.03em;text-transform:uppercase}
-.admin-badge.admin{background:linear-gradient(135deg,rgba(34,197,94,.15),rgba(16,185,129,.1));color:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.1)}
-.admin-badge.member{background:rgba(99,102,241,.08);color:var(--text-muted)}
-.admin-badge.pending{background:linear-gradient(135deg,rgba(251,191,36,.2),rgba(245,158,11,.1));color:#fbbf24;box-shadow:0 0 8px rgba(251,191,36,.1)}
-.admin-badge.public{background:rgba(99,102,241,.1);color:var(--pri)}
-.admin-badge.group{background:rgba(139,92,246,.1);color:var(--violet)}
+.admin-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:3px 10px;border-radius:6px;letter-spacing:.06em;text-transform:uppercase;position:relative;backdrop-filter:blur(4px);transition:all .25s}
+.admin-badge.admin{background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(16,185,129,.06));color:#22c55e;border:1px solid rgba(34,197,94,.2);box-shadow:0 0 12px rgba(34,197,94,.08),inset 0 1px 0 rgba(255,255,255,.05)}
+.admin-badge.admin:hover{box-shadow:0 0 20px rgba(34,197,94,.15),inset 0 1px 0 rgba(255,255,255,.08)}
+.admin-badge.member{background:rgba(99,102,241,.06);color:var(--text-muted);border:1px solid rgba(99,102,241,.12)}
+.admin-badge.pending{background:linear-gradient(135deg,rgba(251,191,36,.12),rgba(245,158,11,.06));color:#fbbf24;border:1px solid rgba(251,191,36,.2);box-shadow:0 0 12px rgba(251,191,36,.08)}
+.admin-badge.public{background:rgba(99,102,241,.08);color:var(--pri);border:1px solid rgba(99,102,241,.15)}
+.admin-badge.group{background:rgba(139,92,246,.08);color:#8b5cf6;border:1px solid rgba(139,92,246,.15)}
+.admin-badge.owner{background:linear-gradient(135deg,rgba(251,191,36,.12),rgba(245,158,11,.08));color:#f59e0b;border:1px solid rgba(251,191,36,.25);box-shadow:0 0 12px rgba(251,191,36,.1),inset 0 1px 0 rgba(255,255,255,.06)}
+.au-badges{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
 .admin-empty{font-size:13px;color:var(--text-muted);padding:48px 24px;text-align:center;border:1px dashed rgba(99,102,241,.15);border-radius:16px;background:rgba(99,102,241,.02)}
 .admin-empty .ae-icon{font-size:32px;display:block;margin-bottom:10px;opacity:.4}
-[data-theme="light"] .admin-badge.admin{background:rgba(5,150,105,.1);color:#059669}
-[data-theme="light"] .admin-badge.member{background:rgba(0,0,0,.06);color:#6b7280}
-[data-theme="light"] .admin-badge.pending{background:rgba(245,158,11,.1);color:#d97706}
+[data-theme="light"] .admin-badge.admin{background:rgba(5,150,105,.08);color:#059669;border-color:rgba(5,150,105,.18)}
+[data-theme="light"] .admin-badge.member{background:rgba(0,0,0,.04);color:#6b7280;border-color:rgba(0,0,0,.08)}
+[data-theme="light"] .admin-badge.pending{background:rgba(245,158,11,.08);color:#d97706;border-color:rgba(245,158,11,.18)}
+[data-theme="light"] .admin-badge.owner{background:rgba(245,158,11,.08);color:#b45309;border-color:rgba(245,158,11,.2)}
 [data-theme="light"] .admin-header{background:linear-gradient(135deg,rgba(99,102,241,.04) 0%,rgba(6,182,212,.03) 50%,rgba(139,92,246,.04) 100%)}
 [data-theme="light"] .admin-stat-box{background:rgba(255,255,255,.8)}
 [data-theme="light"] .admin-pending-section{background:linear-gradient(135deg,rgba(251,191,36,.03),rgba(245,158,11,.015))}
@@ -739,7 +745,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 [data-theme="light"] .nav-tabs{background:rgba(0,0,0,.05)}
 [data-theme="light"] .nav-tabs .tab.active{background:#fff;border-color:rgba(0,0,0,.1);box-shadow:0 1px 3px rgba(0,0,0,.08);color:var(--text)}
 .analytics-view,.settings-view,.logs-view,.migrate-view,.admin-view{flex:1;min-width:0;flex-direction:column;gap:20px}
-.feed-wrap,.tasks-view,.skills-view,.analytics-view,.settings-view,.logs-view,.migrate-view,.admin-view{max-width:960px;margin:0 auto}
+.feed-wrap,.tasks-view,.skills-view,.analytics-view,.logs-view,.migrate-view,.admin-view,.settings-view{max-width:960px}
 
 /* ─── Logs ─── */
 .logs-toolbar{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
@@ -798,6 +804,10 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .recall-score.high{background:rgba(34,197,94,.12);color:#22c55e}
 .recall-score.mid{background:rgba(251,191,36,.12);color:#f59e0b}
 .recall-score.low{background:rgba(248,113,113,.1);color:var(--text-muted)}
+.recall-origin{flex-shrink:0;font-size:9px;font-weight:600;padding:1px 5px;border-radius:4px}
+.recall-origin.local-shared{background:rgba(59,130,246,.12);color:#3b82f6}
+.recall-origin.hub-memory{background:rgba(139,92,246,.12);color:#8b5cf6}
+.recall-origin.hub-remote{background:rgba(139,92,246,.12);color:#8b5cf6}
 .recall-summary-short{flex:1;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .recall-expand-icon{flex-shrink:0;font-size:10px;color:var(--text-muted);transition:transform .15s}
 .recall-item.expanded .recall-expand-icon{transform:rotate(90deg)}
@@ -1242,7 +1252,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <select id="filterOwner" class="filter-select" onchange="onOwnerFilterChange()">
           <option value="" data-i18n="filter.allagents">All agents</option>
         </select>
-        <select id="memorySearchScope" class="filter-select" onchange="onMemoryScopeChange()">
+        <select id="memorySearchScope" class="filter-select" onchange="onMemoryScopeChange()" style="display:none">
           <option value="local" data-i18n="scope.thisAgent">This Agent</option>
           <option value="allLocal" data-i18n="scope.thisDevice">This Device</option>
           <option value="hub" data-i18n="scope.hub">Team</option>
@@ -1254,7 +1264,6 @@ input,textarea,select{font-family:inherit;font-size:inherit}
         <button class="filter-chip active" data-role="" onclick="setRoleFilter(this,'')" data-i18n="filter.all">All</button>
         <button class="filter-chip" data-role="user" onclick="setRoleFilter(this,'user')">User</button>
         <button class="filter-chip" data-role="assistant" onclick="setRoleFilter(this,'assistant')">Assistant</button>
-        <button class="filter-chip" data-role="system" onclick="setRoleFilter(this,'system')">System</button>
         <span class="filter-sep"></span>
         <select id="filterSort" class="filter-select" onchange="applyFilters()">
           <option value="newest" data-i18n="filter.newest">Newest first</option>
@@ -1287,7 +1296,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
           <button class="filter-chip" data-task-status="active" onclick="setTaskStatusFilter(this,'active')" data-i18n="tasks.status.active">Active</button>
           <button class="filter-chip" data-task-status="completed" onclick="setTaskStatusFilter(this,'completed')" data-i18n="tasks.status.completed">Completed</button>
           <button class="filter-chip" data-task-status="skipped" onclick="setTaskStatusFilter(this,'skipped')" data-i18n="tasks.status.skipped">Skipped</button>
-          <select id="taskSearchScope" class="scope-select" onchange="onTaskScopeChange()">
+          <select id="taskSearchScope" class="scope-select" onchange="onTaskScopeChange()" style="display:none">
             <option value="local" data-i18n="scope.thisAgent">This Agent</option>
             <option value="allLocal" data-i18n="scope.thisDevice">This Device</option>
             <option value="hub" data-i18n="scope.hub">Team</option>
@@ -1329,13 +1338,13 @@ input,textarea,select{font-family:inherit;font-size:inherit}
       <div class="search-bar">
         <span class="search-icon">🔍</span>
         <input type="text" id="skillSearchInput" placeholder="Search skills..." data-i18n-ph="skills.search.placeholder" oninput="debounceSkillSearch()">
-        <select id="skillSearchScope" class="scope-select" onchange="onSkillScopeChange()">
+        <select id="skillSearchScope" class="scope-select" onchange="onSkillScopeChange()" style="display:none">
           <option value="local" data-i18n="scope.thisAgent">This Agent</option>
           <option value="allLocal" data-i18n="scope.thisDevice">This Device</option>
           <option value="hub" data-i18n="scope.hub">Team</option>
         </select>
       </div>
-      <div class="search-meta" id="skillSearchMeta"></div>
+      <div class="search-meta" id="skillSearchMeta" style="display:none"></div>
       <div class="tasks-header">
         <div class="tasks-stats">
           <div class="tasks-stat"><span class="tasks-stat-value" id="skillsTotalCount">-</span><span class="tasks-stat-label" data-i18n="skills.total">Total Skills</span></div>
@@ -1349,8 +1358,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
           <button class="filter-chip" data-skill-status="active" onclick="setSkillStatusFilter(this,'active')" data-i18n="skills.filter.active">Active</button>
           <button class="filter-chip" data-skill-status="draft" onclick="setSkillStatusFilter(this,'draft')" data-i18n="skills.filter.draft">Draft</button>
           <button class="filter-chip" data-skill-status="archived" onclick="setSkillStatusFilter(this,'archived')" data-i18n="skills.filter.archived">Archived</button>
-          <span class="filter-sep"></span>
-          <select id="skillVisibilityFilter" class="filter-select" onchange="loadSkills()">
+          <select id="skillVisibilityFilter" class="filter-select" onchange="loadSkills()" style="display:none">
             <option value="" data-i18n="filter.allvisibility">All visibility</option>
             <option value="public" data-i18n="filter.public">Public</option>
             <option value="private" data-i18n="filter.private">Private</option>
@@ -1437,7 +1445,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
           <select id="logToolFilter" onchange="onLogFilterChange()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);min-width:120px">
             <option value="" data-i18n="logs.allTools">All Tools</option>
           </select>
-          <button class="btn btn-sm btn-ghost" onclick="loadLogs()" style="font-size:12px">\u21BB <span data-i18n="logs.refresh">Refresh</span></button>
+          
         </div>
         <div class="logs-toolbar-right">
           <input type="checkbox" id="logAutoRefresh" style="display:none">
@@ -2079,8 +2087,8 @@ const I18N={
     'skills.load.error':'Failed to load skills',
     'skills.hub.title':'\u{1F310} Team Skills',
     'scope.local':'Local',
-    'scope.thisAgent':'This Agent',
-    'scope.thisDevice':'This Device',
+    'scope.thisAgent':'This Agent Only',
+    'scope.thisDevice':'All Local Agents',
     'scope.group':'Group',
     'scope.all':'All',
     'skills.visibility.public':'Shared Locally',
@@ -2225,6 +2233,9 @@ const I18N={
     'logs.recall.noHits':'No matching memories',
     'logs.recall.noneRelevant':'LLM filter: none relevant',
     'logs.recall.more':'{n} more...',
+    'recall.origin.localShared':'Local Shared',
+    'recall.origin.hubMemory':'Team Cache',
+    'recall.origin.hubRemote':'Team',
     'tab.import':'\u{1F4E5} Import',
     'tab.settings':'\u2699 Settings',
     'settings.modelconfig':'Model Configuration',
@@ -2436,11 +2447,13 @@ const I18N={
     'sharing.sidebar.targetHub':'Team Server:',
     'sharing.pendingApproval.hint':'Your join request has been submitted. Please wait for the team admin to approve.',
     'sharing.rejected.hint':'Your join request was rejected by the team admin. Please contact the admin or retry.',
+    'sharing.removed.hint':'You have been removed from the team by the admin. You can re-apply to join.',
     'sharing.retryJoin':'Retry Join',
     'sharing.retryJoin.hint':'Clears local data and re-submits the join request',
     'sharing.retryJoin.confirm':'This will clear your current connection and re-submit a join request. Continue?',
     'sharing.retryJoin.success':'Join request re-submitted. Waiting for admin approval.',
     'sharing.retryJoin.fail':'Failed to retry join',
+    'sharing.ownerRemoved':'(removed)',
     'sharing.cannotJoinSelf':'Cannot join your own server. Please enter a remote server address.',
     'scope.hub':'Team',
     'memory.detail.title':'Memory Detail',
@@ -2644,9 +2657,9 @@ const I18N={
     'share.status.agents':'Local',
     'share.status.hub':'Team',
     'share.scope.title':'Sharing Scope',
-    'share.scope.private':'This Agent Only',
-    'share.scope.local':'All Local Agents',
-    'share.scope.team':'Team',
+    'share.scope.private':'Private',
+    'share.scope.local':'Local Shared',
+    'share.scope.team':'Team Shared',
     'share.scope.current':'Current',
     'share.scope.teamDisabled':'Not connected to team server',
     'share.scope.teamIncludes':'Includes visibility to all local agents',
@@ -2788,8 +2801,8 @@ const I18N={
     'skills.load.error':'加载技能失败',
     'skills.hub.title':'\u{1F310} 团队共享技能',
     'scope.local':'本地',
-    'scope.thisAgent':'当前智能体',
-    'scope.thisDevice':'本机全部',
+    'scope.thisAgent':'仅本智能体',
+    'scope.thisDevice':'本机所有智能体',
     'scope.group':'团队',
     'scope.all':'全部',
     'skills.visibility.public':'本机共享',
@@ -2934,6 +2947,9 @@ const I18N={
     'logs.recall.noHits':'未匹配到记忆',
     'logs.recall.noneRelevant':'LLM 过滤：无相关记忆',
     'logs.recall.more':'还有 {n} 条...',
+    'recall.origin.localShared':'本机共享',
+    'recall.origin.hubMemory':'团队缓存',
+    'recall.origin.hubRemote':'团队',
     'tab.import':'\u{1F4E5} 导入',
     'tab.settings':'\u2699 设置',
     'settings.modelconfig':'模型配置',
@@ -3145,11 +3161,13 @@ const I18N={
     'sharing.sidebar.targetHub':'团队服务器：',
     'sharing.pendingApproval.hint':'加入申请已提交，请等待团队管理员审核通过。',
     'sharing.rejected.hint':'您的加入申请已被团队管理员拒绝，请联系管理员或重新申请。',
+    'sharing.removed.hint':'您已被管理员从团队中移除，可以重新申请加入。',
     'sharing.retryJoin':'重新申请',
     'sharing.retryJoin.hint':'清除本地连接数据并重新提交加入申请',
     'sharing.retryJoin.confirm':'这将清除当前连接数据并重新提交加入申请，是否继续？',
     'sharing.retryJoin.success':'加入申请已重新提交，请等待管理员审核。',
     'sharing.retryJoin.fail':'重新申请失败',
+    'sharing.ownerRemoved':'(已移除)',
     'sharing.cannotJoinSelf':'不能加入自己的服务端，请输入远程服务器地址。',
     'scope.hub':'团队',
     'memory.detail.title':'记忆详情',
@@ -3353,9 +3371,9 @@ const I18N={
     'share.status.agents':'本机',
     'share.status.hub':'团队',
     'share.scope.title':'共享范围',
-    'share.scope.private':'仅本智能体',
-    'share.scope.local':'本机所有智能体',
-    'share.scope.team':'团队',
+    'share.scope.private':'私有',
+    'share.scope.local':'本机共享',
+    'share.scope.team':'团队共享',
     'share.scope.current':'当前',
     'share.scope.teamDisabled':'未连接团队服务器',
     'share.scope.teamIncludes':'包含本机所有智能体的可见性',
@@ -3693,7 +3711,7 @@ function onMemoryScopeChange(){
   var ownerSel=document.getElementById('filterOwner');
   var filterBar=document.getElementById('filterBar');
   var dateFilter=document.querySelector('.date-filter');
-  if(ownerSel) ownerSel.style.display=(isHub||isLocal)?'none':'';
+  if(ownerSel){ownerSel.style.display=(isHub||isLocal)?'none':'';if(isHub||isLocal)ownerSel.value='';}
   if(filterBar) filterBar.style.display=isHub?'none':'';
   if(dateFilter) dateFilter.style.display=isHub?'none':'';
   if(document.getElementById('searchInput').value.trim()) doSearch(document.getElementById('searchInput').value);
@@ -3797,6 +3815,14 @@ function renderSharingSidebar(data){
     html+='</div>';
     statusEl.innerHTML=html;
     hintEl.textContent=t('sharing.rejected.hint');
+  }else if(conn.removed&&conn.user){
+    setBadge('#ef4444',t('sharing.sidebar.disconnected'),false);
+    var html='<div class="info-grid">';
+    html+='<span class="label">'+t('sharing.sidebar.identity')+'</span><span class="value">'+esc(conn.user.username||'-')+'</span>';
+    if(conn.teamName) html+='<span class="label">'+t('sharing.team')+'</span><span class="value">'+esc(conn.teamName)+'</span>';
+    html+='</div>';
+    statusEl.innerHTML=html;
+    hintEl.textContent=t('sharing.removed.hint');
   }else if(conn.connected&&conn.user){
     var isAdmin=conn.user.role==='admin';
     setBadge('#34d399',t('sharing.sidebar.connected'),true);
@@ -3862,6 +3888,8 @@ function renderSharingSettings(data){
       connBadge='<span class="hic-badge pending"><span class="hic-dot amber"></span>'+t('sharing.sidebar.pending')+'</span>';
     }else if(conn.rejected){
       connBadge='<span class="hic-badge disconnected"><span class="hic-dot red"></span>'+t('sharing.sidebar.rejected')+'</span>';
+    }else if(conn.removed){
+      connBadge='<span class="hic-badge disconnected"><span class="hic-dot red"></span>'+t('sharing.sidebar.disconnected')+'</span>';
     }else if(conn.connected){
       connBadge='<span class="hic-badge connected"><span class="hic-dot green"></span>'+t('sharing.sidebar.connected')+'</span>';
     }else{
@@ -3875,6 +3903,11 @@ function renderSharingSettings(data){
     }else if(conn.rejected){
       if(user.username) sh+='<span class="hic-label">'+t('sharing.user')+'</span><span class="hic-value">'+esc(user.username)+'</span>';
       sh+='</div><div class="hic-empty" style="color:#ef4444">'+t('sharing.rejected.hint')+'</div>'+
+        '<div style="margin-top:10px;padding:0 16px 14px"><button class="btn btn-sm btn-primary" onclick="retryHubJoin()">'+t('sharing.retryJoin')+'</button>'+
+        '<span style="font-size:11px;color:var(--text-muted);margin-left:8px">'+t('sharing.retryJoin.hint')+'</span></div></div>';
+    }else if(conn.removed){
+      if(user.username) sh+='<span class="hic-label">'+t('sharing.user')+'</span><span class="hic-value">'+esc(user.username)+'</span>';
+      sh+='</div><div class="hic-empty" style="color:#ef4444">'+t('sharing.removed.hint')+'</div>'+
         '<div style="margin-top:10px;padding:0 16px 14px"><button class="btn btn-sm btn-primary" onclick="retryHubJoin()">'+t('sharing.retryJoin')+'</button>'+
         '<span style="font-size:11px;color:var(--text-muted);margin-left:8px">'+t('sharing.retryJoin.hint')+'</span></div></div>';
     }else if(conn.connected&&user.username){
@@ -3940,7 +3973,7 @@ async function updateHubUsername(){
   if(!input) return;
   var newName=input.value.trim();
   if(!newName||newName.length<2||newName.length>32){
-    toast(t('sharing.username.invalid'),'error');
+    alertModal(t('sharing.username.invalid'));
     return;
   }
   try{
@@ -3951,17 +3984,17 @@ async function updateHubUsername(){
     });
     var d=await r.json();
     if(d.error==='username_taken'){
-      toast(t('sharing.username.taken'),'error');
+      alertModal(t('sharing.username.taken'),{danger:true});
       return;
     }
     if(d.error){
-      toast(d.error,'error');
+      alertModal(d.error,{danger:true});
       return;
     }
     toast(t('sharing.username.updated'),'success');
     loadSharingStatus(false);
   }catch(e){
-    toast(t('sharing.username.error'),'error');
+    alertModal(t('sharing.username.error'),{danger:true});
   }
 }
 
@@ -4148,7 +4181,7 @@ async function loadAdminData(){
     var _newMemories=Array.isArray(memoriesR.memories)?memoriesR.memories:[];
     var pending=isAdmin?(Array.isArray(pendingR.users)?pendingR.users:[]):[];
     var _fp=_newUsers.length+':'+_newTasks.length+':'+_newSkills.length+':'+_newMemories.length+':'+pending.length
-      +':'+_newUsers.map(function(u){return u.id+'|'+(u.isOnline?1:0)+'|'+(u.role||'')}).join(',')
+      +':'+_newUsers.map(function(u){return u.id+'|'+(u.isOnline?1:0)+'|'+(u.role||'')+'|'+(u.username||'')+'|'+(u.memoryCount||0)+'|'+(u.taskCount||0)+'|'+(u.skillCount||0)}).join(',')
       +':'+_newMemories.map(function(m){return m.id}).join(',')
       +':'+_newTasks.map(function(t){return t.id+'|'+(t.status||'')}).join(',')
       +':'+_newSkills.map(function(s){return s.id+'|'+(s.status||'')}).join(',')
@@ -4278,12 +4311,13 @@ function renderAdminUserCard(u,adminCount){
   }else{
     actions+='<span style="font-size:11px;color:var(--text-muted);padding:4px 0">'+t('admin.lastAdminHint')+'</span>';
   }
-  var ownerBadge=u.isOwner?' <span style="font-size:9px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:2px 8px;border-radius:6px;font-weight:800;vertical-align:middle;margin-left:4px;letter-spacing:.04em;text-transform:uppercase;box-shadow:0 2px 8px rgba(251,191,36,.3)">Owner</span>':'';
+  var badgesHtml='<div class="au-badges">'+statusLabel+
+    '<span class="admin-badge '+(u.role==='admin'?'admin':'member')+'">'+esc(u.role||'member').toUpperCase()+'</span>'+
+    (u.isOwner?'<span class="admin-badge owner">OWNER</span>':'')+
+    '</div>';
 
-  return '<div class="admin-card au-card au-'+statusCls+'"><div class="admin-card-header"><div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
-    '<div style="flex:1;min-width:0">'+titleDisplay+editRow+'</div>'+statusLabel+
-    '</div>'+
-    '<div style="display:flex;align-items:center;gap:6px"><span class="admin-badge '+(u.role==='admin'?'admin':'member')+'">'+esc(u.role||'member')+'</span>'+ownerBadge+'</div></div>'+
+  return '<div class="admin-card au-card au-'+statusCls+'"><div class="admin-card-header"><div style="flex:1;min-width:0">'+titleDisplay+editRow+'</div>'+
+    badgesHtml+'</div>'+
     contribHtml+infoHtml+
     (actions?'<div class="admin-card-actions" style="border-top:1px solid rgba(99,102,241,.08);padding-top:12px;margin-top:6px">'+actions+'</div>':'')+
     '</div>';
@@ -4386,13 +4420,24 @@ async function adminSaveEditName(userId){
   var inputEl=document.getElementById('au_input_'+userId);
   if(!inputEl) return;
   var newName=inputEl.value.trim();
-  if(!newName||newName.length<2||newName.length>32){toast(t('toast.invalidUsername'),'warn');return;}
+  if(!newName||newName.length<2||newName.length>32){
+    alertModal(t('toast.invalidUsername'),{title:t('admin.editName')});
+    return;
+  }
   inputEl.disabled=true;
   try{
     var r=await fetch('/api/sharing/rename-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:newName})});
     var d=await r.json();
-    if(d.ok){toast(t('toast.usernameChanged'),'success');loadAdminData();}else{inputEl.disabled=false;toast(d.error||t('toast.renameFail'),'error');}
-  }catch(e){inputEl.disabled=false;toast(t('toast.renameFail')+': '+e.message,'error');}
+    if(d.ok){toast(t('toast.usernameChanged'),'success');adminCancelEditName(userId);loadAdminData();}
+    else{
+      inputEl.disabled=false;
+      if(d.error==='username_taken'){
+        alertModal(t('sharing.username.taken'),{title:t('admin.editName'),danger:true});
+      }else{
+        alertModal(d.error||t('toast.renameFail'),{title:t('admin.editName'),danger:true});
+      }
+    }
+  }catch(e){inputEl.disabled=false;alertModal(t('toast.renameFail'),{title:t('admin.editName'),danger:true});}
 }
 
 async function adminRemoveUser(userId,username){
@@ -4470,7 +4515,7 @@ function renderAdminTasks(tasks){
         '<div class="admin-card-header"><div class="admin-card-title">'+esc(tk.title||tk.id)+'</div></div>'+
         '<div class="admin-card-tags">'+
           '<div class="admin-card-tags-left">'+
-            '<span class="admin-card-tag tag-owner">\u{1F464} '+esc(tk.ownerName||tk.sourceUserId||'unknown')+'</span>'+
+            '<span class="admin-card-tag tag-owner">\u{1F464} '+fmtOwner(tk)+'</span>'+
             (tk.status?'<span class="admin-card-tag tag-status">'+esc(tk.status)+'</span>':'')+
             (tk.chunkCount!=null?'<span class="admin-card-tag tag-kind">\u{1F4DD} '+tk.chunkCount+' '+t('admin.chunks')+'</span>':'')+
         '</div>'+
@@ -4532,7 +4577,7 @@ function renderAdminSkills(skills){
         '<div class="admin-card-header"><div class="admin-card-title">'+esc(s.name||s.id)+'</div></div>'+
         '<div class="admin-card-tags">'+
           '<div class="admin-card-tags-left">'+
-            '<span class="admin-card-tag tag-owner">\u{1F464} '+esc(s.ownerName||s.sourceUserId||'unknown')+'</span>'+
+            '<span class="admin-card-tag tag-owner">\u{1F464} '+fmtOwner(s)+'</span>'+
             (s.status?'<span class="admin-card-tag tag-status">'+esc(s.status)+'</span>':'')+
             (s.version!=null?'<span class="admin-card-tag tag-version">v'+s.version+'</span>':'')+
             (qs!=null?'<span class="admin-card-tag tag-kind">\u2605 '+Number(qs).toFixed(1)+'</span>':'')+
@@ -4597,7 +4642,7 @@ function renderAdminMemories(memories){
         '<div class="admin-card-header"><div class="admin-card-title">'+esc(m.summary||m.content?.slice(0,80)||m.id)+'</div></div>'+
         '<div class="admin-card-tags">'+
           '<div class="admin-card-tags-left">'+
-            '<span class="admin-card-tag tag-owner">\u{1F464} '+esc(m.ownerName||m.sourceUserId||'unknown')+'</span>'+
+            '<span class="admin-card-tag tag-owner">\u{1F464} '+fmtOwner(m)+'</span>'+
             (m.role?'<span class="admin-card-tag tag-role">'+esc(m.role)+'</span>':'')+
             (m.kind?'<span class="admin-card-tag tag-kind">'+esc(m.kind)+'</span>':'')+
         '</div>'+
@@ -4641,7 +4686,7 @@ function toggleAdminMemoryCard(cardId,idx){
     (m.kind?'<span class="meta-item">'+t('admin.kind')+esc(m.kind)+'</span>':'')+
     (m.role?'<span class="meta-item">'+t('admin.role')+esc(m.role)+'</span>':'')+
     (m.visibility?'<span class="meta-item">'+t('admin.visibility')+esc(m.visibility)+'</span>':'')+
-    '<span class="meta-item">'+t('admin.owner')+esc(m.ownerName||m.sourceUserId||'unknown')+'</span>'+
+    '<span class="meta-item">'+t('admin.owner')+fmtOwner(m)+'</span>'+
     (m.groupName?'<span class="meta-item">'+t('admin.group')+esc(m.groupName)+'</span>':'')+
     '<span class="meta-item">'+new Date(m.updatedAt||m.createdAt||0).toLocaleString(dateLoc())+'</span>'+
   '</div>';
@@ -4697,7 +4742,7 @@ async function toggleAdminTaskCard(cardId,idx){
   var metaHtml='<div class="admin-card-detail-meta admin-task-meta">'+
     (tk.status?'<span class="meta-item"><span class="task-status-badge '+tk.status+'">'+esc(tk.status)+'</span></span>':'')+
     (tk.visibility?'<span class="meta-item">'+t('admin.visibility')+esc(tk.visibility)+'</span>':'')+
-    '<span class="meta-item">'+t('admin.owner')+esc(tk.ownerName||'unknown')+'</span>'+
+    '<span class="meta-item">'+t('admin.owner')+fmtOwner(tk)+'</span>'+
     (tk.groupName?'<span class="meta-item">'+t('admin.group')+esc(tk.groupName)+'</span>':'')+
     (task.chunks&&task.chunks.length?'<span class="meta-item">\u{1F4AC} '+task.chunks.length+' '+t('tasks.chunks.label')+'</span>':'')+
     (task.startedAt?'<span class="meta-item">\u{1F4C5} '+formatDateTimeSeconds(task.startedAt)+'</span>':'')+
@@ -4784,7 +4829,7 @@ async function toggleAdminSkillCard(cardId,idx){
     (localSkill.status?'<span class="meta-item"><span class="skill-badge status-'+localSkill.status+'">'+esc(localSkill.status)+'</span></span>':'')+
     (sk.visibility?'<span class="meta-item">'+t('admin.visibility')+esc(sk.visibility||'hub')+'</span>':'')+
     (qs!=null?'<span class="meta-item"><span class="skill-badge quality '+(qs>=7?'high':qs>=5?'mid':'low')+'">\u2605 '+Number(qs).toFixed(1)+'/10</span></span>':'')+
-    '<span class="meta-item">'+t('admin.owner')+esc(sk.ownerName||'unknown')+'</span>'+
+    '<span class="meta-item">'+t('admin.owner')+fmtOwner(sk)+'</span>'+
     (sk.groupName?'<span class="meta-item">'+t('admin.group')+esc(sk.groupName)+'</span>':'')+
     '<span class="meta-item">'+t('admin.updated')+new Date(sk.updatedAt||sk.createdAt||0).toLocaleString(dateLoc())+'</span>'+
   '</div>';
@@ -4853,7 +4898,7 @@ function renderSharingMemorySearchResults(data,query){
           '<div class="summary">'+(idx+1)+'. '+esc(hit.summary||'(no summary)')+'</div>'+
           '<div class="excerpt">'+esc(hit.excerpt||'')+'</div>'+
           '<div class="hub-hit-meta">'+
-            '<span class="meta-chip">owner: '+esc(hit.ownerName||'unknown')+'</span>'+
+            '<span class="meta-chip">owner: '+fmtOwner(hit)+'</span>'+
             (hit.groupName?'<span class="meta-chip">group: '+esc(hit.groupName)+'</span>':'')+
             '<span class="meta-chip">visibility: '+esc(hit.visibility||'hub')+'</span>'+
           '</div>'+
@@ -4938,7 +4983,7 @@ function openHubTaskDetailFromCache(cacheKey,idx){
   var meta=[
     '<span class="meta-item">\\u{1F310} '+t('scope.hub')+'</span>',
     task.status?'<span class="meta-item"><span class="task-status-badge '+task.status+'">'+esc(task.status)+'</span></span>':'',
-    '<span class="meta-item">'+t('admin.owner')+esc(task.ownerName||'unknown')+'</span>',
+    '<span class="meta-item">'+t('admin.owner')+fmtOwner(task)+'</span>',
     task.groupName?'<span class="meta-item">'+t('admin.group')+esc(task.groupName)+'</span>':'',
     task.visibility?'<span class="meta-item">'+t('admin.visibility')+esc(task.visibility)+'</span>':'',
     task.chunkCount!=null?'<span class="meta-item">\\u{1F4DD} '+esc(String(task.chunkCount))+' '+t('tasks.chunks.label')+'</span>':'',
@@ -4969,14 +5014,14 @@ function openHubSkillDetailFromCache(cacheKey,idx){
     skill.status?'<span class="meta-item"><span class="skill-badge status-'+skill.status+'">'+esc(skill.status)+'</span></span>':'',
     '<span class="meta-item">visibility: '+esc(skill.visibility||'hub')+'</span>',
     qsBadge,
-    '<span class="meta-item">'+t('admin.owner')+esc(skill.ownerName||'unknown')+'</span>',
+    '<span class="meta-item">'+t('admin.owner')+fmtOwner(skill)+'</span>',
     skill.groupName?'<span class="meta-item">'+t('admin.group')+esc(skill.groupName)+'</span>':'',
     (skill.updatedAt||skill.createdAt)?'<span class="meta-item">'+t('admin.updated')+new Date(skill.updatedAt||skill.createdAt).toLocaleString(dateLoc())+'</span>':'',
   ].filter(Boolean);
   document.getElementById('skillDetailMeta').innerHTML=meta.join('');
   document.getElementById('skillDetailDesc').textContent=skill.description||'';
   document.getElementById('skillFilesList').innerHTML='';
-  document.getElementById('skillDetailContent').innerHTML=skill.content?'<pre>'+esc(skill.content)+'</pre>':'';
+  document.getElementById('skillDetailContent').innerHTML=skill.content?renderSkillMarkdown(skill.content):'';
   document.getElementById('skillVersionsList').innerHTML='';
   document.getElementById('skillRelatedTasks').innerHTML='';
   var visBtn=document.getElementById('skillVisibilityBtn');
@@ -5102,7 +5147,8 @@ async function confirmScopeSelection(){
       if(st.onConfirm) st.onConfirm(newScope);
       else loadAll();
     }else{
-      toast(d.error||t('share.scope.changeFail'),'error');
+      var errMsg=d.error==='inactive_memory'?t('share.scope.inactiveDisabled'):(d.message||d.error||t('share.scope.changeFail'));
+      toast(errMsg,'error');
     }
   }catch(e){toast(t('share.scope.changeFail')+': '+e.message,'error');}
 }
@@ -5353,6 +5399,13 @@ function parseMemoryAddEntries(out){
   return results;
 }
 
+function recallOriginBadge(origin){
+  if(origin==='local-shared') return '<span class="recall-origin local-shared">'+t('recall.origin.localShared')+'</span>';
+  if(origin==='hub-memory') return '<span class="recall-origin hub-memory">'+t('recall.origin.hubMemory')+'</span>';
+  if(origin==='hub-remote') return '<span class="recall-origin hub-remote">'+t('recall.origin.hubRemote')+'</span>';
+  return '';
+}
+
 function buildLogSummary(lg){
   let inputObj=null;
   try{inputObj=JSON.parse(lg.input);}catch(_){}
@@ -5377,8 +5430,9 @@ function buildLogSummary(lg){
           var scoreClass=c.score>=0.7?'high':c.score>=0.5?'mid':'low';
           var shortText=escapeHtml(c.summary||c.content||c.original_excerpt||'');
           var fullText=escapeHtml(c.content||c.original_excerpt||c.summary||'');
+          var oBadge=recallOriginBadge(c.origin);
           html+='<div class="recall-item" onclick="event.stopPropagation();this.classList.toggle(\\\'expanded\\\')">';
-          html+='<div class="recall-item-head"><span class="recall-score '+scoreClass+'">'+c.score.toFixed(2)+'</span><span class="log-msg-role '+(c.role||'user')+'">'+(c.role||'user')+'</span><span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
+          html+='<div class="recall-item-head"><span class="recall-score '+scoreClass+'">'+c.score.toFixed(2)+'</span><span class="log-msg-role '+(c.role||'user')+'">'+(c.role||'user')+'</span>'+oBadge+'<span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
           html+='<div class="recall-summary-full">'+fullText+'</div>';
           html+='</div>';
         });
@@ -5391,8 +5445,9 @@ function buildLogSummary(lg){
             var scoreClass=f.score>=0.7?'high':f.score>=0.5?'mid':'low';
             var shortText=escapeHtml(f.summary||f.content||f.original_excerpt||'');
             var fullText=escapeHtml(f.content||f.original_excerpt||f.summary||'');
+            var oBadge=recallOriginBadge(f.origin);
             html+='<div class="recall-item" onclick="event.stopPropagation();this.classList.toggle(\\\'expanded\\\')">';
-            html+='<div class="recall-item-head"><span class="recall-score '+scoreClass+'">'+f.score.toFixed(2)+'</span><span class="log-msg-role '+(f.role||'user')+'">'+(f.role||'user')+'</span><span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
+            html+='<div class="recall-item-head"><span class="recall-score '+scoreClass+'">'+f.score.toFixed(2)+'</span><span class="log-msg-role '+(f.role||'user')+'">'+(f.role||'user')+'</span>'+oBadge+'<span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
             html+='<div class="recall-summary-full">'+fullText+'</div>';
             html+='</div>';
           });
@@ -5456,8 +5511,9 @@ function buildRecallDetailHtml(rd){
       var scoreClass=c.score>=0.7?'high':c.score>=0.5?'mid':'low';
       var shortText=escapeHtml(c.summary||c.content||c.original_excerpt||'');
       var fullText=escapeHtml(c.content||c.original_excerpt||c.summary||'');
+      var oBadge=recallOriginBadge(c.origin);
       html+='<div class="recall-item" onclick="event.stopPropagation();this.classList.toggle(\\\'expanded\\\')">';
-      html+='<div class="recall-item-head"><span class="recall-idx">'+(i+1)+'</span><span class="recall-score '+scoreClass+'">'+c.score.toFixed(3)+'</span><span class="log-msg-role '+(c.role||'user')+'">'+(c.role||'user')+'</span><span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
+      html+='<div class="recall-item-head"><span class="recall-idx">'+(i+1)+'</span><span class="recall-score '+scoreClass+'">'+c.score.toFixed(3)+'</span><span class="log-msg-role '+(c.role||'user')+'">'+(c.role||'user')+'</span>'+oBadge+'<span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
       html+='<div class="recall-summary-full">'+fullText+'</div>';
       html+='</div>';
     });
@@ -5471,8 +5527,9 @@ function buildRecallDetailHtml(rd){
       var scoreClass=f.score>=0.7?'high':f.score>=0.5?'mid':'low';
       var shortText=escapeHtml(f.summary||f.content||f.original_excerpt||'');
       var fullText=escapeHtml(f.content||f.original_excerpt||f.summary||'');
+      var oBadge=recallOriginBadge(f.origin);
       html+='<div class="recall-item" onclick="event.stopPropagation();this.classList.toggle(\\\'expanded\\\')">';
-      html+='<div class="recall-item-head"><span class="recall-idx">'+(i+1)+'</span><span class="recall-score '+scoreClass+'">'+f.score.toFixed(3)+'</span><span class="log-msg-role '+(f.role||'user')+'">'+(f.role||'user')+'</span><span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
+      html+='<div class="recall-item-head"><span class="recall-idx">'+(i+1)+'</span><span class="recall-score '+scoreClass+'">'+f.score.toFixed(3)+'</span><span class="log-msg-role '+(f.role||'user')+'">'+(f.role||'user')+'</span>'+oBadge+'<span class="recall-summary-short">'+shortText+'</span><span class="recall-expand-icon">\u25B6</span></div>';
       html+='<div class="recall-summary-full">'+fullText+'</div>';
       html+='</div>';
     });
@@ -6048,7 +6105,7 @@ async function loadSkills(silent){
           '<div class="summary">'+esc(skill.name)+'</div>'+
           '<div class="excerpt">'+esc(skill.description||'')+'</div>'+
           '<div class="hub-skill-meta">'+
-            '<span class="meta-chip">owner: '+esc(skill.ownerName||'unknown')+'</span>'+
+            '<span class="meta-chip">owner: '+fmtOwner(skill)+'</span>'+
             (skill.groupName?'<span class="meta-chip">group: '+esc(skill.groupName)+'</span>':'')+
             '<span class="meta-chip">visibility: '+esc(skill.visibility||'hub')+'</span>'+
             (skill.version!=null?'<span class="meta-chip">v'+skill.version+'</span>':'')+
@@ -6095,12 +6152,12 @@ async function loadHubTasks(){
       return '<div class="task-card" onclick="openHubTaskDetailFromCache(\\x27hub\\x27,'+idx+')" style="cursor:pointer">'+
         '<div class="task-card-top">'+
           '<div class="task-card-title">'+esc(task.title||'(no title)')+'</div>'+
-          '<div class="task-card-badges"><span class="scope-badge team">\\u{1F310} '+t('scope.hub')+'</span></div>'+
+          '<div class="task-card-badges">'+renderScopeBadge('team')+'</div>'+
         '</div>'+
         (task.summary?'<div class="task-card-summary">'+esc(task.summary)+'</div>':'')+
         '<div class="task-card-bottom">'+
           (timeStr?'<span class="tag"><span class="icon">\\u{1F4C5}</span> '+timeStr+'</span>':'')+
-          '<span class="tag"><span class="icon">\\u{1F464}</span> '+esc(task.ownerName||'unknown')+'</span>'+
+          '<span class="tag"><span class="icon">\\u{1F464}</span> '+fmtOwner(task)+'</span>'+
           (task.chunkCount!=null?'<span class="tag"><span class="icon">\\u{1F4DD}</span> '+task.chunkCount+' '+t('tasks.chunks.label')+'</span>':'')+
         '</div>'+
       '</div>';
@@ -6133,12 +6190,12 @@ async function loadHubSkills(hubList, localIds){
         '<div class="summary">'+esc(skill.name)+'</div>'+
         '<div class="excerpt">'+esc(skill.description||'')+'</div>'+
         '<div class="hub-skill-meta">'+
-          '<span class="meta-chip">owner: '+esc(skill.ownerName||'unknown')+'</span>'+
+          '<span class="meta-chip">owner: '+fmtOwner(skill)+'</span>'+
           (skill.groupName?'<span class="meta-chip">group: '+esc(skill.groupName)+'</span>':'')+
           '<span class="meta-chip">visibility: '+esc(skill.visibility||'hub')+'</span>'+
           (skill.version!=null?'<span class="meta-chip">v'+skill.version+'</span>':'')+
         '</div>'+
-        '<div class="hub-skill-actions"><button class="btn btn-sm" onclick="event.stopPropagation();pullHubSkill(\\''+escAttr(skill.sourceSkillId)+'\\')">'+t('skill.pullToLocal')+'</button></div>'+
+        '<div class="hub-skill-actions"><button class="btn btn-sm" onclick="event.stopPropagation();pullHubSkill(\\''+escAttr(skill.id)+'\\')">'+t('skill.pullToLocal')+'</button></div>'+
       '</div>';
     }).join('');
   }catch(e){
@@ -6801,6 +6858,8 @@ function renderSkillMarkdown(md){
 function closeSkillDetail(event){
   if(event && event.target!==document.getElementById('skillDetailOverlay')) return;
   document.getElementById('skillDetailOverlay').classList.remove('show');
+  currentSkillId='';
+  currentSkillDetail=null;
 }
 
 async function deleteSkill(skillId){
@@ -7140,20 +7199,20 @@ async function _livePollTick(){
   var _savedScrollMap={};
   _scrollTargets.forEach(function(id){var el=document.getElementById(id);if(el&&el.scrollTop)_savedScrollMap[id]=el.scrollTop;});
   try{
-    if(sharingStatusCache&&sharingStatusCache.enabled&&_lastSharingConnStatus!=='rejected') loadSharingStatus(false);
-    if(!_notifSSEConnected) pollNotifCount();
-    pollAdminPending();
-    if(_activeView==='admin') loadAdminData();
+    if(sharingStatusCache&&sharingStatusCache.enabled&&_lastSharingConnStatus!=='rejected') await loadSharingStatus(false);
+    if(!_notifSSEConnected) await pollNotifCount();
+    await pollAdminPending();
+    if(_activeView==='admin') await loadAdminData();
     else if(_activeView==='memories'){
       var _searchVal=(document.getElementById('searchInput')||{}).value||'';
       if(!_searchVal.trim()){
-        if(memorySearchScope==='hub') loadHubMemories(true);
-        else{loadStats();loadMemories(null,true);}
+        if(memorySearchScope==='hub') await loadHubMemories(true);
+        else{var _pollOwner=memorySearchScope==='local'?_currentAgentOwner:undefined;await loadStats(_pollOwner);await loadMemories(null,true);}
       }
     }
-    else if(_activeView==='tasks') loadTasks(true);
-    else if(_activeView==='skills') loadSkills(true);
-    else if(_activeView==='analytics') loadMetrics();
+    else if(_activeView==='tasks') await loadTasks(true);
+    else if(_activeView==='skills') await loadSkills(true);
+    else if(_activeView==='analytics') await loadMetrics();
   }catch(e){}
   await new Promise(function(r){requestAnimationFrame(r);});
   window.scrollTo(0,_savedScrollY);
@@ -7497,7 +7556,7 @@ function getFilterParams(){
   const scope=memorySearchScope||'local';
   if(scope==='local'){
     p.set('owner',_currentAgentOwner);
-  }else{
+  }else if(scope==='allLocal'){
     const owner=document.getElementById('filterOwner').value;
     if(owner) p.set('owner',owner);
   }
@@ -7683,7 +7742,7 @@ function renderMemories(items){
     const mergeBadge=mc>0?'<span class="merge-badge">\\u{1F504} '+t('card.evolved')+' '+mc+t('card.times')+'</span>':'';
     const updatedAt=(m.updated_at&&m.updated_at>m.created_at)?'<span class="card-updated">'+t('card.updated')+' '+new Date(m.updated_at).toLocaleString(dateLoc())+'</span>':'';
     const ds=m.dedup_status||'active';
-    const isInactive=ds==='merged';
+    const isInactive=ds==='merged'||ds==='duplicate';
     const dedupBadge=ds==='duplicate'?'<span class="dedup-badge duplicate">'+t('card.dedupDuplicate')+'</span>':ds==='merged'?'<span class="dedup-badge merged">'+t('card.dedupMerged')+'</span>':'';
     const isImported=sid.startsWith('openclaw-import-')||sid.startsWith('openclaw-session-');
     const importBadge=isImported?'<span class="import-badge">\u{1F990} '+t('card.imported')+'</span>':'';
@@ -7692,8 +7751,8 @@ function renderMemories(items){
     const localManaged=!!m.localSharingManaged;
     const memShared=m.sharingVisibility||null;
     const isHubScope=memorySearchScope==='hub';
-    const memScope=isHubScope?'team':memShared?'team':isPublicMem?'local':'private';
-    const memScopeBadge=renderScopeBadge(memScope);
+    const memScope=memShared?'team':isPublicMem?'local':'private';
+    const memScopeBadge=isHubScope?renderScopeBadge('team'):renderScopeBadge(memScope);
     let dedupInfo='';
     if(ds==='duplicate'||ds==='merged'){
       const reason=m.dedup_reason?'<span style="font-size:11px;color:var(--text-muted)">'+t('card.dedupReason')+esc(m.dedup_reason)+'</span>':'';
@@ -7877,6 +7936,11 @@ function closeMemoryModal(){document.getElementById('memoryModal').classList.rem
 function esc(s){
   if(!s)return'';
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtOwner(item){
+  var name=item.ownerName||item.sourceUserId||'unknown';
+  if(item.ownerStatus==='removed') return esc(name)+' <span style="color:#ef4444;font-size:0.9em">'+t('sharing.ownerRemoved')+'</span>';
+  return esc(name);
 }
 
 function renderSummaryHtml(raw){
@@ -8608,13 +8672,20 @@ function confirmModal(message,opts){
     var okBtn=document.getElementById('confirmOkBtn');
     okBtn.textContent=opts.okText||t('confirm.ok')||'\u786E\u5B9A';
     okBtn.className='btn-confirm-ok'+(opts.danger?' danger':'');
-    document.getElementById('confirmCancelBtn').textContent=opts.cancelText||t('confirm.cancel')||'\u53D6\u6D88';
+    var cancelBtn=document.getElementById('confirmCancelBtn');
+    cancelBtn.textContent=opts.cancelText||t('confirm.cancel')||'\u53D6\u6D88';
+    cancelBtn.style.display=opts.hideCancel?'none':'';
     overlay.classList.add('show');
   });
 }
 function confirmModalClose(result){
   document.getElementById('confirmOverlay').classList.remove('show');
+  document.getElementById('confirmCancelBtn').style.display='';
   if(_confirmResolve){var r=_confirmResolve;_confirmResolve=null;r(result);}
+}
+function alertModal(message,opts){
+  opts=opts||{};
+  return confirmModal(message,Object.assign({},opts,{hideCancel:true,okText:opts.okText||t('confirm.ok')||'\u77E5\u9053\u4E86'}));
 }
 
 /* ─── Theme ─── */
@@ -8681,10 +8752,10 @@ async function checkForUpdate(){
     const pkgSpec=d.installCommand?d.installCommand.replace(/^(?:npx\s+)?openclaw\s+plugins\s+install\s+/,''):(d.packageName+'@'+d.latest);
     var bannerWrap=document.createElement('div');
     bannerWrap.id='updateBannerWrap';
-    bannerWrap.style.cssText='width:100%;background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.06));border-bottom:1px solid rgba(99,102,241,.18);backdrop-filter:blur(8px);animation:slideIn .3s ease';
+    bannerWrap.style.cssText='background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.06));border-bottom:1px solid rgba(99,102,241,.18);backdrop-filter:blur(8px);animation:slideIn .3s ease';
     var banner=document.createElement('div');
     banner.id='updateBanner';
-    banner.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 32px;max-width:1400px;margin:0 auto;width:100%;font-size:13px;font-weight:500;box-sizing:border-box;color:var(--pri)';
+    banner.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 32px;width:100%;max-width:1400px;margin:0 auto;font-size:13px;font-weight:500;box-sizing:border-box;color:var(--pri)';
     var textNode=document.createElement('div');
     textNode.style.cssText='display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:13px';
     textNode.innerHTML='<span style="font-size:15px">\u2728</span> '+t('update.available')+' <span style="padding:2px 8px;border-radius:6px;background:rgba(99,102,241,.1);font-size:12px;font-weight:600">v'+esc(d.current)+'</span> <span style="opacity:.5">\u2192</span> <span style="padding:2px 8px;border-radius:6px;background:rgba(52,211,153,.12);color:var(--green);font-size:12px;font-weight:600">v'+esc(d.latest)+'</span>';
@@ -8705,6 +8776,9 @@ async function checkForUpdate(){
     btnClose.onmouseenter=function(){this.style.opacity='1'};
     btnClose.onmouseleave=function(){this.style.opacity='.5'};
     btnClose.onclick=function(){bannerWrap.remove()};
+    var spacerL=document.createElement('div');
+    spacerL.style.cssText='flex:1';
+    banner.appendChild(spacerL);
     banner.appendChild(textNode);
     banner.appendChild(statusDiv);
     banner.appendChild(spacer);

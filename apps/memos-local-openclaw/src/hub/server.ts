@@ -169,6 +169,20 @@ export class HubServer {
     });
   }
 
+  private embedSkillAsync(skillId: string, name: string, description: string, sourceUserId: string, sourceSkillId: string): void {
+    const embedder = this.opts.embedder;
+    if (!embedder) return;
+    const text = `${name}: ${description}`;
+    embedder.embed([text]).then((vectors) => {
+      if (vectors[0]) {
+        this.opts.store.upsertHubSkillEmbedding(skillId, Array.from(vectors[0]), sourceUserId, sourceSkillId);
+        this.opts.log.info(`hub: embedded shared skill ${skillId}`);
+      }
+    }).catch((err) => {
+      this.opts.log.warn(`hub: embedding shared skill failed: ${err}`);
+    });
+  }
+
   private embedMemoryAsync(memoryId: string, summary: string, content: string): void {
     const embedder = this.opts.embedder;
     if (!embedder) return;
@@ -229,6 +243,12 @@ export class HubServer {
             return this.json(res, 200, { status: "pending", userId: existingUser.id });
           }
           return this.json(res, 200, { status: "rejected", userId: existingUser.id });
+        }
+        if (existingUser.status === "removed") {
+          this.userManager.resetToPending(existingUser.id);
+          this.notifyAdmins("user_join_request", "user", username, "");
+          this.opts.log.info(`Hub: removed user "${username}" (${existingUser.id}) re-applied, reset to pending`);
+          return this.json(res, 200, { status: "pending", userId: existingUser.id });
         }
       }
       const user = this.userManager.createPendingUser({
@@ -603,19 +623,70 @@ export class HubServer {
     }
 
     if (req.method === "GET" && routePath === "/api/v1/hub/skills") {
-      const hits = this.opts.store.searchHubSkills(String(url.searchParams.get("query") || ""), {
+      const skillQuery = String(url.searchParams.get("query") || "");
+      const skillMaxResults = Number(url.searchParams.get("maxResults") || 10);
+      const ftsSkillHits = this.opts.store.searchHubSkills(skillQuery, {
         userId: auth.userId,
-        maxResults: Number(url.searchParams.get("maxResults") || 10),
-      }).map(({ hit }) => ({
-        skillId: hit.id,
-        name: hit.name,
-        description: hit.description,
-        version: hit.version,
-        visibility: hit.visibility,
-        groupName: hit.group_name,
-        ownerName: hit.owner_name || "unknown",
-        qualityScore: hit.quality_score,
-      }));
+        maxResults: skillMaxResults * 2,
+      });
+
+      let mergedSkillIds: string[];
+      if (this.opts.embedder && skillQuery) {
+        try {
+          const [queryVec] = await this.opts.embedder.embed([skillQuery]);
+          if (queryVec) {
+            const skillEmbs = this.opts.store.getVisibleHubSkillEmbeddings();
+            const cosineSim = (vec: Float32Array) => {
+              let dot = 0, nA = 0, nB = 0;
+              for (let i = 0; i < queryVec.length && i < vec.length; i++) {
+                dot += queryVec[i] * vec[i]; nA += queryVec[i] * queryVec[i]; nB += vec[i] * vec[i];
+              }
+              return nA > 0 && nB > 0 ? dot / (Math.sqrt(nA) * Math.sqrt(nB)) : 0;
+            };
+            const vecScored = skillEmbs
+              .map(e => ({ id: e.skillId, score: cosineSim(e.vector) }))
+              .filter(e => e.score > 0.3)
+              .sort((a, b) => b.score - a.score)
+              .slice(0, skillMaxResults * 2);
+
+            const K = 60;
+            const rrfScores = new Map<string, number>();
+            ftsSkillHits.forEach(({ hit }, idx) => {
+              rrfScores.set(hit.id, (rrfScores.get(hit.id) ?? 0) + 1 / (K + idx + 1));
+            });
+            vecScored.forEach(({ id }, idx) => {
+              rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + idx + 1));
+            });
+            mergedSkillIds = [...rrfScores.entries()].sort((a, b) => b[1] - a[1]).slice(0, skillMaxResults).map(([id]) => id);
+          } else {
+            mergedSkillIds = ftsSkillHits.slice(0, skillMaxResults).map(({ hit }) => hit.id);
+          }
+        } catch {
+          mergedSkillIds = ftsSkillHits.slice(0, skillMaxResults).map(({ hit }) => hit.id);
+        }
+      } else {
+        mergedSkillIds = ftsSkillHits.slice(0, skillMaxResults).map(({ hit }) => hit.id);
+      }
+
+      const ftsSkillMap = new Map(ftsSkillHits.map(({ hit }) => [hit.id, hit]));
+      const hits = mergedSkillIds.map(id => {
+        const hit = ftsSkillMap.get(id);
+        if (hit) {
+          return {
+            skillId: hit.id, name: hit.name, description: hit.description,
+            version: hit.version, visibility: hit.visibility, groupName: hit.group_name,
+            ownerName: hit.owner_name || "unknown", ownerStatus: hit.owner_status || "",
+            qualityScore: hit.quality_score,
+          };
+        }
+        const skill = this.opts.store.getHubSkillById(id);
+        if (!skill) return null;
+        return {
+          skillId: skill.id, name: skill.name, description: skill.description,
+          version: skill.version, visibility: skill.visibility, groupName: "",
+          ownerName: "unknown", ownerStatus: "", qualityScore: skill.qualityScore,
+        };
+      }).filter(Boolean);
       return this.json(res, 200, { hits });
     }
 
@@ -641,6 +712,7 @@ export class HubServer {
         createdAt: existing?.createdAt ?? Date.now(),
         updatedAt: Date.now(),
       });
+      this.embedSkillAsync(skillId, String(metadata.name || sourceSkillId), String(metadata.description || ""), auth.userId, sourceSkillId);
       if (!existing) {
         this.notifyAdmins("resource_shared", "skill", String(metadata.name || sourceSkillId), auth.userId);
       }

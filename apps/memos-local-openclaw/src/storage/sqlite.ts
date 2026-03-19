@@ -112,6 +112,7 @@ export class SqliteStore {
     this.migrateSkillEmbeddingsAndFts();
     this.migrateFtsToTrigram();
     this.migrateHubTables();
+    this.migrateHubFtsToTrigram();
     this.migrateLocalSharedTasksOwner();
     this.log.debug("Database schema initialized");
   }
@@ -281,6 +282,51 @@ export class SqliteStore {
       }
     } catch (err) {
       this.log.warn(`Failed to migrate skills_fts to trigram: ${err}`);
+    }
+  }
+
+  private migrateHubFtsToTrigram(): void {
+    const tables: Array<{ fts: string; source: string; columns: string; triggers: string[] }> = [
+      {
+        fts: "hub_chunks_fts", source: "hub_chunks", columns: "summary, content",
+        triggers: ["hub_chunks_ai", "hub_chunks_ad", "hub_chunks_au"],
+      },
+      {
+        fts: "hub_skills_fts", source: "hub_skills", columns: "name, description",
+        triggers: ["hub_skills_ai", "hub_skills_ad", "hub_skills_au"],
+      },
+      {
+        fts: "hub_memories_fts", source: "hub_memories", columns: "summary, content",
+        triggers: ["hub_memories_ai", "hub_memories_ad", "hub_memories_au"],
+      },
+    ];
+    for (const t of tables) {
+      try {
+        const row = this.db.prepare(`SELECT sql FROM sqlite_master WHERE name='${t.fts}'`).get() as { sql: string } | undefined;
+        if (!row || !row.sql) continue;
+        if (row.sql.includes("trigram")) continue;
+        this.log.info(`Migrating ${t.fts} to trigram tokenizer...`);
+        for (const tr of t.triggers) this.db.exec(`DROP TRIGGER IF EXISTS ${tr}`);
+        this.db.exec(`DROP TABLE IF EXISTS ${t.fts}`);
+        this.db.exec(`CREATE VIRTUAL TABLE ${t.fts} USING fts5(${t.columns}, content='${t.source}', content_rowid='rowid', tokenize='trigram')`);
+        this.db.exec(`
+          CREATE TRIGGER ${t.triggers[0]} AFTER INSERT ON ${t.source} BEGIN
+            INSERT INTO ${t.fts}(rowid, ${t.columns}) VALUES (new.rowid, ${t.columns.split(", ").map(c => "new." + c).join(", ")});
+          END;
+          CREATE TRIGGER ${t.triggers[1]} AFTER DELETE ON ${t.source} BEGIN
+            INSERT INTO ${t.fts}(${t.fts}, rowid, ${t.columns}) VALUES ('delete', old.rowid, ${t.columns.split(", ").map(c => "old." + c).join(", ")});
+          END;
+          CREATE TRIGGER ${t.triggers[2]} AFTER UPDATE ON ${t.source} BEGIN
+            INSERT INTO ${t.fts}(${t.fts}, rowid, ${t.columns}) VALUES ('delete', old.rowid, ${t.columns.split(", ").map(c => "old." + c).join(", ")});
+            INSERT INTO ${t.fts}(rowid, ${t.columns}) VALUES (new.rowid, ${t.columns.split(", ").map(c => "new." + c).join(", ")});
+          END
+        `);
+        this.db.exec(`INSERT INTO ${t.fts}(rowid, ${t.columns}) SELECT rowid, ${t.columns} FROM ${t.source}`);
+        const cnt = (this.db.prepare(`SELECT COUNT(*) as c FROM ${t.fts}`).get() as { c: number }).c;
+        this.log.info(`Migrated ${t.fts} to trigram: ${cnt} rows indexed`);
+      } catch (err) {
+        this.log.warn(`Failed to migrate ${t.fts} to trigram: ${err}`);
+      }
     }
   }
 
@@ -757,7 +803,7 @@ export class SqliteStore {
         content,
         content='hub_chunks',
         content_rowid='rowid',
-        tokenize='porter unicode61'
+        tokenize='trigram'
       );
 
       CREATE TRIGGER IF NOT EXISTS hub_chunks_ai AFTER INSERT ON hub_chunks BEGIN
@@ -807,7 +853,7 @@ export class SqliteStore {
         description,
         content='hub_skills',
         content_rowid='rowid',
-        tokenize='porter unicode61'
+        tokenize='trigram'
       );
 
       CREATE TRIGGER IF NOT EXISTS hub_skills_ai AFTER INSERT ON hub_skills BEGIN
@@ -857,7 +903,7 @@ export class SqliteStore {
         content,
         content='hub_memories',
         content_rowid='rowid',
-        tokenize='porter unicode61'
+        tokenize='trigram'
       );
 
       CREATE TRIGGER IF NOT EXISTS hub_memories_ai AFTER INSERT ON hub_memories BEGIN
@@ -1076,6 +1122,25 @@ export class SqliteStore {
     } catch {
       return [];
     }
+  }
+
+  hubMemoryPatternSearch(patterns: string[], opts: { limit?: number } = {}): Array<{ memoryId: string; content: string; role: string; createdAt: number }> {
+    if (patterns.length === 0) return [];
+    const limit = opts.limit ?? 10;
+    const conditions = patterns.map(() => "(hm.content LIKE ? OR hm.summary LIKE ?)");
+    const params: (string | number)[] = [];
+    for (const p of patterns) { params.push(`%${p}%`, `%${p}%`); }
+    params.push(limit);
+    try {
+      const rows = this.db.prepare(`
+        SELECT hm.id as memory_id, hm.content, hm.role, hm.created_at
+        FROM hub_memories hm
+        WHERE ${conditions.join(" OR ")}
+        ORDER BY hm.created_at DESC
+        LIMIT ?
+      `).all(...params) as Array<{ memory_id: string; content: string; role: string; created_at: number }>;
+      return rows.map(r => ({ memoryId: r.memory_id, content: r.content, role: r.role, createdAt: r.created_at }));
+    } catch { return []; }
   }
 
   // ─── Vector Search ───
@@ -1813,8 +1878,10 @@ export class SqliteStore {
       this.db.prepare('DELETE FROM hub_tasks WHERE source_user_id = ?').run(userId);
       this.db.prepare('DELETE FROM hub_skills WHERE source_user_id = ?').run(userId);
       this.db.prepare('DELETE FROM hub_memories WHERE source_user_id = ?').run(userId);
+      const result = this.db.prepare('DELETE FROM hub_users WHERE id = ?').run(userId);
+      return result.changes > 0;
     }
-    const result = this.db.prepare('DELETE FROM hub_users WHERE id = ?').run(userId);
+    const result = this.db.prepare("UPDATE hub_users SET status = 'removed', token_hash = '' WHERE id = ?").run(userId);
     return result.changes > 0;
   }
 
@@ -1934,6 +2001,18 @@ export class SqliteStore {
     return out;
   }
 
+  getVisibleHubSkillEmbeddings(): Array<{ skillId: string; vector: Float32Array }> {
+    const rows = this.db.prepare(`
+      SELECT hse.skill_id, hse.vector, hse.dimensions
+      FROM hub_skill_embeddings hse
+      JOIN hub_skills hs ON hs.id = hse.skill_id
+    `).all() as Array<{ skill_id: string; vector: Buffer; dimensions: number }>;
+    return rows.map(r => ({
+      skillId: r.skill_id,
+      vector: new Float32Array(r.vector.buffer, r.vector.byteOffset, r.dimensions),
+    }));
+  }
+
   searchHubChunks(query: string, options?: { userId?: string; maxResults?: number }): Array<{ hit: HubSearchRow; rank: number }> {
     const limit = options?.maxResults ?? 10;
     const userId = options?.userId ?? "";
@@ -2004,7 +2083,7 @@ export class SqliteStore {
     let rows: HubSkillSearchRow[];
     if (sanitized) {
       rows = this.db.prepare(`
-        SELECT hs.id, hs.name, hs.description, hs.version, hs.visibility, '' AS group_name, hu.username AS owner_name, hs.quality_score,
+        SELECT hs.id, hs.name, hs.description, hs.version, hs.visibility, '' AS group_name, hu.username AS owner_name, hu.status AS owner_status, hs.quality_score,
                bm25(hub_skills_fts) as rank
         FROM hub_skills_fts f
         JOIN hub_skills hs ON hs.rowid = f.rowid
@@ -2015,7 +2094,7 @@ export class SqliteStore {
       `).all(sanitized, limit) as HubSkillSearchRow[];
     } else {
       rows = this.db.prepare(`
-        SELECT hs.id, hs.name, hs.description, hs.version, hs.visibility, '' AS group_name, hu.username AS owner_name, hs.quality_score,
+        SELECT hs.id, hs.name, hs.description, hs.version, hs.visibility, '' AS group_name, hu.username AS owner_name, hu.status AS owner_status, hs.quality_score,
                0 as rank
         FROM hub_skills hs
         LEFT JOIN hub_users hu ON hu.id = hs.source_user_id
@@ -2030,9 +2109,9 @@ export class SqliteStore {
     this.db.prepare('DELETE FROM hub_skills WHERE source_user_id = ? AND source_skill_id = ?').run(sourceUserId, sourceSkillId);
   }
 
-  listVisibleHubTasks(userId: string, limit = 40): Array<{ id: string; sourceTaskId: string; sourceUserId: string; title: string; summary: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; chunkCount: number; createdAt: number; updatedAt: number }> {
+  listVisibleHubTasks(userId: string, limit = 40): Array<{ id: string; sourceTaskId: string; sourceUserId: string; title: string; summary: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; ownerStatus: string; chunkCount: number; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT t.*, u.username AS owner_name, NULL AS group_name,
+      SELECT t.*, u.username AS owner_name, u.status AS owner_status, NULL AS group_name,
         (SELECT COUNT(*) FROM hub_chunks c WHERE c.hub_task_id = t.id) AS chunk_count
       FROM hub_tasks t
       LEFT JOIN hub_users u ON u.id = t.source_user_id
@@ -2042,14 +2121,14 @@ export class SqliteStore {
     return rows.map(r => ({
       id: r.id, sourceTaskId: r.source_task_id, sourceUserId: r.source_user_id,
       title: r.title, summary: r.summary, groupId: r.group_id, groupName: r.group_name ?? null,
-      visibility: r.visibility, ownerName: r.owner_name ?? "unknown", chunkCount: r.chunk_count ?? 0,
+      visibility: r.visibility, ownerName: r.owner_name ?? "unknown", ownerStatus: r.owner_status ?? "", chunkCount: r.chunk_count ?? 0,
       createdAt: r.created_at, updatedAt: r.updated_at,
     }));
   }
 
-  listAllHubTasks(): Array<{ id: string; sourceTaskId: string; sourceUserId: string; title: string; summary: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; chunkCount: number; createdAt: number; updatedAt: number }> {
+  listAllHubTasks(): Array<{ id: string; sourceTaskId: string; sourceUserId: string; title: string; summary: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; ownerStatus: string; chunkCount: number; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT t.*, u.username AS owner_name,
+      SELECT t.*, u.username AS owner_name, u.status AS owner_status,
         (SELECT COUNT(*) FROM hub_chunks c WHERE c.hub_task_id = t.id) AS chunk_count
       FROM hub_tasks t
       LEFT JOIN hub_users u ON u.id = t.source_user_id
@@ -2058,7 +2137,7 @@ export class SqliteStore {
     return rows.map(r => ({
       id: r.id, sourceTaskId: r.source_task_id, sourceUserId: r.source_user_id,
       title: r.title, summary: r.summary, groupId: r.group_id, groupName: null as string | null,
-      visibility: r.visibility, ownerName: r.owner_name ?? "unknown", chunkCount: r.chunk_count ?? 0,
+      visibility: r.visibility, ownerName: r.owner_name ?? "unknown", ownerStatus: r.owner_status ?? "", chunkCount: r.chunk_count ?? 0,
       createdAt: r.created_at, updatedAt: r.updated_at,
     }));
   }
@@ -2073,9 +2152,9 @@ export class SqliteStore {
     return info.changes > 0;
   }
 
-  listVisibleHubSkills(userId: string, limit = 40): Array<{ id: string; sourceSkillId: string; sourceUserId: string; name: string; description: string; version: number; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; qualityScore: number | null; createdAt: number; updatedAt: number }> {
+  listVisibleHubSkills(userId: string, limit = 40): Array<{ id: string; sourceSkillId: string; sourceUserId: string; name: string; description: string; version: number; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; ownerStatus: string; qualityScore: number | null; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT s.*, u.username AS owner_name, NULL AS group_name
+      SELECT s.*, u.username AS owner_name, u.status AS owner_status, NULL AS group_name
       FROM hub_skills s
       LEFT JOIN hub_users u ON u.id = s.source_user_id
       ORDER BY s.updated_at DESC
@@ -2085,14 +2164,14 @@ export class SqliteStore {
       id: r.id, sourceSkillId: r.source_skill_id, sourceUserId: r.source_user_id,
       name: r.name, description: r.description, version: r.version,
       groupId: r.group_id, groupName: r.group_name ?? null, visibility: r.visibility,
-      ownerName: r.owner_name ?? "unknown", qualityScore: r.quality_score,
+      ownerName: r.owner_name ?? "unknown", ownerStatus: r.owner_status ?? "", qualityScore: r.quality_score,
       createdAt: r.created_at, updatedAt: r.updated_at,
     }));
   }
 
-  listAllHubSkills(): Array<{ id: string; sourceSkillId: string; sourceUserId: string; name: string; description: string; version: number; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; qualityScore: number | null; createdAt: number; updatedAt: number }> {
+  listAllHubSkills(): Array<{ id: string; sourceSkillId: string; sourceUserId: string; name: string; description: string; version: number; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; ownerStatus: string; qualityScore: number | null; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT s.*, u.username AS owner_name
+      SELECT s.*, u.username AS owner_name, u.status AS owner_status
       FROM hub_skills s
       LEFT JOIN hub_users u ON u.id = s.source_user_id
       ORDER BY s.updated_at DESC
@@ -2101,7 +2180,7 @@ export class SqliteStore {
       id: r.id, sourceSkillId: r.source_skill_id, sourceUserId: r.source_user_id,
       name: r.name, description: r.description, version: r.version,
       groupId: r.group_id, groupName: null as string | null, visibility: r.visibility,
-      ownerName: r.owner_name ?? "unknown", qualityScore: r.quality_score,
+      ownerName: r.owner_name ?? "unknown", ownerStatus: r.owner_status ?? "", qualityScore: r.quality_score,
       createdAt: r.created_at, updatedAt: r.updated_at,
     }));
   }
@@ -2246,9 +2325,9 @@ export class SqliteStore {
     return row ?? null;
   }
 
-  listVisibleHubMemories(userId: string, limit = 40): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; content: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; createdAt: number; updatedAt: number }> {
+  listVisibleHubMemories(userId: string, limit = 40): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; content: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; ownerStatus: string; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT m.*, u.username AS owner_name, NULL AS group_name
+      SELECT m.*, u.username AS owner_name, u.status AS owner_status, NULL AS group_name
       FROM hub_memories m
       LEFT JOIN hub_users u ON u.id = m.source_user_id
       ORDER BY m.updated_at DESC
@@ -2258,13 +2337,13 @@ export class SqliteStore {
       id: r.id, sourceChunkId: r.source_chunk_id, sourceUserId: r.source_user_id,
       role: r.role, content: r.content ?? "", summary: r.summary, kind: r.kind,
       groupId: r.group_id, groupName: r.group_name ?? null, visibility: r.visibility,
-      ownerName: r.owner_name ?? "unknown", createdAt: r.created_at, updatedAt: r.updated_at,
+      ownerName: r.owner_name ?? "unknown", ownerStatus: r.owner_status ?? "", createdAt: r.created_at, updatedAt: r.updated_at,
     }));
   }
 
-  listAllHubMemories(): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; content: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; createdAt: number; updatedAt: number }> {
+  listAllHubMemories(): Array<{ id: string; sourceChunkId: string; sourceUserId: string; role: string; content: string; summary: string; kind: string; groupId: string | null; groupName: string | null; visibility: string; ownerName: string; ownerStatus: string; createdAt: number; updatedAt: number }> {
     const rows = this.db.prepare(`
-      SELECT m.*, u.username AS owner_name
+      SELECT m.*, u.username AS owner_name, u.status AS owner_status
       FROM hub_memories m
       LEFT JOIN hub_users u ON u.id = m.source_user_id
       ORDER BY m.updated_at DESC
@@ -2273,7 +2352,7 @@ export class SqliteStore {
       id: r.id, sourceChunkId: r.source_chunk_id, sourceUserId: r.source_user_id,
       role: r.role, content: r.content ?? "", summary: r.summary, kind: r.kind,
       groupId: r.group_id, groupName: null as string | null, visibility: r.visibility,
-      ownerName: r.owner_name ?? "unknown", createdAt: r.created_at, updatedAt: r.updated_at,
+      ownerName: r.owner_name ?? "unknown", ownerStatus: r.owner_status ?? "", createdAt: r.created_at, updatedAt: r.updated_at,
     }));
   }
 
@@ -2686,6 +2765,7 @@ interface HubSkillSearchRow {
   visibility: string;
   group_name: string | null;
   owner_name: string | null;
+  owner_status: string | null;
   quality_score: number | null;
 }
 

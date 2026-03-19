@@ -19,6 +19,7 @@ import { IngestWorker } from "./src/ingest/worker";
 import { RecallEngine } from "./src/recall/engine";
 import { captureMessages, stripInboundMetadata } from "./src/capture";
 import { DEFAULTS } from "./src/types";
+import type { SearchHit } from "./src/types";
 import { ViewerServer } from "./src/viewer/server";
 import { HubServer } from "./src/hub/server";
 import { hubGetMemoryDetail, hubRequestJson, hubSearchMemories, hubSearchSkills, resolveHubClient } from "./src/client/hub";
@@ -464,6 +465,7 @@ const memosLocalPlugin = {
             score: h.score,
             summary: h.summary,
             original_excerpt: (h.original_excerpt ?? "").slice(0, 200),
+            origin: h.origin || "local",
           }));
 
           if (result.hits.length === 0 && searchScope === "local") {
@@ -523,15 +525,64 @@ const memosLocalPlugin = {
 
           if (searchScope !== "local") {
             const hub = await hubSearchMemories(store, ctx, { query, maxResults: searchLimit, scope: searchScope as any, hubAddress, userToken }).catch(() => ({ hits: [], meta: { totalCandidates: 0, searchedGroups: [], includedPublic: searchScope === "all" } }));
+
+            let filteredHubHits = hub.hits;
+            if (hub.hits.length > 0) {
+              const hubCandidates = hub.hits.map((h, i) => ({
+                index: filteredHits.length + i + 1,
+                role: (h.source?.role || "assistant") as string,
+                content: (h.summary || h.excerpt || "").slice(0, 300),
+                time: h.source?.ts ? new Date(h.source.ts).toISOString().slice(0, 16) : "",
+              }));
+              const localCandidatesForMerge = filteredHits.map((h, i) => ({
+                index: i + 1,
+                role: h.source.role,
+                content: (h.original_excerpt ?? "").slice(0, 300),
+                time: h.source.ts ? new Date(h.source.ts).toISOString().slice(0, 16) : "",
+              }));
+              const mergedCandidates = [...localCandidatesForMerge, ...hubCandidates];
+              const mergedFilter = await summarizer.filterRelevant(query, mergedCandidates);
+              if (mergedFilter !== null && mergedFilter.relevant.length > 0) {
+                const relevantSet = new Set(mergedFilter.relevant);
+                const hubStartIdx = filteredHits.length + 1;
+                filteredHits = filteredHits.filter((_, i) => relevantSet.has(i + 1));
+                filteredHubHits = hub.hits.filter((_, i) => relevantSet.has(hubStartIdx + i));
+                ctx.log.debug(`memory_search LLM filter (merged): local ${localCandidatesForMerge.length}→${filteredHits.length}, hub ${hub.hits.length}→${filteredHubHits.length}`);
+              }
+            }
+
+            const originLabel = (h: SearchHit) => {
+              if (h.origin === "hub-memory") return " [团队缓存]";
+              if (h.origin === "local-shared") return " [本机共享]";
+              return "";
+            };
             const localText = filteredHits.length > 0
               ? filteredHits.map((h, i) => {
                   const excerpt = h.original_excerpt.length > 220 ? h.original_excerpt.slice(0, 217) + "..." : h.original_excerpt;
-                  return `${i + 1}. [${h.source.role}] ${excerpt}`;
+                  return `${i + 1}. [${h.source.role}]${originLabel(h)} ${excerpt}`;
                 }).join("\n")
               : "(none)";
-            const hubText = hub.hits.length > 0
-              ? hub.hits.map((h, i) => `${i + 1}. [${h.ownerName}] ${h.summary}${h.groupName ? ` (${h.groupName})` : ""}`).join("\n")
+            const hubText = filteredHubHits.length > 0
+              ? filteredHubHits.map((h, i) => `${i + 1}. [${h.ownerName}] [团队] ${h.summary}${h.groupName ? ` (${h.groupName})` : ""}`).join("\n")
               : "(none)";
+
+            const localDetailsFiltered = filteredHits.map((h) => {
+              let effectiveTaskId = h.taskId;
+              if (effectiveTaskId) {
+                const t = store.getTask(effectiveTaskId);
+                if (t && t.status === "skipped") effectiveTaskId = null;
+              }
+              return {
+                ref: h.ref,
+                chunkId: h.ref.chunkId,
+                taskId: effectiveTaskId,
+                skillId: h.skillId,
+                role: h.source.role,
+                score: h.score,
+                summary: h.summary,
+                origin: h.origin,
+              };
+            });
 
             return {
               content: [{
@@ -539,8 +590,8 @@ const memosLocalPlugin = {
                 text: `Local results:\n${localText}\n\nHub results:\n${hubText}`,
               }],
               details: {
-                local: { hits: localDetailsHits, meta: result.meta },
-                hub,
+                local: { hits: localDetailsFiltered, meta: result.meta },
+                hub: { ...hub, hits: filteredHubHits },
               },
             };
           }
@@ -552,9 +603,15 @@ const memosLocalPlugin = {
             };
           }
 
+          const originTag = (o?: string) => {
+            if (o === "local-shared") return " [本机共享]";
+            if (o === "hub-memory") return " [团队缓存]";
+            if (o === "hub-remote") return " [团队]";
+            return "";
+          };
           const lines = filteredHits.map((h, i) => {
             const excerpt = h.original_excerpt;
-            const parts = [`${i + 1}. [${h.source.role}]`];
+            const parts = [`${i + 1}. [${h.source.role}]${originTag(h.origin)}`];
             if (excerpt) parts.push(`   ${excerpt}`);
             parts.push(`   chunkId="${h.ref.chunkId}"`);
             if (h.taskId) {
@@ -1650,7 +1707,7 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
             const dur = performance.now() - recallT0;
             store.recordToolCall("memory_search", dur, true);
             store.recordApiLog("memory_search", { type: "auto_recall", query }, JSON.stringify({
-              candidates: result.hits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt })),
+              candidates: result.hits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt, origin: h.origin || "local" })),
               filtered: []
             }), dur, true);
             if (query.length > 50) {
@@ -1671,7 +1728,8 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
 
         const lines = filteredHits.map((h, i) => {
           const excerpt = h.original_excerpt;
-          const parts: string[] = [`${i + 1}. [${h.source.role}]`];
+          const oTag = h.origin === "local-shared" ? " [本机共享]" : h.origin === "hub-memory" ? " [团队缓存]" : "";
+          const parts: string[] = [`${i + 1}. [${h.source.role}]${oTag}`];
           if (excerpt) parts.push(`   ${excerpt}`);
           parts.push(`   chunkId="${h.ref.chunkId}"`);
           if (h.taskId) {
@@ -1711,8 +1769,8 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
         const recallDur = performance.now() - recallT0;
         store.recordToolCall("memory_search", recallDur, true);
         store.recordApiLog("memory_search", { type: "auto_recall", query }, JSON.stringify({
-          candidates: result.hits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt })),
-          filtered: filteredHits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt }))
+          candidates: result.hits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt, origin: h.origin || "local" })),
+          filtered: filteredHits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt, origin: h.origin || "local" }))
         }), recallDur, true);
         telemetry.trackAutoRecall(filteredHits.length, recallDur);
 

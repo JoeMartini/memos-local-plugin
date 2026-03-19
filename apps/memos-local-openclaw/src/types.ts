@@ -66,6 +66,8 @@ export interface ChunkRef {
 
 // ─── Search / Recall ───
 
+export type SearchHitOrigin = "local" | "local-shared" | "hub-memory" | "hub-remote";
+
 export interface SearchHit {
   summary: string;
   original_excerpt: string;
@@ -74,6 +76,7 @@ export interface SearchHit {
   taskId: string | null;
   skillId: string | null;
   owner?: string;
+  origin?: SearchHitOrigin;
   source: {
     ts: number;
     role: Role;
