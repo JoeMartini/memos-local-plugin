@@ -1464,6 +1464,28 @@ export class ViewerServer {
     }
   }
 
+  private handleCleanupPolluted(res: http.ServerResponse): void {
+    try {
+      const polluted = this.store.findPollutedUserChunks();
+      let deleted = 0;
+      for (const { id, reason } of polluted) {
+        if (this.store.deleteChunk(id)) {
+          deleted++;
+          this.log.info(`Cleaned polluted chunk ${id}: ${reason}`);
+        }
+      }
+      const fixed = this.store.fixMixedUserChunks();
+      this.log.info(`Cleanup: removed ${deleted} polluted, fixed ${fixed} mixed chunks`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ deleted, fixed, total: polluted.length }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.log.error(`handleCleanupPolluted error: ${msg}`);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: msg }));
+    }
+  }
+
   private handleMigrateScan(res: http.ServerResponse): void {
     try {
       const ocHome = this.getOpenClawHome();
