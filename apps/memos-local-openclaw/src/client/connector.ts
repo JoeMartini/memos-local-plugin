@@ -21,6 +21,7 @@ export interface HubStatusInfo {
     username: string;
     role: UserRole;
     status: UserStatus | string;
+    groups?: Array<{ id: string; name: string }>;
   };
 }
 
