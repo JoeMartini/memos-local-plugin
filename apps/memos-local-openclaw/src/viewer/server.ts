@@ -2440,6 +2440,7 @@ export class ViewerServer {
     res.write("data: {\"type\":\"connected\"}\n\n");
     this.notifSSEClients.push(res);
     if (!this.notifPollTimer) this.startNotifPoll();
+    else this.notifPollImmediate();
     req.on("close", () => {
       this.notifSSEClients = this.notifSSEClients.filter((c) => c !== res);
       if (this.notifSSEClients.length === 0) this.stopNotifPoll();
@@ -2473,6 +2474,20 @@ export class ViewerServer {
 
   private stopNotifPoll(): void {
     if (this.notifPollTimer) { clearInterval(this.notifPollTimer); this.notifPollTimer = undefined; }
+  }
+
+  private notifPollImmediate(): void {
+    const hub = this.resolveHubConnection();
+    if (!hub) return;
+    hubRequestJson(hub.hubUrl, hub.userToken, "/api/v1/hub/notifications?unread=1")
+      .then((data: any) => {
+        const count = data?.unreadCount ?? 0;
+        if (count !== this.lastKnownNotifCount) {
+          this.lastKnownNotifCount = count;
+          this.broadcastNotifSSE({ type: "update", unreadCount: count });
+        }
+      })
+      .catch(() => {});
   }
 
   private startHubHeartbeat(): void {
@@ -2660,11 +2675,16 @@ export class ViewerServer {
         const finalSharing = config.sharing as Record<string, unknown> | undefined;
         const nowClient = Boolean(finalSharing?.enabled) && finalSharing?.role === "client";
         const previouslyClient = oldSharingEnabled && oldSharingRole === "client";
+        let joinStatus: string | undefined;
         if (nowClient && !previouslyClient) {
-          this.autoJoinOnSave(finalSharing).catch(e => this.log.warn(`Auto-join on save failed: ${e}`));
+          try {
+            joinStatus = await this.autoJoinOnSave(finalSharing);
+          } catch (e) {
+            this.log.warn(`Auto-join on save failed: ${e}`);
+          }
         }
 
-        this.jsonResponse(res, { ok: true });
+        this.jsonResponse(res, { ok: true, joinStatus });
       } catch (e) {
         this.log.warn(`handleSaveConfig error: ${e}`);
         res.writeHead(500, { "Content-Type": "application/json" });
@@ -2673,11 +2693,11 @@ export class ViewerServer {
     });
   }
 
-  private async autoJoinOnSave(sharing: Record<string, unknown>): Promise<void> {
+  private async autoJoinOnSave(sharing: Record<string, unknown>): Promise<string | undefined> {
     const clientCfg = sharing.client as Record<string, unknown> | undefined;
     const hubAddress = String(clientCfg?.hubAddress || "");
     const teamToken = String(clientCfg?.teamToken || "");
-    if (!hubAddress || !teamToken) return;
+    if (!hubAddress || !teamToken) return undefined;
     const hubUrl = normalizeHubUrl(hubAddress);
     const os = await import("os");
     const nickname = String(clientCfg?.nickname || "");
@@ -2704,6 +2724,7 @@ export class ViewerServer {
     if (result.userToken) {
       this.startHubHeartbeat();
     }
+    return result.status;
   }
 
   private async notifyHubLeave(): Promise<void> {

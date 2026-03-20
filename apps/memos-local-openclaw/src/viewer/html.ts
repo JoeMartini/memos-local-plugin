@@ -976,8 +976,6 @@ input,textarea,select{font-family:inherit;font-size:inherit}
 .team-guide-steps li::marker{color:var(--pri);font-weight:700;font-size:11px}
 .team-guide-opt .btn-guide{font-size:11px;padding:5px 14px;border-radius:6px;font-weight:600;border:1px solid rgba(99,102,241,.25);background:rgba(99,102,241,.08);color:var(--pri);cursor:pointer;transition:background .15s,border-color .15s}
 .team-guide-opt .btn-guide:hover{background:rgba(99,102,241,.14);border-color:var(--pri)}
-.team-guide-dismiss{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text-muted);font-size:15px;cursor:pointer;padding:4px;line-height:1;opacity:.5;transition:opacity .15s}
-.team-guide-dismiss:hover{opacity:1}
 [data-theme="light"] .team-guide{background:linear-gradient(135deg,rgba(6,182,212,.03),rgba(79,70,229,.02));border-color:rgba(6,182,212,.15)}
 [data-theme="light"] .team-guide-opt{box-shadow:0 1px 3px rgba(0,0,0,.03)}
 [data-theme="light"] .team-guide-opt:hover{box-shadow:0 4px 16px rgba(0,0,0,.04)}
@@ -1641,9 +1639,8 @@ input,textarea,select{font-family:inherit;font-size:inherit}
             </div>
           </div>
           <div class="settings-card-body">
-            <!-- team setup guide (inside Hub card) -->
+            <!-- team setup guide (inside Hub card) — always visible when sharing is not configured -->
             <div class="team-guide" id="teamSetupGuide">
-              <button class="team-guide-dismiss" onclick="dismissTeamGuide()" title="Dismiss">&times;</button>
               <div class="team-guide-title">\u{1F680} <span data-i18n="guide.title">Get Started with Team Collaboration</span></div>
               <div class="team-guide-subtitle" data-i18n="guide.subtitle">MemOS supports team memory sharing. Choose one of the following options to enable collaboration, or continue using local-only mode.</div>
               <div class="team-guide-options">
@@ -2126,6 +2123,8 @@ const I18N={
     'notif.userJoin':'New user requests to join the team',
     'notif.userOnline':'User came online',
     'notif.userOffline':'User went offline',
+    'notif.membershipApproved':'Your team join request has been approved',
+    'notif.membershipRejected':'Your team join request has been declined',
     'notif.clearAll':'Clear all',
     'notif.timeAgo.just':'just now',
     'notif.timeAgo.min':'{n}m ago',
@@ -2448,6 +2447,9 @@ const I18N={
     'sharing.pendingApproval.hint':'Your join request has been submitted. Please wait for the team admin to approve.',
     'sharing.rejected.hint':'Your join request was rejected by the team admin. Please contact the admin or retry.',
     'sharing.removed.hint':'You have been removed from the team by the admin. You can re-apply to join.',
+    'sharing.joinTeam':'Join Team',
+    'sharing.joinSent.pending':'Join request sent! Waiting for admin approval.',
+    'sharing.joinSent.active':'Successfully joined the team!',
     'sharing.retryJoin':'Retry Join',
     'sharing.retryJoin.hint':'Clears local data and re-submits the join request',
     'sharing.retryJoin.confirm':'This will clear your current connection and re-submit a join request. Continue?',
@@ -2840,6 +2842,8 @@ const I18N={
     'notif.userJoin':'有新用户申请加入团队',
     'notif.userOnline':'用户上线了',
     'notif.userOffline':'用户下线了',
+    'notif.membershipApproved':'你的团队加入申请已通过',
+    'notif.membershipRejected':'你的团队加入申请已被拒绝',
     'notif.clearAll':'清除全部',
     'notif.timeAgo.just':'刚刚',
     'notif.timeAgo.min':'{n}分钟前',
@@ -3162,6 +3166,9 @@ const I18N={
     'sharing.pendingApproval.hint':'加入申请已提交，请等待团队管理员审核通过。',
     'sharing.rejected.hint':'您的加入申请已被团队管理员拒绝，请联系管理员或重新申请。',
     'sharing.removed.hint':'您已被管理员从团队中移除，可以重新申请加入。',
+    'sharing.joinTeam':'加入团队',
+    'sharing.joinSent.pending':'加入申请已发送，等待管理员审批。',
+    'sharing.joinSent.active':'成功加入团队！',
     'sharing.retryJoin':'重新申请',
     'sharing.retryJoin.hint':'清除本地连接数据并重新提交加入申请',
     'sharing.retryJoin.confirm':'这将清除当前连接数据并重新提交加入申请，是否继续？',
@@ -3606,6 +3613,9 @@ function selectSharingRole(role){
     var tn=document.getElementById('cfgHubTeamName');
     if(!tn.value.trim()) tn.value='My Team';
   }
+  var card=document.getElementById('settingsSharingConfig');
+  var saveBtn=card&&card.querySelector('.settings-actions .btn-primary');
+  if(saveBtn&&typeof _hubSaveBtnLabel==='function') saveBtn.textContent=_hubSaveBtnLabel();
 }
 var _cachedLocalIP='';
 function updateHubShareInfo(){
@@ -3697,15 +3707,14 @@ function switchView(view){
   else if(view==='analytics') loadMetrics();
   else if(view==='logs') loadLogs();
   else if(view==='settings'){loadConfig().then(function(){
-    var notDismissed=localStorage.getItem('memos-team-guide-dismissed')!=='1';
     var sharingOn=document.getElementById('cfgSharingEnabled');
     var sharingNotEnabled=!sharingOn||!sharingOn.checked;
-    if(notDismissed&&sharingNotEnabled){
+    if(sharingNotEnabled){
       switchSettingsTab('hub',document.querySelector('.settings-tab-btn[data-tab="hub"]'));
     }
   });loadModelHealth();}
   else if(view==='import'){if(!window._migrateRunning) migrateScan(false);}
-  else if(view==='admin'){loadAdminData();}
+  else if(view==='admin'){_lastAdminFingerprint='';loadAdminData();}
 }
 
 function onMemoryScopeChange(){
@@ -3775,10 +3784,13 @@ async function loadSharingStatus(forcePending){
     if(_lastSharingConnStatus==='pending'&&curStatus==='connected'){
       toast(t('sharing.approved.toast'),'success');
       loadMemories();loadTasks();loadSkills();
+      if(_notifSSE){_notifSSE.close();_notifSSE=null;_notifSSEConnected=false;}
+      connectNotifSSE();
+      loadNotifications();
     }
     _lastSharingConnStatus=curStatus;
     if(curStatus==='pending'&&!_clientPendingPollTimer){
-      _clientPendingPollTimer=setInterval(function(){loadSharingStatus(false);},10000);
+      _clientPendingPollTimer=setInterval(function(){loadSharingStatus(false);},5000);
     }
     if(curStatus!=='pending'&&_clientPendingPollTimer){
       clearInterval(_clientPendingPollTimer);
@@ -4059,7 +4071,7 @@ async function approveSharingUser(userId,username){
   try{
     const r=await fetch('/api/sharing/approve-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
     const d=await r.json();
-    if(d.ok){toast(t('toast.userApproved'),'success');loadSharingPendingUsers();loadSharingStatus(true);} else {toast(d.error||t('toast.approveFail'),'error');}
+    if(d.ok){toast(t('toast.userApproved'),'success');loadSharingPendingUsers();loadSharingStatus(true);_lastAdminFingerprint='';loadAdminData();} else {toast(d.error||t('toast.approveFail'),'error');}
   }catch(e){toast(t('toast.approveFail')+': '+e.message,'error');}
 }
 
@@ -4067,23 +4079,16 @@ async function rejectSharingUser(userId,username){
   try{
     const r=await fetch('/api/sharing/reject-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
     const d=await r.json();
-    if(d.ok){toast(t('toast.userRejected'),'success');loadSharingPendingUsers();} else {toast(d.error||t('toast.rejectFail'),'error');}
+    if(d.ok){toast(t('toast.userRejected'),'success');loadSharingPendingUsers();_lastAdminFingerprint='';loadAdminData();} else {toast(d.error||t('toast.rejectFail'),'error');}
   }catch(e){toast(t('toast.rejectFail')+': '+e.message,'error');}
 }
 
 /* ─── Team Setup Guide ─── */
-var TEAM_GUIDE_DISMISSED_KEY='memos-team-guide-dismissed';
 function updateTeamGuide(sharingData){
   var el=document.getElementById('teamSetupGuide');
   if(!el) return;
-  if(localStorage.getItem(TEAM_GUIDE_DISMISSED_KEY)==='1'){el.style.display='none';return;}
   var isConfigured=sharingData&&sharingData.enabled;
   el.style.display=isConfigured?'none':'block';
-}
-function dismissTeamGuide(){
-  localStorage.setItem(TEAM_GUIDE_DISMISSED_KEY,'1');
-  var el=document.getElementById('teamSetupGuide');
-  if(el) el.style.display='none';
 }
 function guideGoToHub(role){
   switchSettingsTab('hub',document.querySelector('.settings-tab-btn[data-tab="hub"]'));
@@ -4200,7 +4205,7 @@ async function loadAdminData(){
     var _newMemories=Array.isArray(memoriesR.memories)?memoriesR.memories:[];
     var pending=isAdmin?(Array.isArray(pendingR.users)?pendingR.users:[]):[];
     var _fp=_newUsers.length+':'+_newTasks.length+':'+_newSkills.length+':'+_newMemories.length+':'+pending.length
-      +':'+_newUsers.map(function(u){return u.id+'|'+(u.isOnline?1:0)+'|'+(u.role||'')+'|'+(u.username||'')+'|'+(u.memoryCount||0)+'|'+(u.taskCount||0)+'|'+(u.skillCount||0)}).join(',')
+      +':'+_newUsers.map(function(u){return u.id+'|'+(u.isOnline?1:0)+'|'+(u.role||'')+'|'+(u.status||'')+'|'+(u.username||'')+'|'+(u.memoryCount||0)+'|'+(u.taskCount||0)+'|'+(u.skillCount||0)}).join(',')
       +':'+_newMemories.map(function(m){return m.id}).join(',')
       +':'+_newTasks.map(function(t){return t.id+'|'+(t.status||'')}).join(',')
       +':'+_newSkills.map(function(s){return s.id+'|'+(s.status||'')}).join(',')
@@ -4396,7 +4401,7 @@ async function adminApproveUser(userId,username){
   try{
     var r=await fetch('/api/sharing/approve-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,username:username})});
     var d=await r.json();
-    if(d.ok){toast(t('toast.userApproved'),'success');loadAdminData();}else{toast(d.error||t('toast.approveFail'),'error');}
+    if(d.ok){toast(t('toast.userApproved'),'success');_lastAdminFingerprint='';loadAdminData();}else{toast(d.error||t('toast.approveFail'),'error');}
   }catch(e){toast(t('toast.approveFail')+': '+e.message,'error');}
 }
 async function adminRejectUser(userId){
@@ -4404,7 +4409,7 @@ async function adminRejectUser(userId){
   try{
     var r=await fetch('/api/sharing/reject-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId})});
     var d=await r.json();
-    if(d.ok){toast(t('toast.userRejected'),'success');loadAdminData();}else{toast(d.error||t('toast.rejectFail'),'error');}
+    if(d.ok){toast(t('toast.userRejected'),'success');_lastAdminFingerprint='';loadAdminData();}else{toast(d.error||t('toast.rejectFail'),'error');}
   }catch(e){toast(t('toast.rejectFail')+': '+e.message,'error');}
 }
 async function adminToggleRole(userId,newRole){
@@ -4413,7 +4418,7 @@ async function adminToggleRole(userId,newRole){
   try{
     var r=await fetch('/api/sharing/change-role',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,role:newRole})});
     var d=await r.json();
-    if(d.ok){toast(t('toast.roleChanged'),'success');loadAdminData();}
+    if(d.ok){toast(t('toast.roleChanged'),'success');_lastAdminFingerprint='';loadAdminData();}
     else if(d.error==='cannot_demote_owner'){toast(t('admin.ownerHint'),'error');}
     else{toast(d.error||t('toast.roleChangeFail'),'error');}
   }catch(e){toast(t('toast.roleChangeFail')+': '+e.message,'error');}
@@ -4465,7 +4470,7 @@ async function adminRemoveUser(userId,username){
   try{
     var r=await fetch('/api/sharing/remove-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,cleanResources:clean})});
     var d=await r.json();
-    if(d.ok){toast(t('toast.userRemoved'),'success');loadAdminData();}
+    if(d.ok){toast(t('toast.userRemoved'),'success');_lastAdminFingerprint='';loadAdminData();}
     else if(d.error==='cannot_remove_owner'){toast(t('admin.ownerHint'),'error');}
     else{toast(d.error||t('toast.removeFail'),'error');}
   }catch(e){toast(t('toast.removeFail')+': '+e.message,'error');}
@@ -6597,16 +6602,16 @@ async function doSaveConfig(cfg, btnEl, savedId){
   function done(){btnEl.disabled=false;btnEl.textContent=t('settings.save');}
   try{
     const r=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
-    if(r.status===401){done();toast(t('settings.session.expired'),'error');return false;}
+    if(r.status===401){done();toast(t('settings.session.expired'),'error');return null;}
     if(!r.ok) throw new Error(await r.text());
+    var data=await r.json().catch(function(){return {ok:true};});
     flashSaved(savedId);
-    toast(t('settings.saved'),'success');
     done();
-    return true;
+    return data;
   }catch(e){
     toast(t('settings.save.fail')+': '+e.message,'error');
     done();
-    return false;
+    return null;
   }
 }
 
@@ -6701,11 +6706,19 @@ async function saveModelsConfig(){
   await doSaveConfig(cfg, saveBtn, 'modelsSaved');
 }
 
+function _hubSaveBtnLabel(){
+  var on=document.getElementById('cfgSharingEnabled');
+  if(on&&on.checked&&_sharingRole==='client'){
+    var prevClient=sharingStatusCache&&sharingStatusCache.enabled&&sharingStatusCache.role==='client';
+    return prevClient?t('settings.save'):t('sharing.joinTeam');
+  }
+  return t('settings.save');
+}
 async function saveHubConfig(){
   var card=document.getElementById('settingsSharingConfig');
   var saveBtn=card.querySelector('.settings-actions .btn-primary');
   saveBtn.disabled=true;saveBtn.textContent=t('settings.test.loading');
-  function done(){saveBtn.disabled=false;saveBtn.textContent=t('settings.save');}
+  function done(){saveBtn.disabled=false;saveBtn.textContent=_hubSaveBtnLabel();}
 
   const cfg={};
   var sharingEnabled=document.getElementById('cfgSharingEnabled').checked;
@@ -6772,13 +6785,24 @@ async function saveHubConfig(){
     if(!(await confirmModal(switchMsg,{danger:true}))){done();return;}
   }
 
-  var ok=await doSaveConfig(cfg, saveBtn, 'hubSaved');
-  if(ok){
+  var result=await doSaveConfig(cfg, saveBtn, 'hubSaved');
+  if(result){
     if(sharingEnabled&&_sharingRole==='hub'){
       var adminNameEl=document.getElementById('cfgHubAdminName');
       if(adminNameEl&&adminNameEl.value.trim()){
         try{await fetch('/api/sharing/update-username',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:adminNameEl.value.trim()})});}catch(e){}
       }
+    }
+    if(sharingEnabled&&_sharingRole==='client'&&result.joinStatus){
+      if(result.joinStatus==='pending'){
+        toast(t('sharing.joinSent.pending'),'success');
+      }else if(result.joinStatus==='active'){
+        toast(t('sharing.joinSent.active'),'success');
+      }else{
+        toast(t('settings.saved'),'success');
+      }
+    }else{
+      toast(t('settings.saved'),'success');
     }
     _lastSidebarFingerprint='';
     _lastSettingsFingerprint='';
@@ -7353,6 +7377,12 @@ function notifTypeText(n){
   }
   if(n.type==='user_offline'){
     return t('notif.userOffline');
+  }
+  if(n.type==='membership_approved'){
+    return t('notif.membershipApproved');
+  }
+  if(n.type==='membership_rejected'){
+    return t('notif.membershipRejected');
   }
   return n.message||n.type;
 }

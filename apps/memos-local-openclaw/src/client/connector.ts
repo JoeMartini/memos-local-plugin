@@ -208,20 +208,55 @@ export async function getHubStatus(store: SqliteStore, config: MemosLocalConfig)
   } catch (err: any) {
     const is401 = typeof err?.message === "string" && err.message.includes("(401)");
     if (is401 && conn) {
-      store.setClientHubConnection({
-        ...conn,
-        userToken: "",
-        lastKnownStatus: "removed",
-      });
+      const teamToken = config.sharing?.client?.teamToken ?? "";
+      if (hubAddress && teamToken) {
+        try {
+          const regResult = await hubRequestJson(normalizeHubUrl(hubAddress), "", "/api/v1/hub/registration-status", {
+            method: "POST",
+            body: JSON.stringify({ teamToken, userId: conn.userId }),
+          }) as any;
+          if (regResult.status === "active" && regResult.userToken) {
+            store.setClientHubConnection({
+              ...conn,
+              hubUrl: normalizeHubUrl(hubAddress),
+              userToken: regResult.userToken,
+              connectedAt: Date.now(),
+              lastKnownStatus: "active",
+            });
+            try {
+              const me = await hubRequestJson(normalizeHubUrl(hubAddress), regResult.userToken, "/api/v1/hub/me", { method: "GET" }) as any;
+              return {
+                connected: true,
+                hubUrl: normalizeHubUrl(hubAddress),
+                user: {
+                  id: String(me.id),
+                  username: String(me.username ?? ""),
+                  role: String(me.role ?? "member") as UserRole,
+                  status: String(me.status ?? "active"),
+                  groups: Array.isArray(me.groups) ? me.groups : [],
+                },
+              };
+            } catch { /* fall through to token-only return */ }
+            return {
+              connected: true,
+              hubUrl: normalizeHubUrl(hubAddress),
+              user: { id: conn.userId, username: conn.username || "", role: conn.role as UserRole || "member", status: "active" },
+            };
+          }
+          const realStatus = regResult.status as string;
+          store.setClientHubConnection({ ...conn, userToken: "", lastKnownStatus: realStatus });
+          return {
+            connected: false,
+            hubUrl: normalizeHubUrl(hubAddress),
+            user: { id: conn.userId, username: conn.username || "", role: "member", status: realStatus },
+          };
+        } catch { /* registration-status also failed, fall through */ }
+      }
+      store.setClientHubConnection({ ...conn, userToken: "", lastKnownStatus: "token_expired" });
       return {
         connected: false,
         hubUrl: normalizeHubUrl(hubAddress),
-        user: {
-          id: conn.userId,
-          username: conn.username || "",
-          role: "member",
-          status: "removed",
-        },
+        user: { id: conn.userId, username: conn.username || "", role: "member", status: "token_expired" },
       };
     }
     return { connected: false, user: null };
