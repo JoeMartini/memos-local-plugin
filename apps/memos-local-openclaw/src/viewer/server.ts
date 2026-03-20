@@ -1780,7 +1780,8 @@ export class ViewerServer {
         localIPs.push("127.0.0.1", "localhost", "0.0.0.0");
         try {
           const u = new URL(hubUrl);
-          if (localIPs.includes(u.hostname)) {
+          const targetPort = u.port || (u.protocol === "https:" ? "443" : "80");
+          if (localIPs.includes(u.hostname) && targetPort === String(this.port)) {
             return this.jsonResponse(res, { ok: false, error: "cannot_join_self" });
           }
         } catch {}
@@ -2592,7 +2593,8 @@ export class ViewerServer {
               localIPs.push("127.0.0.1", "localhost", "0.0.0.0");
               try {
                 const u = new URL(addr.startsWith("http") ? addr : `http://${addr}`);
-                if (localIPs.includes(u.hostname)) {
+                const targetPort = u.port || (u.protocol === "https:" ? "443" : "80");
+                if (localIPs.includes(u.hostname) && targetPort === String(this.port)) {
                   res.writeHead(400, { "Content-Type": "application/json" });
                   res.end(JSON.stringify({ error: "cannot_join_self" }));
                   return;
@@ -2618,8 +2620,12 @@ export class ViewerServer {
           const isClient = newEnabled && newRole === "client";
           if (wasClient && !isClient) {
             this.notifyHubLeave();
-            this.store.clearClientHubConnection();
-            this.log.info("Cleared client hub connection (sharing disabled or role changed)");
+            if (newRole !== "client") {
+              this.store.clearClientHubConnection();
+              this.log.info("Cleared client hub connection (role changed away from client)");
+            } else {
+              this.log.info("Sharing disabled but preserving client hub connection for re-enable");
+            }
           }
 
           // Detect switching to a different Hub while still in client mode
@@ -2645,9 +2651,11 @@ export class ViewerServer {
         this.log.info("Plugin config updated via Viewer");
         this.stopHubHeartbeat();
 
-        // When switching to client mode, immediately send join request
+        // When switching to client mode or re-enabling sharing as client, send join request
         const finalSharing = config.sharing as Record<string, unknown> | undefined;
-        if (finalSharing?.role === "client" && oldSharingRole !== "client") {
+        const nowClient = Boolean(finalSharing?.enabled) && finalSharing?.role === "client";
+        const previouslyClient = oldSharingEnabled && oldSharingRole === "client";
+        if (nowClient && !previouslyClient) {
           this.autoJoinOnSave(finalSharing).catch(e => this.log.warn(`Auto-join on save failed: ${e}`));
         }
 
@@ -2798,7 +2806,8 @@ export class ViewerServer {
           const localIPs = this.getLocalIPs();
           localIPs.push("127.0.0.1", "localhost", "0.0.0.0");
           const parsed = new URL(hubUrl.startsWith("http") ? hubUrl : `http://${hubUrl}`);
-          if (localIPs.includes(parsed.hostname)) {
+          const targetPort = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+          if (localIPs.includes(parsed.hostname) && targetPort === String(this.port)) {
             this.jsonResponse(res, { ok: false, error: "cannot_join_self" });
             return;
           }
