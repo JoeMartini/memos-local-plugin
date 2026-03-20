@@ -128,7 +128,8 @@ export function resolveConfig(raw: Partial<MemosLocalConfig> | undefined, stateD
         userToken: cfg.sharing?.client?.userToken ?? "",
         teamToken: cfg.sharing?.client?.teamToken ?? "",
         pendingUserId: cfg.sharing?.client?.pendingUserId ?? "",
-      } : { hubAddress: "", userToken: "", teamToken: "", pendingUserId: "" };
+        nickname: cfg.sharing?.client?.nickname ?? "",
+      } : { hubAddress: "", userToken: "", teamToken: "", pendingUserId: "", nickname: "" };
       return { enabled, role, hub, client, capabilities: sharingCapabilities };
     })(),
   };

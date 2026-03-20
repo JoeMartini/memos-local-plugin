@@ -466,7 +466,10 @@ const memosLocalPlugin = {
           };
           const role = rawRole === "user" || rawRole === "assistant" || rawRole === "tool" || rawRole === "system" ? rawRole : undefined;
           const minScore = typeof rawMinScore === "number" ? Math.max(0.35, Math.min(1, rawMinScore)) : undefined;
-          const searchScope = resolveMemorySearchScope(rawScope);
+          let searchScope = resolveMemorySearchScope(rawScope);
+          if (searchScope === "local" && ctx.config?.sharing?.enabled) {
+            searchScope = "all";
+          }
           const searchLimit = typeof maxResults === "number" ? Math.max(1, Math.min(20, Math.round(maxResults))) : 10;
 
           const agentId = currentAgentId;
@@ -1818,6 +1821,38 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
         ctx.log.debug(`auto-recall: query="${query.slice(0, 80)}"`);
 
         const result = await engine.search({ query, maxResults: 10, minScore: 0.45, ownerFilter: recallOwnerFilter });
+
+        // Hub fallback helper: search team shared memories when local search has no relevant results
+        const hubFallback = async (): Promise<SearchHit[]> => {
+          if (!ctx.config?.sharing?.enabled) return [];
+          try {
+            const hubResult = await hubSearchMemories(store, ctx, { query, maxResults: 10, scope: "all" });
+            if (hubResult.hits.length === 0) return [];
+            ctx.log.debug(`auto-recall: hub fallback returned ${hubResult.hits.length} hit(s)`);
+            return hubResult.hits.map((h) => ({
+              summary: h.summary,
+              original_excerpt: h.excerpt || h.summary,
+              ref: { sessionKey: "", chunkId: h.remoteHitId, turnId: "", seq: 0 },
+              score: 0.9,
+              taskId: null,
+              skillId: null,
+              origin: "hub-remote" as const,
+              source: { ts: h.source.ts, role: h.source.role, sessionKey: "" },
+            }));
+          } catch (err) {
+            ctx.log.debug(`auto-recall: hub fallback failed (${err})`);
+            return [];
+          }
+        };
+
+        if (result.hits.length === 0) {
+          // Local found nothing — try hub before giving up
+          const hubHits = await hubFallback();
+          if (hubHits.length > 0) {
+            result.hits.push(...hubHits);
+            ctx.log.debug(`auto-recall: local empty, using ${hubHits.length} hub hit(s)`);
+          }
+        }
         if (result.hits.length === 0) {
           ctx.log.debug("auto-recall: no memory candidates found");
           const dur = performance.now() - recallT0;
@@ -1881,22 +1916,36 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
             const indexSet = new Set(filterResult.relevant);
             filteredHits = result.hits.filter((_, i) => indexSet.has(i + 1));
           } else {
-            ctx.log.debug("auto-recall: LLM filter returned no relevant hits");
-            const dur = performance.now() - recallT0;
-            store.recordToolCall("memory_search", dur, true);
-            store.recordApiLog("memory_search", { type: "auto_recall", query }, JSON.stringify({
-              candidates: result.hits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt, origin: h.origin || "local" })),
-              filtered: []
-            }), dur, true);
-            if (query.length > 50) {
-              const noRecallHint =
-                "## Memory system — ACTION REQUIRED\n\n" +
-                "Auto-recall found no relevant results for a long query. " +
-                "You MUST call `memory_search` now with a shortened query (2-5 key words) before answering. " +
-                "Do NOT skip this step. Do NOT answer without searching first.";
-              return { prependContext: noRecallHint };
+            ctx.log.debug("auto-recall: LLM filter returned no relevant local hits, trying hub fallback");
+            const hubHits = await hubFallback();
+            if (hubHits.length > 0) {
+              ctx.log.debug(`auto-recall: hub fallback provided ${hubHits.length} hit(s) after local filter yielded 0`);
+              filteredHits = hubHits;
+            } else {
+              const dur = performance.now() - recallT0;
+              store.recordToolCall("memory_search", dur, true);
+              store.recordApiLog("memory_search", { type: "auto_recall", query }, JSON.stringify({
+                candidates: result.hits.map(h => ({ score: h.score, role: h.source.role, summary: h.summary, content: h.original_excerpt, origin: h.origin || "local" })),
+                filtered: []
+              }), dur, true);
+              if (query.length > 50) {
+                const noRecallHint =
+                  "## Memory system — ACTION REQUIRED\n\n" +
+                  "Auto-recall found no relevant results for a long query. " +
+                  "You MUST call `memory_search` now with a shortened query (2-5 key words) before answering. " +
+                  "Do NOT skip this step. Do NOT answer without searching first.";
+                return { prependContext: noRecallHint };
+              }
+              return;
             }
-            return;
+          }
+        }
+
+        if (!sufficient && filteredHits.length > 0 && ctx.config?.sharing?.enabled) {
+          const hubSupp = await hubFallback();
+          if (hubSupp.length > 0) {
+            ctx.log.debug(`auto-recall: local insufficient, supplementing with ${hubSupp.length} hub hit(s)`);
+            filteredHits.push(...hubSupp);
           }
         }
 

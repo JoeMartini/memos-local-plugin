@@ -1490,7 +1490,10 @@ export class SqliteStore {
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (opts.status) { conditions.push("status = ?"); params.push(opts.status); }
-    if (opts.owner) { conditions.push("owner = ?"); params.push(opts.owner); }
+    if (opts.owner) {
+      conditions.push("(owner = ? OR (owner = 'public' AND id IN (SELECT task_id FROM local_shared_tasks WHERE original_owner = ?)))");
+      params.push(opts.owner, opts.owner);
+    }
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const countRow = this.db.prepare(`SELECT COUNT(*) as c FROM tasks ${whereClause}`).get(...params) as { c: number };

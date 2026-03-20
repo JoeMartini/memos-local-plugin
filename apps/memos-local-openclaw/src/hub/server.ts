@@ -314,6 +314,7 @@ export class HubServer {
           { userId: user.id, username: user.username, role: user.role, status: user.status },
           this.authSecret,
         );
+        this.userManager.approveUser(user.id, token);
         return this.json(res, 200, { status: "active", userToken: token });
       }
       return this.json(res, 200, { status: user.status });

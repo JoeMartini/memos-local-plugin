@@ -3599,14 +3599,16 @@ function selectSharingRole(role){
   var tp=document.getElementById('sharingTeamPanel');
   var ap=document.getElementById('sharingAdminPanel');
   if(role==='client'){
-    if(sp) sp.style.display='none';
+    if(sp) { sp.style.display='none'; sp.innerHTML=''; }
     if(tp) tp.style.display='none';
     if(ap) ap.style.display='none';
   }else{
-    if(sp) sp.style.display='';
+    if(sp) { sp.style.display='none'; sp.innerHTML=''; }
     if(tp) tp.style.display='';
     if(ap) ap.style.display='';
   }
+  _lastSettingsFingerprint='';
+  setTimeout(function(){ loadSharingStatus(true); },200);
   if(role==='hub'){
     var tk=document.getElementById('cfgHubTeamToken');
     if(!tk.value.trim()) tk.value=_genToken(18);
@@ -3719,6 +3721,7 @@ function switchView(view){
 
 function onMemoryScopeChange(){
   memorySearchScope=document.getElementById('memorySearchScope')?.value||'local';
+  try{localStorage.setItem('memos_memorySearchScope',memorySearchScope);}catch(e){}
   currentPage=1;
   activeSession=null;activeRole='';
   _lastMemoriesFingerprint='';
@@ -3844,6 +3847,7 @@ function renderSharingSidebar(data){
     html+='<span class="label">'+t('sharing.sidebar.identity')+'</span><span class="value">'+esc(conn.user.username||'-')+'</span>';
     if(conn.teamName) html+='<span class="label">'+t('sharing.team')+'</span><span class="value">'+esc(conn.teamName)+'</span>';
     html+='</div>';
+    html+='<div style="margin-top:8px"><button class="btn btn-sm btn-primary" onclick="retryHubJoin()" style="font-size:11px">'+t('sharing.retryJoin')+'</button></div>';
     statusEl.innerHTML=html;
     hintEl.textContent=t('sharing.rejected.hint');
   }else if(conn.removed&&conn.user){
@@ -3852,6 +3856,7 @@ function renderSharingSidebar(data){
     html+='<span class="label">'+t('sharing.sidebar.identity')+'</span><span class="value">'+esc(conn.user.username||'-')+'</span>';
     if(conn.teamName) html+='<span class="label">'+t('sharing.team')+'</span><span class="value">'+esc(conn.teamName)+'</span>';
     html+='</div>';
+    html+='<div style="margin-top:8px"><button class="btn btn-sm btn-primary" onclick="retryHubJoin()" style="font-size:11px">'+t('sharing.retryJoin')+'</button></div>';
     statusEl.innerHTML=html;
     hintEl.textContent=t('sharing.removed.hint');
   }else if(conn.connected&&conn.user){
@@ -3888,6 +3893,9 @@ function renderSharingSettings(data){
   if(!data||!data.enabled){
     statusEl.innerHTML='';teamEl.innerHTML='';adminEl.innerHTML='';
     if(panelsWrap) panelsWrap.style.display='none';
+    var adminNavTab0=document.querySelector('.tab[data-view="admin"]');
+    if(adminNavTab0) adminNavTab0.style.display='none';
+    if(_activeView==='admin') switchView('memories');
     return;
   }
   if(panelsWrap) panelsWrap.style.display='';
@@ -3895,9 +3903,20 @@ function renderSharingSettings(data){
   var user=conn.user||{};
   var actualRole=data.role||_sharingRole||'client';
   if(data.role) _sharingRole=data.role;
+  var prevIsAdmin=!!window._isHubAdmin;
   var isAdmin=(data.admin&&data.admin.canManageUsers)||(conn.connected&&user.role==='admin')||(actualRole==='hub');
   window._isHubAdmin=isAdmin;
   if(isAdmin) startAdminPoll();
+  var adminNavTab=document.querySelector('.tab[data-view="admin"]');
+  if(adminNavTab){
+    var showTab=(actualRole==='hub')||(conn.connected);
+    adminNavTab.style.display=showTab?'':'none';
+    if(!showTab&&_activeView==='admin') switchView('memories');
+  }
+  if(prevIsAdmin&&!isAdmin&&_activeView==='admin'){
+    _lastAdminFingerprint='';
+    loadAdminData();
+  }
   var hubAdminBtn=document.getElementById('hubAdminEntryBtn');
 
   if(actualRole==='hub'){
@@ -4418,7 +4437,14 @@ async function adminToggleRole(userId,newRole){
   try{
     var r=await fetch('/api/sharing/change-role',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:userId,role:newRole})});
     var d=await r.json();
-    if(d.ok){toast(t('toast.roleChanged'),'success');_lastAdminFingerprint='';loadAdminData();}
+    if(d.ok){
+      toast(t('toast.roleChanged'),'success');
+      _lastAdminFingerprint='';
+      _lastSettingsFingerprint='';
+      _lastSidebarFingerprint='';
+      await loadSharingStatus(false);
+      loadAdminData();
+    }
     else if(d.error==='cannot_demote_owner'){toast(t('admin.ownerHint'),'error');}
     else{toast(d.error||t('toast.roleChangeFail'),'error');}
   }catch(e){toast(t('toast.roleChangeFail')+': '+e.message,'error');}
@@ -8840,6 +8866,14 @@ async function checkForUpdate(){
 }
 
 /* ─── Init ─── */
+try{
+  var savedScope=localStorage.getItem('memos_memorySearchScope');
+  if(savedScope&&(savedScope==='local'||savedScope==='allLocal'||savedScope==='hub')){
+    memorySearchScope=savedScope;
+    var scopeEl=document.getElementById('memorySearchScope');
+    if(scopeEl) scopeEl.value=savedScope;
+  }
+}catch(e){}
 document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target.id==='modalOverlay')closeModal()});
 document.getElementById('searchInput').addEventListener('keydown',e=>{if(e.key==='Escape'){e.target.value='';currentPage=1;if(memorySearchScope==='hub')loadHubMemories();else loadMemories();}});
 applyI18n();
