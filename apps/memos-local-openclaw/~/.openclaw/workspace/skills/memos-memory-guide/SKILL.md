@@ -1,86 +1,211 @@
 ---
 name: memos-memory-guide
-description: Use the MemOS Local memory system to search and use the user's past conversations. Use this skill whenever the user refers to past chats, their own preferences or history, or when you need to answer from prior context. When auto-recall returns nothing (long or unclear user query), generate your own short search query and call memory_search. Use task_summary when you need full task context, skill_get for experience guides, and memory_timeline to expand around a memory hit.
+description: "Use the MemOS Local memory system to search and use the user's past conversations. Use this skill whenever the user refers to past chats, their own preferences or history, or when you need to answer from prior context. When auto-recall returns nothing (long or unclear user query), generate your own short search query and call memory_search. Available tools: memory_search, memory_get, memory_write_public, memory_share, memory_unshare, task_summary, skill_get, skill_search, skill_install, skill_publish, skill_unpublish, network_memory_detail, network_skill_pull, network_team_info, memory_timeline, memory_viewer."
 ---
 
 # MemOS Local Memory — Agent Guide
 
-This skill describes how to use the MemOS memory tools so you can reliably search and use the user's long-term conversation history.
+This skill describes how to use the MemOS memory tools so you can reliably search and use the user's long-term conversation history, query team-shared data, share tasks, and discover or pull reusable skills.
+
+Two sharing planes exist and must not be confused:
+
+- **Local agent sharing:** visible to agents in the same OpenClaw workspace only.
+- **Team sharing:** visible to teammates through the configured team server.
 
 ## How memory is provided each turn
 
 - **Automatic recall (hook):** At the start of each turn, the system runs a memory search using the user's current message and injects relevant past memories into your context. You do not need to call any tool for that.
-- **When that is not enough:** If the user's message is very long, vague, or the automatic search returns **no memories**, you should **generate your own short, focused query** and call `memory_search` yourself. For example:
-  - User sent a long paragraph → extract 1–2 key topics or a short question and search with that.
-  - Auto-recall said "no memories" or you see no memory block → call `memory_search` with a query you derive (e.g. the user's name, a topic they often mention, or a rephrased question).
-- **When you need more detail:** Search results only give excerpts and IDs. Use the tools below to fetch full task context, skill content, or surrounding messages.
+- **When that is not enough:** If the user's message is very long, vague, or the automatic search returns **no memories**, you should **generate your own short, focused query** and call `memory_search` yourself.
+- **Memory isolation:** Each agent can only see its own local private memories and local `public` memories. Team-shared data only appears when you search with `scope="group"` or `scope="all"`.
 
 ## Tools — what they do and when to call
 
 ### memory_search
 
-- **What it does:** Searches the user's stored conversation memory by a natural-language query. Returns a list of relevant excerpts with `chunkId` and optionally `task_id`.
+- **What it does:** Search long-term conversation memory for past conversations, user preferences, decisions, and experiences. Returns relevant excerpts with `chunkId` and optionally `task_id`. Only returns memories belonging to the current agent or marked as public.
 - **When to call:**
-  - The automatic recall did not run or returned nothing (e.g. no `<memory_context>` block, or a note that no memories were found).
-  - The user's query is long or unclear — **generate a short query yourself** (keywords, rephrased question, or a clear sub-question) and call `memory_search(query="...")`.
-  - You need to search with a different angle (e.g. filter by `role='user'` to find what the user said, or use a more specific query).
-- **Parameters:** `query` (required), optional `minScore`, `role` (e.g. `"user"`).
-- **Output:** List of items with role, excerpt, `chunkId`, and sometimes `task_id`. Use those IDs with the tools below when you need more context.
+  - The automatic recall did not run or returned nothing.
+  - The user's query is long or unclear — **generate a short query yourself** and call `memory_search(query="...")`.
+  - You need to search with a different angle (e.g. filter by `role='user'`).
+- **Parameters:**
+  - `query` (string, **required**) — Natural language search query.
+  - `scope` (string, optional) — `'local'` (default) for current agent + local shared memories, or `'group'` / `'all'` to include team-shared memories.
+  - `maxResults` (number, optional) — Increase when the first search is too narrow.
+  - `minScore` (number, optional) — Lower slightly if recall is too strict.
+  - `role` (string, optional) — Filter local results by `'user'`, `'assistant'`, `'tool'`, or `'system'`.
+
+### memory_get
+
+- **What it does:** Get the full original text of a memory chunk. Use to verify exact details from a search hit.
+- **When to call:** A `memory_search` hit looks relevant but you need to see the complete original content, not just the summary/excerpt.
+- **Parameters:**
+  - `chunkId` (string, **required**) — The chunkId from a search hit.
+  - `maxChars` (number, optional) — Max characters to return (default 4000, max 12000).
+
+### memory_write_public
+
+- **What it does:** Create a brand new local shared memory. These memories are visible to all agents in the same OpenClaw workspace during `memory_search`. This does **not** publish anything to the team server.
+- **When to call:** In multi-agent or collaborative scenarios, when you want to create a new persistent shared note from scratch (e.g. shared decisions, conventions, configurations, workflows). Do not use it if you already have a specific memory chunk to expose.
+- **Parameters:**
+  - `content` (string, **required**) — The content to write to local shared memory.
+  - `summary` (string, optional) — Short summary of the content.
+
+### memory_share
+
+- **What it does:** Share an existing memory either with local OpenClaw agents, to the team, or to both.
+- **When to call:** You already have a useful memory chunk and want to expose it beyond the current agent.
+- **Do not use when:** You are creating a new shared note from scratch. In that case use `memory_write_public`.
+- **Parameters:**
+  - `chunkId` (string, **required**) — Existing memory chunk ID.
+  - `target` (string, optional) — `'agents'` (default), `'hub'`, or `'both'`.
+  - `visibility` (string, optional) — Team visibility when target includes team: `'public'` (default) or `'group'`.
+  - `groupId` (string, optional) — Optional team group ID when `visibility='group'`.
+
+### memory_unshare
+
+- **What it does:** Remove an existing memory from local agent sharing, team sharing, or both.
+- **When to call:** A memory should no longer be visible outside the current agent or should be removed from the team.
+- **Parameters:**
+  - `chunkId` (string, **required**) — Existing memory chunk ID.
+  - `target` (string, optional) — `'agents'`, `'hub'`, or `'all'` (default).
+  - `privateOwner` (string, optional) — Rare fallback only for older public memories that have no recorded original owner.
 
 ### task_summary
 
-- **What it does:** Returns the full task summary for a given `task_id`: title, status, and the complete narrative summary of that conversation task (steps, decisions, URLs, commands, etc.).
-- **When to call:** A `memory_search` hit included a `task_id` and you need the full story of that task (e.g. what was done, what the user decided, what failed or succeeded).
-- **Parameters:** `taskId` (from a search hit).
-- **Effect:** You get one coherent summary of the whole task instead of isolated excerpts.
+- **What it does:** Get the detailed summary of a complete task: title, status, narrative summary, and related skills. Use when `memory_search` returns a hit with a `task_id` and you need the full story. Preserves critical information: URLs, file paths, commands, error codes, step-by-step instructions.
+- **When to call:** A `memory_search` hit included a `task_id` and you need the full context of that task.
+- **Parameters:**
+  - `taskId` (string, **required**) — The task_id from a memory_search hit.
 
 ### skill_get
 
-- **What it does:** Returns the content of a learned skill (experience guide) by `skillId` or by `taskId`. If you pass `taskId`, the system finds the skill linked to that task.
-- **When to call:** A search hit has a `task_id` and the task is the kind that has a "how to do this again" guide (e.g. a workflow the user has run before). Use this to follow the same approach or reuse steps.
-- **Parameters:** `skillId` (direct) or `taskId` (lookup).
-- **Effect:** You receive the full SKILL.md-style guide. You can then call `skill_install(skillId)` if the user or you want that skill loaded for future turns.
+- **What it does:** Retrieve a proven skill (experience guide) by `skillId` or by `taskId`. If you pass a `taskId`, the system will find the associated skill automatically.
+- **When to call:** A search hit has a `task_id` and the task has a "how to do this again" guide. Use this to follow the same approach or reuse steps.
+- **Parameters:**
+  - `skillId` (string, optional) — Direct skill ID.
+  - `taskId` (string, optional) — Task ID — will look up the skill linked to this task.
+  - At least one of `skillId` or `taskId` must be provided.
+
+### skill_search
+
+- **What it does:** Search available skills by natural language. Searches your own skills, local shared skills, or both. It can also include team skills.
+- **When to call:** The current task requires a capability or guide you don't have. Use `skill_search` to find one first; after finding it, use `skill_get` to read it, then `skill_install` to load it for future turns.
+- **Parameters:**
+  - `query` (string, **required**) — Natural language description of the needed skill.
+  - `scope` (string, optional) — `'mix'` (default, self + local shared), `'self'`, `'public'` (local shared only), or `'group'` / `'all'` to include team results.
 
 ### skill_install
 
-- **What it does:** Installs a skill (by `skillId`) into the workspace so it is loaded in future sessions.
-- **When to call:** After `skill_get` when the skill is useful for ongoing use (e.g. the user's recurring workflow). Optional; only when you want the skill to be permanently available.
+- **What it does:** Install a learned skill into the agent workspace so it becomes permanently available. After installation, the skill will be loaded automatically in future sessions.
+- **When to call:** After `skill_get` when the skill is useful for ongoing use.
+- **Parameters:**
+  - `skillId` (string, **required**) — The skill ID to install.
+
+### skill_publish
+
+- **What it does:** Share a skill with local agents, or publish it to the team.
+- **When to call:** You have a useful skill that other agents or your team could benefit from.
+- **Parameters:**
+  - `skillId` (string, **required**) — The skill ID to publish.
+  - `target` (string, optional) — `'agents'` (default) or `'hub'`.
+  - `visibility` (string, optional) — When `target='hub'`, use `'public'` (default) or `'group'`.
+  - `groupId` (string, optional) — Optional team group ID when `target='hub'` and `visibility='group'`.
+  - `scope` (string, optional) — Backward-compatible alias for old calls. Prefer `target` + `visibility` in new calls.
+
+### skill_unpublish
+
+- **What it does:** Stop local agent sharing, remove a team-published copy, or do both.
+- **When to call:** You want to stop sharing a previously published skill.
+- **Parameters:**
+  - `skillId` (string, **required**) — The skill ID to unpublish.
+  - `target` (string, optional) — `'agents'` (default), `'hub'`, or `'all'`.
+
+### network_memory_detail
+
+- **What it does:** Fetches the full content behind a team search hit.
+- **When to call:** A `memory_search` result came from the team and you need the full shared memory content.
+- **Parameters:** `remoteHitId`.
+
+### task_share / task_unshare
+
+- **What they do:** Share a local task to the team, or remove it later.
+- **When to call:** A task is valuable to your group or to the whole team and should be discoverable via shared search.
+- **Parameters:** `taskId`, plus sharing visibility/scope when required.
+
+### network_skill_pull
+
+- **What it does:** Pulls a team-shared skill bundle down into local storage.
+- **When to call:** `skill_search` found a useful team skill and you want to use it locally or offline.
 - **Parameters:** `skillId`.
+
+### network_team_info
+
+- **What it does:** Returns current team server connection information, user, role, and groups.
+- **When to call:** You need to confirm whether team sharing is configured or which groups the current client belongs to.
+- **Call this first before:** `memory_share(... target='hub'|'both')`, `memory_unshare(... target='hub'|'all')`, `task_share`, `task_unshare`, `skill_publish(... target='hub')`, `skill_unpublish(... target='hub'|'all')`, or `network_skill_pull`.
+- **Parameters:** none.
 
 ### memory_timeline
 
-- **What it does:** Expands context around a single memory chunk: returns the surrounding conversation messages (±N turns) so you see what was said before and after that excerpt.
-- **When to call:** A `memory_search` hit is relevant but you need the surrounding dialogue (e.g. who said what next, or the exact follow-up question).
-- **Parameters:** `chunkId` (from a search hit), optional `window` (default 2).
-- **Effect:** You get a short, linear slice of the conversation around that chunk.
+- **What it does:** Expand context around a memory search hit. Pass the `chunkId` from a search result to read the surrounding conversation messages.
+- **When to call:** A `memory_search` hit is relevant but you need the surrounding dialogue.
+- **Parameters:**
+  - `chunkId` (string, **required**) — The chunkId from a memory_search hit.
+  - `window` (number, optional) — Context window ±N messages, default 2.
 
 ### memory_viewer
 
-- **What it does:** Returns the URL of the MemOS Memory Viewer (web UI) where the user can browse, search, and manage their memories.
-- **When to call:** The user asks how to view their memories, open the memory dashboard, or manage stored data.
+- **What it does:** Show the MemOS Memory Viewer URL. Call this when the user asks how to view, browse, manage, or check their memories. Returns the URL the user can open in their browser.
+- **When to call:** The user asks where to see or manage their memories.
 - **Parameters:** None.
-- **Effect:** You can tell the user to open that URL in a browser.
 
 ## Quick decision flow
 
 1. **No memories in context or auto-recall reported nothing**
-   → Call `memory_search` with a **self-generated short query** (e.g. key topic or rephrased question).
+   → Call `memory_search(query="...")` with a **self-generated short query**.
 
-2. **Search returned hits with `task_id` and you need full context**
-   → Call `task_summary(taskId)`.
+2. **Need to see the full original text of a search hit**
+   → Call `memory_get(chunkId="...")`.
 
-3. **Task has an experience guide you want to follow**
-   → Call `skill_get(taskId=...)` (or `skill_get(skillId=...)` if you have the id). Optionally `skill_install(skillId)` for future use.
+3. **Search returned hits with `task_id` and you need full context**
+   → Call `task_summary(taskId="...")`.
 
-4. **You need the exact surrounding conversation of a hit**
-   → Call `memory_timeline(chunkId=...)`.
+4. **Task has an experience guide you want to follow**
+   → Call `skill_get(taskId="...")` or `skill_get(skillId="...")`. Optionally `skill_install(skillId="...")` for future use.
 
-5. **User asks where to see or manage their memories**
+5. **You need the exact surrounding conversation of a hit**
+   → Call `memory_timeline(chunkId="...")`.
+
+6. **You need a capability/guide that you don't have**
+   → Call `skill_search(query="...", scope="mix")` to discover available skills.
+
+7. **You have new shared knowledge useful to all local agents**
+   → Call `memory_write_public(content="...")`.
+
+8. **You already have an existing memory chunk and want to expose or hide it**
+   → Call `memory_share(chunkId="...", target="agents|hub|both")` or `memory_unshare(chunkId="...", target="agents|hub|all")`.
+
+9. **You are about to do anything team-sharing-related**
+   → Call `network_team_info()` first if team server availability is uncertain.
+
+10. **You want to share/stop sharing a skill with local agents or team**
+   → Prefer `skill_publish(skillId="...", target="agents|hub", visibility=...)` and `skill_unpublish(skillId="...", target="agents|hub|all")`.
+
+11. **User asks where to see or manage their memories**
    → Call `memory_viewer()` and share the URL.
 
 ## Writing good search queries
 
 - Prefer **short, focused** queries (a few words or one clear question).
-- Use **concrete terms**: names, topics, tools, or decisions (e.g. "preferred editor", "deploy script", "API key setup").
+- Use **concrete terms**: names, topics, tools, or decisions.
 - If the user's message is long, **derive one or two sub-queries** rather than pasting the whole message.
-- Use `role='user'` when you specifically want to find what the user said (e.g. preferences, past questions).
+- Use `role='user'` when you specifically want to find what the user said.
+
+## Memory ownership and agent isolation
+
+Each memory is tagged with an `owner` (e.g. `agent:main`, `agent:sales-bot`). This is handled **automatically** — you do not need to pass any owner parameter.
+
+- **Your memories:** All tools (`memory_search`, `memory_get`, `memory_timeline`) automatically scope queries to your agent's own memories.
+- **Local shared memories:** Memories marked as local shared are visible to all agents in the same OpenClaw workspace. Use `memory_write_public` to create them, or `memory_share(target='agents')` to expose an existing chunk.
+- **Cross-agent isolation:** You cannot see memories owned by other agents (unless they are public).
+- **How it works:** The system identifies your agent ID from the OpenClaw runtime context and applies owner filtering automatically on every search, recall, and retrieval.

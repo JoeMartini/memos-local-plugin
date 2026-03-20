@@ -484,12 +484,53 @@ export class SkillGenerator {
 
   private buildConversationText(chunks: Chunk[]): string {
     const lines: string[] = [];
+    const redact = this.ctx.config.skillEvolution?.redactSensitiveInSkill ?? true;
+
     for (const c of chunks) {
-      if (c.role !== "user" && c.role !== "assistant") continue;
-      const roleLabel = c.role === "user" ? "User" : "Assistant";
-      lines.push(`[${roleLabel}]: ${c.content}`);
+      let roleLabel: string;
+      switch (c.role) {
+        case "user": roleLabel = "User"; break;
+        case "assistant": roleLabel = "Assistant"; break;
+        case "tool": roleLabel = "Tool"; break;
+        case "system": roleLabel = "System"; break;
+        default: continue;
+      }
+
+      let content = c.content;
+      if (c.role === "system") continue;
+
+      if (c.role === "tool") {
+        content = this.truncateToolOutput(content);
+      }
+
+      if (redact) {
+        content = SkillGenerator.redactSensitive(content);
+      }
+
+      lines.push(`[${roleLabel}]: ${content}`);
     }
     return lines.join("\n\n");
+  }
+
+  private truncateToolOutput(content: string): string {
+    const MAX_TOOL_OUTPUT = 1500;
+    if (content.length <= MAX_TOOL_OUTPUT) return content;
+    const head = content.slice(0, MAX_TOOL_OUTPUT * 0.6);
+    const tail = content.slice(-MAX_TOOL_OUTPUT * 0.3);
+    return `${head}\n... (truncated ${content.length - MAX_TOOL_OUTPUT} chars) ...\n${tail}`;
+  }
+
+  static redactSensitive(text: string): string {
+    let result = text;
+    result = result.replace(/\bsk-[a-zA-Z0-9]{20,}\b/g, "sk-***REDACTED***");
+    result = result.replace(/\bBearer\s+[a-zA-Z0-9_\-.]{20,}\b/g, "Bearer ***REDACTED***");
+    result = result.replace(/\bAKIA[0-9A-Z]{16}\b/g, "AKIA***REDACTED***");
+    result = result.replace(/(api[_-]?key|secret|token|password|credential)\s*[:=]\s*["']([^"']{8,})["']/gi,
+      (match, key) => `${key}="***REDACTED***"`);
+    result = result.replace(/\/Users\/[a-zA-Z0-9._-]+\//g, "/Users/****/");
+    result = result.replace(/\/home\/[a-zA-Z0-9._-]+\//g, "/home/****/");
+    result = result.replace(/C:\\Users\\[a-zA-Z0-9._-]+\\/g, "C:\\Users\\****\\");
+    return result;
   }
 
   private parseDescription(content: string): string {
@@ -499,6 +540,4 @@ export class SkillGenerator {
     if (match2) return match2[1];
     return "";
   }
-
-
 }

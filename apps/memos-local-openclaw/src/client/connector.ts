@@ -10,6 +10,7 @@ export interface HubSessionInfo {
   userToken: string;
   role: UserRole;
   connectedAt: number;
+  identityKey?: string;
 }
 
 export interface HubStatusInfo {
@@ -54,6 +55,8 @@ export async function connectToHub(store: SqliteStore, config: MemosLocalConfig,
             userToken: result.userToken,
             role: "member",
             connectedAt: Date.now(),
+            identityKey: persisted.identityKey || "",
+            lastKnownStatus: "active",
           });
           return store.getClientHubConnection()!;
         }
@@ -62,6 +65,12 @@ export async function connectToHub(store: SqliteStore, config: MemosLocalConfig,
         }
         if (result.status === "rejected") {
           throw new Error("Join request was rejected by the Hub admin.");
+        }
+        if (result.status === "blocked") {
+          throw new Error("Your account has been blocked by the Hub admin.");
+        }
+        if (result.status === "left" || result.status === "removed") {
+          log.info(`User status is "${result.status}", will try to rejoin.`);
         }
       } catch (err) {
         if (err instanceof PendingApprovalError) throw err;
@@ -78,6 +87,7 @@ export async function connectToHub(store: SqliteStore, config: MemosLocalConfig,
 
   const hubUrl = normalizeHubUrl(hubAddress);
   const me = await hubRequestJson(hubUrl, userToken, "/api/v1/hub/me", { method: "GET" }) as any;
+  const persisted = store.getClientHubConnection();
   store.setClientHubConnection({
     hubUrl,
     userId: String(me.id),
@@ -85,6 +95,8 @@ export async function connectToHub(store: SqliteStore, config: MemosLocalConfig,
     userToken,
     role: String(me.role ?? "member") as UserRole,
     connectedAt: Date.now(),
+    identityKey: persisted?.identityKey || String(me.identityKey ?? ""),
+    lastKnownStatus: "active",
   });
   return store.getClientHubConnection()!;
 }
@@ -95,9 +107,13 @@ export async function getHubStatus(store: SqliteStore, config: MemosLocalConfig)
   const hubAddress = conn?.hubUrl || (configHubAddress ? normalizeHubUrl(configHubAddress) : "");
   const userToken = conn?.userToken || config.sharing?.client?.userToken || "";
 
-  // If DB has a connection to a different Hub than config, the DB data is stale
   if (conn && configHubAddress && conn.hubUrl && normalizeHubUrl(configHubAddress) !== conn.hubUrl) {
-    store.clearClientHubConnection();
+    store.setClientHubConnection({
+      ...conn,
+      hubUrl: normalizeHubUrl(configHubAddress),
+      userToken: "",
+      lastKnownStatus: "hub_changed",
+    });
     return { connected: false, user: null };
   }
 
@@ -129,6 +145,8 @@ export async function getHubStatus(store: SqliteStore, config: MemosLocalConfig)
             userToken: result.userToken,
             role: "member",
             connectedAt: Date.now(),
+            identityKey: conn.identityKey || "",
+            lastKnownStatus: "active",
           });
           const me = await hubRequestJson(normalizeHubUrl(hubAddress), result.userToken, "/api/v1/hub/me", { method: "GET" }) as any;
           return {
@@ -169,12 +187,10 @@ export async function getHubStatus(store: SqliteStore, config: MemosLocalConfig)
     const latestRole = String(me.role ?? "member") as UserRole;
     if (conn && (conn.username !== latestUsername || conn.role !== latestRole)) {
       store.setClientHubConnection({
-        hubUrl: conn.hubUrl,
-        userId: conn.userId,
+        ...conn,
         username: latestUsername,
-        userToken: conn.userToken,
         role: latestRole,
-        connectedAt: conn.connectedAt,
+        lastKnownStatus: "active",
       });
     }
     return {
@@ -185,12 +201,17 @@ export async function getHubStatus(store: SqliteStore, config: MemosLocalConfig)
         username: latestUsername,
         role: latestRole,
         status: String(me.status ?? "active"),
+        groups: Array.isArray(me.groups) ? me.groups : [],
       },
     };
   } catch (err: any) {
     const is401 = typeof err?.message === "string" && err.message.includes("(401)");
     if (is401 && conn) {
-      store.clearClientHubConnection();
+      store.setClientHubConnection({
+        ...conn,
+        userToken: "",
+        lastKnownStatus: "removed",
+      });
       return {
         connected: false,
         hubUrl: normalizeHubUrl(hubAddress),
@@ -232,11 +253,16 @@ export async function autoJoinHub(
     }
   }
 
+  const persisted = store.getClientHubConnection();
+  const existingIdentityKey = persisted?.identityKey || "";
+
   log.info(`Joining Hub at ${hubUrl} as "${username}"...`);
   const result = await hubRequestJson(hubUrl, "", "/api/v1/hub/join", {
     method: "POST",
-    body: JSON.stringify({ teamToken, username, deviceName: hostname, clientIp }),
+    body: JSON.stringify({ teamToken, username, deviceName: hostname, clientIp, identityKey: existingIdentityKey }),
   }) as any;
+
+  const returnedIdentityKey = String(result.identityKey || existingIdentityKey || "");
 
   if (result.status === "pending") {
     log.info(`Join request submitted, awaiting admin approval. userId=${result.userId}`);
@@ -247,12 +273,18 @@ export async function autoJoinHub(
       userToken: "",
       role: "member",
       connectedAt: Date.now(),
+      identityKey: returnedIdentityKey,
+      lastKnownStatus: "pending",
     });
     throw new PendingApprovalError(result.userId);
   }
 
   if (result.status === "rejected") {
     throw new Error(`Join request was rejected by the Hub admin.`);
+  }
+
+  if (result.status === "blocked") {
+    throw new Error(`Your account has been blocked by the Hub admin.`);
   }
 
   if (!result.userToken) {
@@ -267,6 +299,8 @@ export async function autoJoinHub(
     userToken: result.userToken,
     role: "member",
     connectedAt: Date.now(),
+    identityKey: returnedIdentityKey,
+    lastKnownStatus: "active",
   });
   return store.getClientHubConnection()!;
 }

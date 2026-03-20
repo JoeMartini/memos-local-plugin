@@ -1220,7 +1220,7 @@ input,textarea,select{font-family:inherit;font-size:inherit}
       </div>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()" data-i18n="logout">Logout</button>
     </div>
-  </div>
+    </div>
   </div>
 
   <div class="main-content">
@@ -3696,7 +3696,14 @@ function switchView(view){
   else if(view==='skills') loadSkills();
   else if(view==='analytics') loadMetrics();
   else if(view==='logs') loadLogs();
-  else if(view==='settings'){loadConfig();loadModelHealth();}
+  else if(view==='settings'){loadConfig().then(function(){
+    var notDismissed=localStorage.getItem('memos-team-guide-dismissed')!=='1';
+    var sharingOn=document.getElementById('cfgSharingEnabled');
+    var sharingNotEnabled=!sharingOn||!sharingOn.checked;
+    if(notDismissed&&sharingNotEnabled){
+      switchSettingsTab('hub',document.querySelector('.settings-tab-btn[data-tab="hub"]'));
+    }
+  });loadModelHealth();}
   else if(view==='import'){if(!window._migrateRunning) migrateScan(false);}
   else if(view==='admin'){loadAdminData();}
 }
@@ -3736,6 +3743,13 @@ function onTaskScopeChange(){
 
 var _clientPendingPollTimer=null;
 var _lastSharingConnStatus='';
+function _updateScopeSelectorsVisibility(hubAvailable){
+  var ids=['memorySearchScope','taskSearchScope','skillSearchScope'];
+  for(var i=0;i<ids.length;i++){
+    var el=document.getElementById(ids[i]);
+    if(el) el.style.display=hubAvailable?'':'none';
+  }
+}
 async function loadSharingStatus(forcePending){
   try{
     const r=await fetch('/api/sharing/status');
@@ -3748,15 +3762,19 @@ async function loadSharingStatus(forcePending){
     if(!d||!d.enabled){
       if(_clientPendingPollTimer){clearInterval(_clientPendingPollTimer);_clientPendingPollTimer=null;}
       _lastSharingConnStatus='';
+      _updateScopeSelectorsVisibility(false);
       return;
     }
     var conn=d.connection||{};
     var curStatus=conn.rejected?'rejected':conn.pendingApproval?'pending':conn.connected?'connected':'none';
+    var hubActive=d.role==='hub'||curStatus==='connected';
+    _updateScopeSelectorsVisibility(hubActive);
     if(_lastSharingConnStatus==='pending'&&curStatus==='rejected'){
       toast(t('sharing.rejected.toast'),'error');
     }
     if(_lastSharingConnStatus==='pending'&&curStatus==='connected'){
       toast(t('sharing.approved.toast'),'success');
+      loadMemories();loadTasks();loadSkills();
     }
     _lastSharingConnStatus=curStatus;
     if(curStatus==='pending'&&!_clientPendingPollTimer){
@@ -3770,6 +3788,7 @@ async function loadSharingStatus(forcePending){
     renderSharingSidebar(null);
     renderSharingSettings(null);
     updateTeamGuide(null);
+    _updateScopeSelectorsVisibility(false);
   }
 }
 
@@ -4097,7 +4116,7 @@ function adminPaginateHtml(total,page,refilterFn){
   if(end<pages) html+=(end<pages-1?'<span class="pg-info">...</span>':'')+'<button class="pg-btn" onclick="'+refilterFn+'Page('+(pages-1)+')">'+pages+'</button>';
   html+='<button class="pg-btn'+(page>=pages-1?' disabled':'')+'" onclick="'+refilterFn+'Page('+(page+1)+')">\\u2192</button>';
   html+='<span class="pg-info">'+total+' '+t('pagination.total')+'</span>';
-  html+='</div>';
+    html+='</div>';
   return html;
 }
 
@@ -4159,12 +4178,12 @@ async function loadAdminData(){
     var fetches;
     if(isAdmin){
       fetches=await Promise.all([
-        fetch('/api/sharing/users').then(function(r){return r.json();}),
-        fetch('/api/admin/shared-tasks').then(function(r){return r.json();}),
-        fetch('/api/admin/shared-skills').then(function(r){return r.json();}),
-        fetch('/api/sharing/pending-users').then(function(r){return r.json();}),
-        fetch('/api/admin/shared-memories').then(function(r){return r.json();})
-      ]);
+      fetch('/api/sharing/users').then(function(r){return r.json();}),
+      fetch('/api/admin/shared-tasks').then(function(r){return r.json();}),
+      fetch('/api/admin/shared-skills').then(function(r){return r.json();}),
+      fetch('/api/sharing/pending-users').then(function(r){return r.json();}),
+      fetch('/api/admin/shared-memories').then(function(r){return r.json();})
+    ]);
     }else{
       fetches=await Promise.all([
         Promise.resolve({users:[]}),
@@ -6735,8 +6754,8 @@ async function saveHubConfig(){
         if(!td.ok){
           var errMsg=td.error==='cannot_join_self'?t('sharing.cannotJoinSelf'):(td.error||t('settings.hub.test.fail'));
           done();toast(errMsg,'error');return;
-        }
-      }catch(e){
+    }
+  }catch(e){
         done();toast(t('settings.hub.test.fail')+': '+String(e),'error');return;
       }
     }
@@ -7557,8 +7576,8 @@ function getFilterParams(){
   if(scope==='local'){
     p.set('owner',_currentAgentOwner);
   }else if(scope==='allLocal'){
-    const owner=document.getElementById('filterOwner').value;
-    if(owner) p.set('owner',owner);
+  const owner=document.getElementById('filterOwner').value;
+  if(owner) p.set('owner',owner);
   }
   return p;
 }
@@ -7588,11 +7607,11 @@ async function loadMemories(page,silent){
     renderPagination();
   }catch(e){
     if(!silent){
-      list.innerHTML='';
-      totalPages=1;totalCount=0;
+    list.innerHTML='';
+    totalPages=1;totalCount=0;
       _lastMemoriesFingerprint='';
-      renderMemories([]);
-      renderPagination();
+    renderMemories([]);
+    renderPagination();
     }
   }
 }
@@ -7619,9 +7638,9 @@ async function loadHubMemories(silent){
   }catch(e){
     if(!silent){
       _lastMemoriesFingerprint='';
-      document.getElementById('searchMeta').textContent='0'+t('search.meta.results');
-      renderMemories([]);
-      document.getElementById('pagination').innerHTML='';
+    document.getElementById('searchMeta').textContent='0'+t('search.meta.results');
+    renderMemories([]);
+    document.getElementById('pagination').innerHTML='';
     }
   }
 }

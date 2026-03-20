@@ -219,46 +219,70 @@ export class HubServer {
         || (req.headers["x-client-ip"] as string)?.trim()
         || (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
         || req.socket.remoteAddress || "";
-      const existingUsers = this.opts.store.listHubUsers();
-      const existingUser = existingUsers.find(u => u.username === username);
+      const identityKey = typeof body.identityKey === "string" ? body.identityKey.trim() : "";
+
+      let existingUser = identityKey
+        ? this.userManager.findByIdentityKey(identityKey)
+        : null;
+      if (!existingUser) {
+        const existingUsers = this.opts.store.listHubUsers();
+        existingUser = existingUsers.find(u => u.username === username && u.status !== "left" && u.status !== "removed") ?? null;
+      }
+
       if (existingUser) {
         try { this.opts.store.updateHubUserActivity(existingUser.id, joinIp); } catch { /* best-effort */ }
+
         if (existingUser.status === "active") {
           const token = issueUserToken(
             { userId: existingUser.id, username: existingUser.username, role: existingUser.role, status: "active" },
             this.authSecret,
           );
           this.userManager.approveUser(existingUser.id, token);
-          return this.json(res, 200, { status: "active", userId: existingUser.id, userToken: token });
+          if (identityKey && !existingUser.identityKey) {
+            this.opts.store.upsertHubUser({ ...existingUser, identityKey });
+          }
+          return this.json(res, 200, { status: "active", userId: existingUser.id, userToken: token, identityKey: existingUser.identityKey || identityKey });
         }
         if (existingUser.status === "pending") {
           this.notifyAdmins("user_join_request", "user", username, "", { dedup: true });
-          return this.json(res, 200, { status: "pending", userId: existingUser.id });
+          return this.json(res, 200, { status: "pending", userId: existingUser.id, identityKey: existingUser.identityKey || identityKey });
         }
         if (existingUser.status === "rejected") {
           if (body.reapply === true) {
             this.userManager.resetToPending(existingUser.id);
             this.notifyAdmins("user_join_request", "user", username, "");
             this.opts.log.info(`Hub: rejected user "${username}" (${existingUser.id}) re-applied, reset to pending`);
-            return this.json(res, 200, { status: "pending", userId: existingUser.id });
+            return this.json(res, 200, { status: "pending", userId: existingUser.id, identityKey: existingUser.identityKey || identityKey });
           }
           return this.json(res, 200, { status: "rejected", userId: existingUser.id });
         }
         if (existingUser.status === "removed") {
-          this.userManager.resetToPending(existingUser.id);
-          this.notifyAdmins("user_join_request", "user", username, "");
-          this.opts.log.info(`Hub: removed user "${username}" (${existingUser.id}) re-applied, reset to pending`);
-          return this.json(res, 200, { status: "pending", userId: existingUser.id });
+          this.userManager.rejoinUser(existingUser.id);
+          this.notifyAdmins("user_join_request", "user", username, "", { dedup: true });
+          this.opts.log.info(`Hub: removed user "${username}" (${existingUser.id}) re-applied via rejoin, reset to pending`);
+          return this.json(res, 200, { status: "pending", userId: existingUser.id, identityKey: existingUser.identityKey || identityKey });
+        }
+        if (existingUser.status === "left") {
+          this.userManager.rejoinUser(existingUser.id);
+          this.notifyAdmins("user_join_request", "user", username, "", { dedup: true });
+          this.opts.log.info(`Hub: left user "${username}" (${existingUser.id}) re-applied via rejoin, reset to pending`);
+          return this.json(res, 200, { status: "pending", userId: existingUser.id, identityKey: existingUser.identityKey || identityKey });
+        }
+        if (existingUser.status === "blocked") {
+          return this.json(res, 200, { status: "blocked", userId: existingUser.id });
         }
       }
+
+      const generatedIdentityKey = identityKey || randomUUID();
       const user = this.userManager.createPendingUser({
         username,
         deviceName: typeof body.deviceName === "string" ? body.deviceName : undefined,
+        identityKey: generatedIdentityKey,
       });
       try { this.opts.store.updateHubUserActivity(user.id, joinIp); } catch { /* best-effort */ }
       this.opts.log.info(`Hub: user "${username}" (${user.id}) registered as pending, awaiting admin approval`);
       this.notifyAdmins("user_join_request", "user", username, "");
-      return this.json(res, 200, { status: "pending", userId: user.id });
+      return this.json(res, 200, { status: "pending", userId: user.id, identityKey: generatedIdentityKey });
     }
 
     if (req.method === "POST" && routePath === "/api/v1/hub/registration-status") {
@@ -275,6 +299,15 @@ export class HubServer {
       }
       if (user.status === "rejected") {
         return this.json(res, 200, { status: "rejected" });
+      }
+      if (user.status === "blocked") {
+        return this.json(res, 200, { status: "blocked" });
+      }
+      if (user.status === "left") {
+        return this.json(res, 200, { status: "left" });
+      }
+      if (user.status === "removed") {
+        return this.json(res, 200, { status: "removed" });
       }
       if (user.status === "active") {
         const token = issueUserToken(
@@ -300,12 +333,10 @@ export class HubServer {
     }
 
     if (req.method === "POST" && routePath === "/api/v1/hub/leave") {
-      try {
-        this.opts.store.updateHubUserActivity(auth.userId, "", 0);
-      } catch { /* best-effort */ }
+      this.userManager.markUserLeft(auth.userId);
       this.knownOnlineUsers.delete(auth.userId);
       this.notifyAdmins("user_offline", "user", auth.username, auth.userId);
-      this.opts.log.info(`Hub: user "${auth.username}" (${auth.userId}) left voluntarily`);
+      this.opts.log.info(`Hub: user "${auth.username}" (${auth.userId}) left voluntarily, status set to "left"`);
       return this.json(res, 200, { ok: true });
     }
 
@@ -346,18 +377,33 @@ export class HubServer {
     if (req.method === "POST" && routePath === "/api/v1/hub/admin/approve-user") {
       if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
       const body = await this.readJson(req);
-      const token = issueUserToken({ userId: String(body.userId), username: String(body.username || ""), role: "member", status: "active" }, this.authSecret);
-      const approved = this.userManager.approveUser(String(body.userId), token);
+      const userId = String(body.userId);
+      const username = String(body.username || "");
+      const token = issueUserToken({ userId, username, role: "member", status: "active" }, this.authSecret);
+      const approved = this.userManager.approveUser(userId, token);
       if (!approved) return this.json(res, 404, { error: "not_found" });
-      try { this.opts.store.updateHubUserActivity(String(body.userId), ""); } catch { /* best-effort */ }
+      try { this.opts.store.updateHubUserActivity(userId, ""); } catch { /* best-effort */ }
+      try {
+        this.opts.store.insertHubNotification({
+          id: randomUUID(), userId, type: "membership_approved",
+          resource: "user", title: `Your request to join team "${this.teamName}" has been approved. Welcome!`,
+        });
+      } catch { /* best-effort */ }
       return this.json(res, 200, { status: "active", token });
     }
 
     if (req.method === "POST" && routePath === "/api/v1/hub/admin/reject-user") {
       if (auth.role !== "admin") return this.json(res, 403, { error: "forbidden" });
       const body = await this.readJson(req);
-      const rejected = this.userManager.rejectUser(String(body.userId));
+      const userId = String(body.userId);
+      const rejected = this.userManager.rejectUser(userId);
       if (!rejected) return this.json(res, 404, { error: "not_found" });
+      try {
+        this.opts.store.insertHubNotification({
+          id: randomUUID(), userId, type: "membership_rejected",
+          resource: "user", title: `Your request to join team "${this.teamName}" has been declined.`,
+        });
+      } catch { /* best-effort */ }
       return this.json(res, 200, { status: "rejected" });
     }
 

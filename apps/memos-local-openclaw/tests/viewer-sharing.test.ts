@@ -60,8 +60,17 @@ describe("viewer sharing endpoints", () => {
     });
     const joinJson = await join.json();
     expect(join.status).toBe(200);
-    expect(joinJson.status).toBe("active");
-    expect(joinJson.userToken).toBeTruthy();
+    expect(joinJson.status).toBe("pending");
+    expect(joinJson.userId).toBeTruthy();
+
+    const approveBob = await fetch("http://127.0.0.1:19831/api/v1/hub/admin/approve-user", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ userId: joinJson.userId, username: "bob" }),
+    });
+    expect(approveBob.status).toBe(200);
+    const bobToken = (await approveBob.json()).token;
+    expect(bobToken).toBeTruthy();
 
     viewer = new ViewerServer({
       store: viewerStore,
@@ -100,7 +109,8 @@ describe("viewer sharing endpoints", () => {
     });
     const eveJson = await joinEve.json();
     expect(joinEve.status).toBe(200);
-    expect(eveJson.userToken).toBeTruthy();
+    expect(eveJson.status).toBe("pending");
+    expect(eveJson.userId).toBeTruthy();
   });
 
   it("serves split sharing memory and skill search payloads", async () => {

@@ -1232,7 +1232,7 @@ export class ViewerServer {
               body: JSON.stringify({ memory: { sourceChunkId: refreshedChunk.id, role: refreshedChunk.role, content: refreshedChunk.content, summary: refreshedChunk.summary, kind: refreshedChunk.kind, groupId: null, visibility: "public" } }),
             });
             if (!isLocalShared) this.store.markMemorySharedLocally(chunkId);
-            if (hubClient.userId) {
+            if (hubClient.userId && this.ctx?.config?.sharing?.role === "hub") {
               const existing = this.store.getHubMemoryBySource(hubClient.userId, chunkId);
               this.store.upsertHubMemory({
                 id: (response as any)?.memoryId ?? existing?.id ?? crypto.randomUUID(),
@@ -1789,10 +1789,13 @@ export class ViewerServer {
         const nickname = sharing.client?.nickname;
         const username = nickname || os.userInfo().username || "user";
         const hostname = os.hostname() || "unknown";
+        const persisted = this.store.getClientHubConnection();
+        const existingIdentityKey = persisted?.identityKey || "";
         const result = await hubRequestJson(hubUrl, "", "/api/v1/hub/join", {
           method: "POST",
-          body: JSON.stringify({ teamToken, username, deviceName: hostname, reapply: true }),
+          body: JSON.stringify({ teamToken, username, deviceName: hostname, reapply: true, identityKey: existingIdentityKey }),
         }) as any;
+        const returnedIdentityKey = String(result.identityKey || existingIdentityKey || "");
         this.store.setClientHubConnection({
           hubUrl,
           userId: String(result.userId || ""),
@@ -1800,6 +1803,8 @@ export class ViewerServer {
           userToken: result.userToken || "",
           role: "member",
           connectedAt: Date.now(),
+          identityKey: returnedIdentityKey,
+          lastKnownStatus: result.status || "",
         });
         this.jsonResponse(res, { ok: true, status: result.status || "pending" });
       } catch (err) {
@@ -2075,14 +2080,13 @@ export class ViewerServer {
             },
           }),
         });
-        const hubUserId = hubClient.userId;
-        if (hubUserId) {
+        if (hubClient.userId && this.ctx?.config?.sharing?.role === "hub") {
           const now = Date.now();
-          const existing = this.store.getHubMemoryBySource(hubUserId, chunk.id);
+          const existing = this.store.getHubMemoryBySource(hubClient.userId, chunk.id);
           this.store.upsertHubMemory({
             id: (response as any)?.memoryId ?? existing?.id ?? crypto.randomUUID(),
             sourceChunkId: chunk.id,
-            sourceUserId: hubUserId,
+            sourceUserId: hubClient.userId,
             role: chunk.role,
             content: chunk.content,
             summary: chunk.summary ?? "",
@@ -2620,21 +2624,22 @@ export class ViewerServer {
           const isClient = newEnabled && newRole === "client";
           if (wasClient && !isClient) {
             this.notifyHubLeave();
-            if (newRole !== "client") {
-              this.store.clearClientHubConnection();
-              this.log.info("Cleared client hub connection (role changed away from client)");
-            } else {
-              this.log.info("Sharing disabled but preserving client hub connection for re-enable");
+            const oldConn = this.store.getClientHubConnection();
+            if (oldConn) {
+              this.store.setClientHubConnection({ ...oldConn, userToken: "", lastKnownStatus: "left" });
             }
+            this.log.info("Client hub connection token cleared (sharing disabled or role changed), identity preserved");
           }
 
-          // Detect switching to a different Hub while still in client mode
           if (wasClient && isClient) {
             const newClientAddr = String((merged.client as Record<string, unknown>)?.hubAddress || "");
             if (newClientAddr && oldClientHubAddress && normalizeHubUrl(newClientAddr) !== normalizeHubUrl(oldClientHubAddress)) {
               this.notifyHubLeave();
-              this.store.clearClientHubConnection();
-              this.log.info("Cleared client hub connection (switched to different Hub)");
+              const oldConn = this.store.getClientHubConnection();
+              if (oldConn) {
+                this.store.setClientHubConnection({ ...oldConn, hubUrl: normalizeHubUrl(newClientAddr), userToken: "", lastKnownStatus: "hub_changed" });
+              }
+              this.log.info("Client hub connection token cleared (switched to different Hub), identity preserved");
             }
           }
 
@@ -2678,10 +2683,13 @@ export class ViewerServer {
     const nickname = String(clientCfg?.nickname || "");
     const username = nickname || os.userInfo().username || "user";
     const hostname = os.hostname() || "unknown";
+    const persisted = this.store.getClientHubConnection();
+    const existingIdentityKey = persisted?.identityKey || "";
     const result = await hubRequestJson(hubUrl, "", "/api/v1/hub/join", {
       method: "POST",
-      body: JSON.stringify({ teamToken, username, deviceName: hostname }),
+      body: JSON.stringify({ teamToken, username, deviceName: hostname, identityKey: existingIdentityKey }),
     }) as any;
+    const returnedIdentityKey = String(result.identityKey || existingIdentityKey || "");
     this.store.setClientHubConnection({
       hubUrl,
       userId: String(result.userId || ""),
@@ -2689,6 +2697,8 @@ export class ViewerServer {
       userToken: result.userToken || "",
       role: "member",
       connectedAt: Date.now(),
+      identityKey: returnedIdentityKey,
+      lastKnownStatus: result.status || "",
     });
     this.log.info(`Auto-join on save: status=${result.status}, userId=${result.userId}`);
     if (result.userToken) {
@@ -2776,10 +2786,10 @@ export class ViewerServer {
               this.log.warn(`Failed to update hub-auth.json: ${e}`);
             }
           } else {
-            const persisted = this.store.getClientHubConnection();
-            if (persisted) {
+            const persistedConn = this.store.getClientHubConnection();
+            if (persistedConn) {
               this.store.setClientHubConnection({
-                ...persisted,
+                ...persistedConn,
                 username: result.username,
                 userToken: result.userToken,
               });

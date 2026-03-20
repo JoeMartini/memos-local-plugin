@@ -252,6 +252,10 @@ export interface SkillEvolutionConfig {
   minConfidence?: number;
   maxSkillLines?: number;
   autoInstall?: boolean;
+  autoRecallSkills?: boolean;
+  autoRecallSkillLimit?: number;
+  preferUpgradeExisting?: boolean;
+  redactSensitiveInSkill?: boolean;
   /** Optional independent LLM config for skill evaluation/validation. Falls back to main summarizer if not set. */
   summarizer?: SummarizerConfig;
 }
@@ -347,6 +351,10 @@ export const DEFAULTS = {
   skillMinConfidence: 0.7,
   skillMaxLines: 400,
   skillAutoInstall: false,
+  skillAutoRecall: true,
+  skillAutoRecallLimit: 2,
+  skillPreferUpgrade: true,
+  skillRedactSensitive: true,
 } as const;
 
 // ─── Plugin Hooks (OpenClaw integration) ───

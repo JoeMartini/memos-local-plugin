@@ -114,6 +114,8 @@ export class SqliteStore {
     this.migrateHubTables();
     this.migrateHubFtsToTrigram();
     this.migrateLocalSharedTasksOwner();
+    this.migrateHubUserIdentityFields();
+    this.migrateClientHubConnectionIdentityFields();
     this.log.debug("Database schema initialized");
   }
 
@@ -127,6 +129,49 @@ export class SqliteStore {
       if (cols.length > 0 && !cols.some((c) => c.name === "original_owner")) {
         this.db.exec("ALTER TABLE local_shared_tasks ADD COLUMN original_owner TEXT NOT NULL DEFAULT 'agent:main'");
         this.log.info("Migrated: added original_owner column to local_shared_tasks");
+      }
+    } catch { /* table may not exist yet */ }
+  }
+
+  private migrateHubUserIdentityFields(): void {
+    try {
+      const cols = this.db.prepare("PRAGMA table_info(hub_users)").all() as Array<{ name: string }>;
+      if (cols.length === 0) return;
+      if (!cols.some(c => c.name === "identity_key")) {
+        this.db.exec("ALTER TABLE hub_users ADD COLUMN identity_key TEXT NOT NULL DEFAULT ''");
+        this.db.exec("CREATE INDEX IF NOT EXISTS idx_hub_users_identity_key ON hub_users(identity_key)");
+        this.log.info("Migrated: added identity_key to hub_users");
+      }
+      if (!cols.some(c => c.name === "left_at")) {
+        this.db.exec("ALTER TABLE hub_users ADD COLUMN left_at INTEGER");
+        this.log.info("Migrated: added left_at to hub_users");
+      }
+      if (!cols.some(c => c.name === "removed_at")) {
+        this.db.exec("ALTER TABLE hub_users ADD COLUMN removed_at INTEGER");
+        this.log.info("Migrated: added removed_at to hub_users");
+      }
+      if (!cols.some(c => c.name === "rejected_at")) {
+        this.db.exec("ALTER TABLE hub_users ADD COLUMN rejected_at INTEGER");
+        this.log.info("Migrated: added rejected_at to hub_users");
+      }
+      if (!cols.some(c => c.name === "rejoin_requested_at")) {
+        this.db.exec("ALTER TABLE hub_users ADD COLUMN rejoin_requested_at INTEGER");
+        this.log.info("Migrated: added rejoin_requested_at to hub_users");
+      }
+    } catch { /* table may not exist yet */ }
+  }
+
+  private migrateClientHubConnectionIdentityFields(): void {
+    try {
+      const cols = this.db.prepare("PRAGMA table_info(client_hub_connection)").all() as Array<{ name: string }>;
+      if (cols.length === 0) return;
+      if (!cols.some(c => c.name === "identity_key")) {
+        this.db.exec("ALTER TABLE client_hub_connection ADD COLUMN identity_key TEXT NOT NULL DEFAULT ''");
+        this.log.info("Migrated: added identity_key to client_hub_connection");
+      }
+      if (!cols.some(c => c.name === "last_known_status")) {
+        this.db.exec("ALTER TABLE client_hub_connection ADD COLUMN last_known_status TEXT NOT NULL DEFAULT ''");
+        this.log.info("Migrated: added last_known_status to client_hub_connection");
       }
     } catch { /* table may not exist yet */ }
   }
@@ -761,6 +806,20 @@ export class SqliteStore {
       );
       CREATE INDEX IF NOT EXISTS idx_hub_users_status ON hub_users(status);
       CREATE INDEX IF NOT EXISTS idx_hub_users_role ON hub_users(role);
+
+      CREATE TABLE IF NOT EXISTS hub_groups (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        created_at  INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS hub_group_members (
+        group_id   TEXT NOT NULL REFERENCES hub_groups(id) ON DELETE CASCADE,
+        user_id    TEXT NOT NULL REFERENCES hub_users(id) ON DELETE CASCADE,
+        joined_at  INTEGER NOT NULL,
+        PRIMARY KEY (group_id, user_id)
+      );
 
       CREATE TABLE IF NOT EXISTS hub_tasks (
         id             TEXT PRIMARY KEY,
@@ -1731,16 +1790,18 @@ export class SqliteStore {
 
   setClientHubConnection(conn: ClientHubConnection): void {
     this.db.prepare(`
-      INSERT INTO client_hub_connection (id, hub_url, user_id, username, user_token, role, connected_at)
-      VALUES (1, ?, ?, ?, ?, ?, ?)
+      INSERT INTO client_hub_connection (id, hub_url, user_id, username, user_token, role, connected_at, identity_key, last_known_status)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         hub_url = excluded.hub_url,
         user_id = excluded.user_id,
         username = excluded.username,
         user_token = excluded.user_token,
         role = excluded.role,
-        connected_at = excluded.connected_at
-    `).run(conn.hubUrl, conn.userId, conn.username, conn.userToken, conn.role, conn.connectedAt);
+        connected_at = excluded.connected_at,
+        identity_key = excluded.identity_key,
+        last_known_status = excluded.last_known_status
+    `).run(conn.hubUrl, conn.userId, conn.username, conn.userToken, conn.role, conn.connectedAt, conn.identityKey ?? "", conn.lastKnownStatus ?? "");
   }
 
   getClientHubConnection(): ClientHubConnection | null {
@@ -1847,8 +1908,8 @@ export class SqliteStore {
 
   upsertHubUser(user: HubUserRecord): void {
     this.db.prepare(`
-      INSERT INTO hub_users (id, username, device_name, role, status, token_hash, created_at, approved_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO hub_users (id, username, device_name, role, status, token_hash, created_at, approved_at, identity_key, left_at, removed_at, rejected_at, rejoin_requested_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         username = excluded.username,
         device_name = excluded.device_name,
@@ -1856,21 +1917,32 @@ export class SqliteStore {
         status = excluded.status,
         token_hash = excluded.token_hash,
         created_at = excluded.created_at,
-        approved_at = excluded.approved_at
-    `).run(user.id, user.username, user.deviceName ?? "", user.role, user.status, user.tokenHash, user.createdAt, user.approvedAt);
+        approved_at = excluded.approved_at,
+        identity_key = excluded.identity_key,
+        left_at = excluded.left_at,
+        removed_at = excluded.removed_at,
+        rejected_at = excluded.rejected_at,
+        rejoin_requested_at = excluded.rejoin_requested_at
+    `).run(user.id, user.username, user.deviceName ?? "", user.role, user.status, user.tokenHash, user.createdAt, user.approvedAt, user.identityKey ?? "", user.leftAt ?? null, user.removedAt ?? null, user.rejectedAt ?? null, user.rejoinRequestedAt ?? null);
   }
 
   getHubUser(userId: string): HubUserRecord | null {
     const row = this.db.prepare('SELECT * FROM hub_users WHERE id = ?').get(userId) as HubUserRow | undefined;
     if (!row) return null;
-    return rowToHubUser(row);
+    const user = rowToHubUser(row);
+    user.groups = this.getGroupsForHubUser(userId);
+    return user;
   }
 
   listHubUsers(status?: UserStatus): HubUserRecord[] {
     const rows = status
       ? this.db.prepare('SELECT * FROM hub_users WHERE status = ? ORDER BY created_at').all(status) as HubUserRow[]
       : this.db.prepare('SELECT * FROM hub_users ORDER BY created_at').all() as HubUserRow[];
-    return rows.map(rowToHubUser);
+    return rows.map(r => {
+      const user = rowToHubUser(r);
+      user.groups = this.getGroupsForHubUser(r.id);
+      return user;
+    });
   }
 
   deleteHubUser(userId: string, cleanResources = false): boolean {
@@ -1881,12 +1953,52 @@ export class SqliteStore {
       const result = this.db.prepare('DELETE FROM hub_users WHERE id = ?').run(userId);
       return result.changes > 0;
     }
-    const result = this.db.prepare("UPDATE hub_users SET status = 'removed', token_hash = '' WHERE id = ?").run(userId);
+    const result = this.db.prepare("UPDATE hub_users SET status = 'removed', token_hash = '', removed_at = ? WHERE id = ?").run(Date.now(), userId);
+    return result.changes > 0;
+  }
+
+  findHubUserByIdentityKey(identityKey: string): HubUserRecord | null {
+    if (!identityKey) return null;
+    const row = this.db.prepare('SELECT * FROM hub_users WHERE identity_key = ?').get(identityKey) as HubUserRow | undefined;
+    return row ? rowToHubUser(row) : null;
+  }
+
+  markHubUserLeft(userId: string): boolean {
+    const result = this.db.prepare("UPDATE hub_users SET status = 'left', token_hash = '', left_at = ? WHERE id = ?").run(Date.now(), userId);
     return result.changes > 0;
   }
 
   updateHubUserActivity(userId: string, ip: string, timestamp?: number): void {
     this.db.prepare('UPDATE hub_users SET last_ip = ?, last_active_at = ? WHERE id = ?').run(ip, timestamp ?? Date.now(), userId);
+  }
+
+  // ─── Hub Groups ───
+
+  upsertHubGroup(group: { id: string; name: string; description?: string; createdAt: number }): void {
+    this.db.prepare(`
+      INSERT INTO hub_groups (id, name, description, created_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description
+    `).run(group.id, group.name, group.description ?? "", group.createdAt);
+  }
+
+  addHubGroupMember(groupId: string, userId: string, joinedAt: number): void {
+    this.db.prepare(`
+      INSERT OR IGNORE INTO hub_group_members (group_id, user_id, joined_at)
+      VALUES (?, ?, ?)
+    `).run(groupId, userId, joinedAt);
+  }
+
+  removeHubGroupMember(groupId: string, userId: string): void {
+    this.db.prepare('DELETE FROM hub_group_members WHERE group_id = ? AND user_id = ?').run(groupId, userId);
+  }
+
+  getGroupsForHubUser(userId: string): Array<{ id: string; name: string; description: string }> {
+    return this.db.prepare(`
+      SELECT g.id, g.name, g.description FROM hub_groups g
+      JOIN hub_group_members m ON m.group_id = g.id
+      WHERE m.user_id = ?
+    `).all(userId) as Array<{ id: string; name: string; description: string }>;
   }
 
   getHubUserContributions(): Record<string, { memoryCount: number; taskCount: number; skillCount: number }> {
@@ -2017,16 +2129,21 @@ export class SqliteStore {
     const limit = options?.maxResults ?? 10;
     const userId = options?.userId ?? "";
     const rows = this.db.prepare(`
-      SELECT hc.id, hc.content, hc.summary, hc.role, hc.created_at, ht.title as task_title, ht.visibility, '' as group_name, hu.username as owner_name,
+      SELECT hc.id, hc.content, hc.summary, hc.role, hc.created_at, ht.title as task_title, ht.visibility,
+             COALESCE(hg.name, '') as group_name, hu.username as owner_name,
              bm25(hub_chunks_fts) as rank
       FROM hub_chunks_fts f
       JOIN hub_chunks hc ON hc.rowid = f.rowid
       JOIN hub_tasks ht ON ht.id = hc.hub_task_id
       LEFT JOIN hub_users hu ON hu.id = ht.source_user_id
+      LEFT JOIN hub_groups hg ON hg.id = ht.group_id
       WHERE hub_chunks_fts MATCH ?
+        AND (ht.visibility = 'public'
+             OR ht.source_user_id = ?
+             OR EXISTS (SELECT 1 FROM hub_group_members gm WHERE gm.group_id = ht.group_id AND gm.user_id = ?))
       ORDER BY rank
       LIMIT ?
-    `).all(sanitizeFtsQuery(query), limit) as HubSearchRow[];
+    `).all(sanitizeFtsQuery(query), userId, userId, limit) as HubSearchRow[];
     return rows.map((row, idx) => ({ hit: row, rank: idx + 1 }));
   }
 
@@ -2051,7 +2168,10 @@ export class SqliteStore {
       FROM hub_embeddings he
       JOIN hub_chunks hc ON hc.id = he.chunk_id
       JOIN hub_tasks ht ON ht.id = hc.hub_task_id
-    `).all() as Array<{ chunk_id: string; vector: Buffer; dimensions: number }>;
+      WHERE ht.visibility = 'public'
+        OR ht.source_user_id = ?
+        OR EXISTS (SELECT 1 FROM hub_group_members gm WHERE gm.group_id = ht.group_id AND gm.user_id = ?)
+    `).all(userId, userId) as Array<{ chunk_id: string; vector: Buffer; dimensions: number }>;
     return rows.map(r => ({
       chunkId: r.chunk_id,
       vector: new Float32Array(r.vector.buffer, r.vector.byteOffset, r.dimensions),
@@ -2060,14 +2180,19 @@ export class SqliteStore {
 
   getVisibleHubSearchHitByChunkId(chunkId: string, userId: string): HubSearchRow | null {
     const row = this.db.prepare(`
-      SELECT hc.id, hc.content, hc.summary, hc.role, hc.created_at, ht.title as task_title, ht.visibility, '' as group_name, hu.username as owner_name,
+      SELECT hc.id, hc.content, hc.summary, hc.role, hc.created_at, ht.title as task_title, ht.visibility,
+             COALESCE(hg.name, '') as group_name, hu.username as owner_name,
              0 as rank
       FROM hub_chunks hc
       JOIN hub_tasks ht ON ht.id = hc.hub_task_id
       LEFT JOIN hub_users hu ON hu.id = ht.source_user_id
+      LEFT JOIN hub_groups hg ON hg.id = ht.group_id
       WHERE hc.id = ?
+        AND (ht.visibility = 'public'
+             OR ht.source_user_id = ?
+             OR EXISTS (SELECT 1 FROM hub_group_members gm WHERE gm.group_id = ht.group_id AND gm.user_id = ?))
       LIMIT 1
-    `).get(chunkId) as HubSearchRow | undefined;
+    `).get(chunkId, userId, userId) as HubSearchRow | undefined;
     return row ?? null;
   }
 
@@ -2561,6 +2686,8 @@ interface ClientHubConnection {
   userToken: string;
   role: UserRole;
   connectedAt: number;
+  identityKey?: string;
+  lastKnownStatus?: string;
 }
 
 interface ClientHubConnectionRow {
@@ -2570,6 +2697,8 @@ interface ClientHubConnectionRow {
   user_token: string;
   role: string;
   connected_at: number;
+  identity_key?: string;
+  last_known_status?: string;
 }
 
 function rowToClientHubConnection(row: ClientHubConnectionRow): ClientHubConnection {
@@ -2580,6 +2709,8 @@ function rowToClientHubConnection(row: ClientHubConnectionRow): ClientHubConnect
     userToken: row.user_token,
     role: row.role as UserRole,
     connectedAt: row.connected_at,
+    identityKey: row.identity_key || "",
+    lastKnownStatus: row.last_known_status || "",
   };
 }
 
@@ -2589,6 +2720,11 @@ interface HubUserRecord extends UserInfo {
   approvedAt: number | null;
   lastIp: string;
   lastActiveAt: number | null;
+  identityKey?: string;
+  leftAt?: number | null;
+  removedAt?: number | null;
+  rejectedAt?: number | null;
+  rejoinRequestedAt?: number | null;
 }
 
 interface HubUserRow {
@@ -2602,6 +2738,11 @@ interface HubUserRow {
   approved_at: number | null;
   last_ip: string;
   last_active_at: number | null;
+  identity_key?: string;
+  left_at?: number | null;
+  removed_at?: number | null;
+  rejected_at?: number | null;
+  rejoin_requested_at?: number | null;
 }
 
 function rowToHubUser(row: HubUserRow): HubUserRecord {
@@ -2617,6 +2758,11 @@ function rowToHubUser(row: HubUserRow): HubUserRecord {
     approvedAt: row.approved_at,
     lastIp: row.last_ip || "",
     lastActiveAt: row.last_active_at ?? null,
+    identityKey: row.identity_key || "",
+    leftAt: row.left_at ?? null,
+    removedAt: row.removed_at ?? null,
+    rejectedAt: row.rejected_at ?? null,
+    rejoinRequestedAt: row.rejoin_requested_at ?? null,
   };
 }
 

@@ -12,7 +12,7 @@ import type {
 export type HubScope = "local" | "group" | "all";
 export type SharedVisibility = "group" | "public";
 export type UserRole = "admin" | "member";
-export type UserStatus = "pending" | "active" | "blocked" | "rejected" | "removed";
+export type UserStatus = "pending" | "active" | "blocked" | "rejected" | "removed" | "left";
 
 export type { ClientModeConfig, HubModeConfig, SharingCapabilities, SharingConfig, SharingRole };
 

@@ -319,6 +319,21 @@ const memosLocalPlugin = {
                 candidates: det.candidates,
                 filtered: det.hits ?? det.filtered ?? [],
               });
+            } else if (det && det.local && det.hub) {
+              const localHits = det.local?.hits ?? [];
+              const hubHits = (det.hub?.hits ?? []).map((h: any) => ({
+                score: h.score ?? 0,
+                role: h.source?.role ?? h.role ?? "assistant",
+                summary: h.summary ?? "",
+                original_excerpt: h.excerpt ?? h.summary ?? "",
+                origin: "hub-remote",
+                ownerName: h.ownerName ?? "",
+                groupName: h.groupName ?? "",
+              }));
+              outputText = JSON.stringify({
+                candidates: [...localHits, ...hubHits],
+                filtered: [...localHits, ...hubHits],
+              });
             } else {
               outputText = result?.content?.[0]?.text ?? JSON.stringify(result ?? "");
             }
@@ -371,27 +386,29 @@ const memosLocalPlugin = {
         }),
       }) as { memoryId?: string; visibility?: "public" | "group" };
 
-      const now = Date.now();
-      const existing = store.getHubMemoryBySource(hubClient.userId, chunk.id);
-      store.upsertHubMemory({
-        id: response?.memoryId ?? existing?.id ?? `${chunk.id}-hub`,
-        sourceChunkId: chunk.id,
-        sourceUserId: hubClient.userId,
-        role: chunk.role,
-        content: chunk.content,
-        summary: chunk.summary ?? "",
-        kind: chunk.kind,
-        groupId,
-        visibility,
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: now,
-      });
+      const memoryId = response?.memoryId ?? `${chunk.id}-hub`;
 
-      return {
-        memoryId: response?.memoryId ?? existing?.id ?? `${chunk.id}-hub`,
-        visibility,
-        groupId,
-      };
+      // Only persist hub_memories locally in Hub mode where this DB owns the data.
+      // Client mode relies on the remote Hub for storage and search.
+      if (ctx.config.sharing?.role === "hub") {
+        const now = Date.now();
+        const existing = store.getHubMemoryBySource(hubClient.userId, chunk.id);
+        store.upsertHubMemory({
+          id: memoryId,
+          sourceChunkId: chunk.id,
+          sourceUserId: hubClient.userId,
+          role: chunk.role,
+          content: chunk.content,
+          summary: chunk.summary ?? "",
+          kind: chunk.kind,
+          groupId,
+          visibility,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+        });
+      }
+
+      return { memoryId, visibility, groupId };
     };
 
     const unshareMemoryFromHub = async (
@@ -520,6 +537,7 @@ const memosLocalPlugin = {
               role: h.source.role,
               score: h.score,
               summary: h.summary,
+              origin: h.origin || "local",
             };
           });
 
@@ -666,6 +684,7 @@ const memosLocalPlugin = {
                   score: h.score,
                   summary: h.summary,
                   original_excerpt: (h.original_excerpt ?? "").slice(0, 200),
+                  origin: h.origin || "local",
                 };
               }),
               meta: result.meta,
@@ -1115,10 +1134,31 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
             };
           }
 
+          const manifest = skillInstaller.getCompanionManifest(resolvedSkillId);
+          let footer = "\n\n---\n";
+
+          if (manifest && manifest.hasCompanionFiles) {
+            const fileSummary = manifest.files
+              .filter(f => f.type !== "eval")
+              .map(f => `\`${f.relativePath}\``)
+              .join(", ");
+            footer += `**Companion files available:** ${fileSummary}\n`;
+            footer += `→ call \`skill_files(skillId="${resolvedSkillId}")\` to list all files\n`;
+            footer += `→ call \`skill_file_get(skillId="${resolvedSkillId}", path="...")\` to read a specific file\n`;
+            if (manifest.installMode === "install_recommended") {
+              footer += `→ **Recommended:** call \`skill_install(skillId="${resolvedSkillId}")\` for persistent workspace access (many/large files)\n`;
+            }
+            if (manifest.installed && manifest.installedPath) {
+              footer += `> Already installed at: ${manifest.installedPath}/\n`;
+            }
+          } else {
+            footer += `To install this skill for persistent use: call skill_install(skillId="${resolvedSkillId}")`;
+          }
+
           return {
             content: [{
               type: "text",
-              text: `## Skill: ${skill.name} (v${skill.version})\n\n${sv.content}\n\n---\nTo install this skill for persistent use: call skill_install(skillId="${resolvedSkillId}")`,
+              text: `## Skill: ${skill.name} (v${skill.version})\n\n${sv.content}${footer}`,
             }],
             details: {
               skillId: skill.id,
@@ -1126,6 +1166,8 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
               version: skill.version,
               status: skill.status,
               installed: skill.installed,
+              companionFiles: manifest?.hasCompanionFiles ?? false,
+              installMode: manifest?.installMode ?? "inline",
             },
           };
         }),
@@ -1159,6 +1201,112 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
         }),
       },
       { name: "skill_install" },
+    );
+
+    // ─── Tool: skill_files ───
+
+    api.registerTool(
+      {
+        name: "skill_files",
+        label: "List Skill Companion Files",
+        description:
+          "List companion files (scripts, references, evals) for a skill. " +
+          "Use this after skill_get to see what additional files are available. " +
+          "Returns file names, sizes, and whether the skill recommends installation.",
+        parameters: Type.Object({
+          skillId: Type.String({ description: "The skill_id to inspect" }),
+        }),
+        execute: trackTool("skill_files", async (_toolCallId: any, params: any) => {
+          const { skillId } = params as { skillId: string };
+          ctx.log.debug(`skill_files called for skill=${skillId}`);
+
+          const manifest = skillInstaller.getCompanionManifest(skillId);
+          if (!manifest) {
+            return {
+              content: [{ type: "text", text: `Skill not found: ${skillId}` }],
+              details: { error: "not_found" },
+            };
+          }
+
+          if (!manifest.hasCompanionFiles) {
+            return {
+              content: [{ type: "text", text: "This skill has no companion files (scripts, references). The SKILL.md from skill_get contains everything." }],
+              details: manifest,
+            };
+          }
+
+          const lines: string[] = [`## Companion Files (${manifest.files.length} files, ${Math.round(manifest.totalSize / 1024)}KB total)\n`];
+          if (manifest.scriptsCount > 0) {
+            lines.push(`### Scripts (${manifest.scriptsCount})`);
+            for (const f of manifest.files.filter(f => f.type === "script")) {
+              lines.push(`- \`${f.relativePath}\` (${f.size} bytes) → call \`skill_file_get(skillId="${skillId}", path="${f.relativePath}")\``);
+            }
+          }
+          if (manifest.referencesCount > 0) {
+            lines.push(`\n### References (${manifest.referencesCount})`);
+            for (const f of manifest.files.filter(f => f.type === "reference")) {
+              lines.push(`- \`${f.relativePath}\` (${f.size} bytes) → call \`skill_file_get(skillId="${skillId}", path="${f.relativePath}")\``);
+            }
+          }
+          if (manifest.evalsCount > 0) {
+            lines.push(`\n### Evals (${manifest.evalsCount})`);
+            for (const f of manifest.files.filter(f => f.type === "eval")) {
+              lines.push(`- \`${f.relativePath}\` (${f.size} bytes)`);
+            }
+          }
+
+          if (manifest.installMode === "install_recommended") {
+            lines.push(`\n> **Recommendation:** This skill has many/large companion files. Consider \`skill_install(skillId="${skillId}")\` for persistent workspace access.`);
+          }
+          if (manifest.installed && manifest.installedPath) {
+            lines.push(`\n> **Installed at:** ${manifest.installedPath}/`);
+          }
+
+          return {
+            content: [{ type: "text", text: lines.join("\n") }],
+            details: manifest,
+          };
+        }),
+      },
+      { name: "skill_files" },
+    );
+
+    // ─── Tool: skill_file_get ───
+
+    api.registerTool(
+      {
+        name: "skill_file_get",
+        label: "Get Skill Companion File",
+        description:
+          "Read the content of a specific companion file (script, reference) from a skill. " +
+          "Use after skill_files to retrieve a script or reference document. " +
+          "Pass the relative path like 'scripts/deploy.sh' or 'references/api-notes.md'.",
+        parameters: Type.Object({
+          skillId: Type.String({ description: "The skill_id" }),
+          path: Type.String({ description: "Relative path within the skill, e.g. 'scripts/deploy.sh'" }),
+        }),
+        execute: trackTool("skill_file_get", async (_toolCallId: any, params: any) => {
+          const { skillId, path: filePath } = params as { skillId: string; path: string };
+          ctx.log.debug(`skill_file_get called for skill=${skillId} path=${filePath}`);
+
+          const result = skillInstaller.readCompanionFile(skillId, filePath);
+          if ("error" in result) {
+            return {
+              content: [{ type: "text", text: `Error: ${result.error}` }],
+              details: result,
+            };
+          }
+
+          const ext = filePath.split(".").pop() || "";
+          const lang = { sh: "bash", py: "python", ts: "typescript", js: "javascript", json: "json", md: "markdown", yml: "yaml", yaml: "yaml" }[ext] || "";
+
+          return {
+            content: [{ type: "text", text: `## ${filePath}\n\n\`\`\`${lang}\n${result.content}\n\`\`\`` }],
+            details: { path: filePath, size: result.size },
+          };
+        }),
+      },
+      { name: "skill_file_get" },
     );
 
     // ─── Tool: memory_viewer ───
@@ -1671,10 +1819,40 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
 
         const result = await engine.search({ query, maxResults: 10, minScore: 0.45, ownerFilter: recallOwnerFilter });
         if (result.hits.length === 0) {
-          ctx.log.debug("auto-recall: no candidates found");
+          ctx.log.debug("auto-recall: no memory candidates found");
           const dur = performance.now() - recallT0;
           store.recordToolCall("memory_search", dur, true);
           store.recordApiLog("memory_search", { type: "auto_recall", query }, JSON.stringify({ candidates: [], filtered: [] }), dur, true);
+
+          // Even without memory hits, try skill recall
+          const skillAutoRecallEarly = ctx.config.skillEvolution?.autoRecallSkills ?? DEFAULTS.skillAutoRecall;
+          if (skillAutoRecallEarly) {
+            try {
+              const skillLimit = ctx.config.skillEvolution?.autoRecallSkillLimit ?? DEFAULTS.skillAutoRecallLimit;
+              const skillHits = await engine.searchSkills(query, "mix" as any, getCurrentOwner());
+              const topSkills = skillHits.slice(0, skillLimit);
+              if (topSkills.length > 0) {
+                const skillLines = topSkills.map((sc, i) => {
+                  const manifest = skillInstaller.getCompanionManifest(sc.skillId);
+                  let badge = "";
+                  if (manifest?.installed) badge = " [installed]";
+                  else if (manifest?.installMode === "install_recommended") badge = " [has scripts, install recommended]";
+                  else if (manifest?.hasCompanionFiles) badge = " [has companion files]";
+                  return `${i + 1}. **${sc.name}**${badge} — ${sc.description.slice(0, 200)}\n   → call \`skill_get(skillId="${sc.skillId}")\` for the full guide`;
+                });
+                const skillContext = "## Relevant skills from past experience\n\n" +
+                  "No direct memory matches were found, but these skills from past tasks may help:\n\n" +
+                  skillLines.join("\n\n") +
+                  "\n\nYou SHOULD call `skill_get` to retrieve the full guide before attempting the task.";
+                ctx.log.info(`auto-recall-skill (no-memory path): injecting ${topSkills.length} skill(s)`);
+                try { store.recordApiLog("skill_search", { type: "auto_recall_skill", query }, JSON.stringify(topSkills), dur, true); } catch { /* best-effort */ }
+                return { prependContext: skillContext };
+              }
+            } catch (err) {
+              ctx.log.debug(`auto-recall-skill (no-memory path): failed: ${err}`);
+            }
+          }
+
           if (query.length > 50) {
             const noRecallHint =
               "## Memory system — ACTION REQUIRED\n\n" +
@@ -1764,6 +1942,75 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
           lines.join("\n\n"),
         ];
         if (tipsText) contextParts.push(tipsText);
+
+        // ─── Skill auto-recall ───
+        const skillAutoRecall = ctx.config.skillEvolution?.autoRecallSkills ?? DEFAULTS.skillAutoRecall;
+        const skillLimit = ctx.config.skillEvolution?.autoRecallSkillLimit ?? DEFAULTS.skillAutoRecallLimit;
+        let skillSection = "";
+
+        if (skillAutoRecall) {
+          try {
+            const skillCandidateMap = new Map<string, { name: string; description: string; skillId: string; source: string }>();
+
+            // Source 1: direct skill search based on user query
+            try {
+              const directSkillHits = await engine.searchSkills(query, "mix" as any, getCurrentOwner());
+              for (const sh of directSkillHits.slice(0, skillLimit + 2)) {
+                if (!skillCandidateMap.has(sh.skillId)) {
+                  skillCandidateMap.set(sh.skillId, { name: sh.name, description: sh.description, skillId: sh.skillId, source: "query" });
+                }
+              }
+            } catch (err) {
+              ctx.log.debug(`auto-recall-skill: direct search failed: ${err}`);
+            }
+
+            // Source 2: skills linked to tasks from memory hits
+            const taskIds = new Set<string>();
+            for (const h of filteredHits) {
+              if (h.taskId) {
+                const t = store.getTask(h.taskId);
+                if (t && t.status !== "skipped") taskIds.add(h.taskId);
+              }
+            }
+            for (const tid of taskIds) {
+              const linked = store.getSkillsByTask(tid);
+              for (const rs of linked) {
+                if (!skillCandidateMap.has(rs.skill.id)) {
+                  skillCandidateMap.set(rs.skill.id, { name: rs.skill.name, description: rs.skill.description, skillId: rs.skill.id, source: `task:${tid}` });
+                }
+              }
+            }
+
+            const skillCandidates = [...skillCandidateMap.values()].slice(0, skillLimit);
+
+            if (skillCandidates.length > 0) {
+              const skillLines = skillCandidates.map((sc, i) => {
+                const manifest = skillInstaller.getCompanionManifest(sc.skillId);
+                let badge = "";
+                if (manifest?.installed) badge = " [installed]";
+                else if (manifest?.installMode === "install_recommended") badge = " [has scripts, install recommended]";
+                else if (manifest?.hasCompanionFiles) badge = " [has companion files]";
+                const action = `call \`skill_get(skillId="${sc.skillId}")\``;
+                return `${i + 1}. **${sc.name}**${badge} — ${sc.description.slice(0, 200)}\n   → ${action}`;
+              });
+              skillSection = "\n\n## Relevant skills from past experience\n\n" +
+                "The following skills were distilled from similar previous tasks. " +
+                "You SHOULD call `skill_get` to retrieve the full guide before attempting the task.\n\n" +
+                skillLines.join("\n\n");
+
+              ctx.log.info(`auto-recall-skill: injecting ${skillCandidates.length} skill(s): ${skillCandidates.map(s => s.name).join(", ")}`);
+              try {
+                store.recordApiLog("skill_search", { type: "auto_recall_skill", query }, JSON.stringify(skillCandidates), performance.now() - recallT0, true);
+              } catch { /* best-effort */ }
+            } else {
+              ctx.log.debug("auto-recall-skill: no matching skills found");
+            }
+          } catch (err) {
+            ctx.log.debug(`auto-recall-skill: failed: ${err}`);
+          }
+        }
+
+        if (skillSection) contextParts.push(skillSection);
         const context = contextParts.join("\n");
 
         const recallDur = performance.now() - recallT0;
@@ -1774,7 +2021,7 @@ Groups: ${groupNames.length > 0 ? groupNames.join(", ") : "(none)"}`,
         }), recallDur, true);
         telemetry.trackAutoRecall(filteredHits.length, recallDur);
 
-        ctx.log.info(`auto-recall: returning prependContext (${context.length} chars), sufficient=${sufficient}`);
+        ctx.log.info(`auto-recall: returning prependContext (${context.length} chars), sufficient=${sufficient}, skills=${skillSection ? "yes" : "no"}`);
 
         if (!sufficient) {
           const searchHint =
