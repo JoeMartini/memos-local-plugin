@@ -3,16 +3,18 @@
   "version": "2.0.0-beta.5",
   "description": "Reflect2Evolve memory plugin: layered L1/L2/L3 memory, reflection-weighted value backprop, cross-task policy induction, skill crystallization, three-tier retrieval. Adapters for OpenClaw and Hermes Agent via a shared algorithm core.",
   "type": "module",
-  "main": "core/index.ts",
+  "main": "dist/core/index.js",
+  "types": "dist/core/index.d.ts",
   "openclaw": {
     "id": "memos-local-plugin",
     "kind": "memory",
     "extensions": [
-      "./adapters/openclaw/index.ts"
+      "./dist/adapters/openclaw/index.js"
     ],
     "installDependencies": true
   },
   "files": [
+    "dist",
     "bridge.cts",
     "bridge",
     "core",
@@ -20,25 +22,26 @@
     "server",
     "adapters",
     "templates",
-    "web/dist",
-    "site/dist",
+    "web",
     "scripts",
     "install.sh",
     "install.ps1",
     "tsconfig.json",
+    "tsconfig.build.json",
     "tsconfig.web.json",
     "tsconfig.site.json",
     "README.md",
     "ARCHITECTURE.md",
     "CHANGELOG.md",
-    "AGENTS.md",
-    "docs"
+    "AGENTS.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-runtime-assets.cjs",
     "build:web": "vite build --config vite.config.ts",
     "build:site": "cd site && vite build",
+    "build:package": "npm run build && npm run build:web",
     "build:all": "npm run build && npm run build:web && npm run build:site",
+    "prepack": "npm run build:package",
     "dev": "tsc -p tsconfig.json --watch",
     "web:dev": "vite --config vite.config.ts",
     "site:dev": "vite --config site/vite.config.ts",
