@@ -15,10 +15,12 @@ import { api } from "../api/client";
 import { t } from "../stores/i18n";
 import { Icon } from "../components/Icon";
 import { Pager } from "../components/Pager";
+import { ShareScopePill } from "../components/ShareScopePill";
 import { route } from "../stores/router";
 import { clearEntryId, linkTo } from "../stores/cross-link";
 import type { WorldModelDTO } from "../api/types";
 import { areAllIdsSelected, toggleIdsInSelection } from "../utils/selection";
+import { loadHubSharingEnabled } from "../utils/share";
 
 interface WorldModelUsage {
   policies: Array<{
@@ -58,6 +60,12 @@ export function WorldModelsView() {
       return n;
     });
   };
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    void loadHubSharingEnabled({ force: true, signal: ctrl.signal });
+    return () => ctrl.abort();
+  }, []);
 
   const load = async (opts: { q: string; page: number }) => {
     setLoading(true);
@@ -199,6 +207,7 @@ export function WorldModelsView() {
                 <div class="mem-card__body">
                   <div class="mem-card__title">{m.title || "(untitled)"}</div>
                   <div class="mem-card__meta">
+                    <ShareScopePill scope={m.share?.scope} />
                     <span class="pill pill--info" title={t("worldModels.version.title")}>
                       v{m.version ?? 1}
                     </span>
@@ -432,6 +441,8 @@ function WorldModelDrawer({
                   {t(`status.${worldModel.status}` as "status.active")}
                 </span>
               </dd>
+              <dt class="muted">{t("memories.field.share")}</dt>
+              <dd><ShareScopePill scope={worldModel.share?.scope} /></dd>
               <dt class="muted">{t("memories.field.createdAt")}</dt>
               <dd>{new Date(worldModel.createdAt).toLocaleString()}</dd>
               <dt class="muted">{t("memories.field.updatedAt")}</dt>
