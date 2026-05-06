@@ -224,9 +224,13 @@ async function runAll(
     const noUsableChannel = !queryVec && !haveKeywordChannel;
 
     // Kick off the tiers in parallel — each resolves to its own list.
+    const wantTier1 = plan.wantTier1 && deps.config.tier1TopK > 0;
+    const wantTier2 = plan.wantTier2 && deps.config.tier2TopK > 0;
+    const wantTier3 = plan.wantTier3 && deps.config.tier3TopK > 0;
+
     const tier1Start = Date.now();
     const tier1Promise: Promise<SkillCandidate[]> =
-      plan.wantTier1 && !noUsableChannel
+      wantTier1 && !noUsableChannel
         ? runTier1(
             { repos: deps.repos, config: deps.config },
             {
@@ -241,7 +245,7 @@ async function runAll(
 
     const tier2Start = Date.now();
     const tier2Promise: Promise<{ traces: TraceCandidate[]; episodes: EpisodeCandidate[] }> =
-      plan.wantTier2 && !noUsableChannel
+      wantTier2 && !noUsableChannel
         ? runTier2(
             { repos: deps.repos, config: deps.config, now: deps.now },
             {
@@ -257,7 +261,7 @@ async function runAll(
 
     const tier3Start = Date.now();
     const tier3Promise: Promise<WorldModelCandidate[]> =
-      plan.wantTier3 && !noUsableChannel
+      wantTier3 && !noUsableChannel
         ? runTier3(
             { repos: deps.repos, config: deps.config },
             {
@@ -274,9 +278,9 @@ async function runAll(
       tier3Promise,
     ]);
 
-    const tier1LatencyMs = plan.wantTier1 ? Date.now() - tier1Start : 0;
-    const tier2LatencyMs = plan.wantTier2 ? Date.now() - tier2Start : 0;
-    const tier3LatencyMs = plan.wantTier3 ? Date.now() - tier3Start : 0;
+    const tier1LatencyMs = wantTier1 ? Date.now() - tier1Start : 0;
+    const tier2LatencyMs = wantTier2 ? Date.now() - tier2Start : 0;
+    const tier3LatencyMs = wantTier3 ? Date.now() - tier3Start : 0;
 
     const fuseStart = Date.now();
     const rawCandidateCount =
