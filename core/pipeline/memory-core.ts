@@ -93,6 +93,7 @@ import {
   ownerFromNamespace,
   isVisibleTo,
 } from "../runtime/namespace.js";
+import type { RetrievalConfig } from "../retrieval/types.js";
 
 // ─── Public bootstrap helpers ───────────────────────────────────────────────
 
@@ -1739,8 +1740,10 @@ export function createMemoryCore(
     ensureLive();
     const ns = query.namespace ?? activeNamespace;
     activeNamespace = ns;
+    const baseDeps = handle.retrievalDeps();
     const deps = {
-      ...handle.retrievalDeps(),
+      ...baseDeps,
+      config: applyTopKOverride(baseDeps.config, query.topK),
       namespace: ns,
       repos: wrapRetrievalRepos(handle.repos, ns),
     };
@@ -3733,6 +3736,25 @@ export function inferTier(
   if (kind === "skill") return 1;
   if (kind === "world-model") return 3;
   return 2;
+}
+
+function applyTopKOverride(
+  config: RetrievalConfig,
+  topK: RetrievalQueryDTO["topK"] | undefined,
+): RetrievalConfig {
+  if (!topK) return config;
+  return {
+    ...config,
+    tier1TopK: clampTopK(topK.tier1, config.tier1TopK),
+    tier2TopK: clampTopK(topK.tier2, config.tier2TopK),
+    tier3TopK: clampTopK(topK.tier3, config.tier3TopK),
+  };
+}
+
+function clampTopK(value: number | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(0, Math.trunc(value)), 100);
 }
 
 function eventTime(evt: unknown): number {

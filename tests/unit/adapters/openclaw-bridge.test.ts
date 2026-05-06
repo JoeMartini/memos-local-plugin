@@ -1366,6 +1366,47 @@ describe("registerOpenClawTools", () => {
     expect(res.totalMs).toBeGreaterThanOrEqual(0);
   });
 
+  it("memory_search maps per-tier topK params and keeps maxResults fallback", async () => {
+    const searchMemory = vi.fn(async () => ({
+      hits: [],
+      injectedContext: "",
+      tierLatencyMs: { tier1: 0, tier2: 0, tier3: 0 },
+    }));
+    const mc = { searchMemory } as unknown as MemoryCore;
+
+    const { api, tools } = collectTools();
+    registerOpenClawTools(api, {
+      agent: "openclaw",
+      core: mc,
+      log: silentLogger(),
+    });
+    const search = tools.find((t) => t.descriptor.name === "memory_search")!;
+
+    await search.descriptor.execute("toolCall_1", {
+      query: "anything",
+      maxResults: 7,
+      tier1topK: 2,
+      tier3topK: 0,
+    });
+    expect(searchMemory).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: "anything",
+        topK: { tier1: 2, tier2: 7, tier3: 0 },
+      }),
+    );
+
+    await search.descriptor.execute("toolCall_2", {
+      query: "fallback",
+      maxResults: 4,
+    });
+    expect(searchMemory).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: "fallback",
+        topK: { tier1: 4, tier2: 4, tier3: 4 },
+      }),
+    );
+  });
+
   it("registers tool shells before the async core is resolved", async () => {
     const mc = buildCore();
     await mc.init();
