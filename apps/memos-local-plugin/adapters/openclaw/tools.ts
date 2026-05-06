@@ -16,7 +16,7 @@
  */
 import { Type, type Static } from "@sinclair/typebox";
 
-import type { AgentKind, SkillId, TraceId } from "../../agent-contract/dto.js";
+import type { AgentKind, RuntimeNamespace, SkillId, TraceId } from "../../agent-contract/dto.js";
 import type { MemoryCore } from "../../agent-contract/memory-core.js";
 
 import { bridgeSessionId } from "./bridge.js";
@@ -109,6 +109,17 @@ function sessionFromCtx(ctx: OpenClawPluginToolContext | undefined): string | un
   return bridgeSessionId(agentId, sessionKey);
 }
 
+function namespaceFromCtx(ctx: OpenClawPluginToolContext | undefined): RuntimeNamespace {
+  const profileId = (ctx?.agentId || "main").trim() || "main";
+  return {
+    agentKind: "openclaw",
+    profileId,
+    profileLabel: profileId,
+    workspacePath: ctx?.workspaceDir || ctx?.agentDir,
+    sessionKey: ctx?.sessionKey,
+  };
+}
+
 async function resolveCore(opts: ToolsOptions): Promise<MemoryCore> {
   const core = opts.core ?? (await opts.getCore?.());
   if (!core) {
@@ -138,6 +149,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
         const sessionId = params.sessionScope ? sessionFromCtx(ctx) : undefined;
         const result = await core.searchMemory({
           agent: opts.agent,
+          namespace: namespaceFromCtx(ctx),
           sessionId: sessionId as never,
           query: params.query,
           topK: {
@@ -163,7 +175,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
 
   // ── memory_get ──
   api.registerTool(
-    (_ctx: OpenClawPluginToolContext): AgentToolDescriptor<typeof MemoryGetParams> => ({
+    (ctx: OpenClawPluginToolContext): AgentToolDescriptor<typeof MemoryGetParams> => ({
       name: "memory_get",
       label: "Memory Get",
       description:
@@ -174,7 +186,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
         const core = await resolveCore(opts);
         const kind = params.kind ?? "trace";
         if (kind === "trace") {
-          const trace = await core.getTrace(params.id as TraceId);
+          const trace = await core.getTrace(params.id as TraceId, namespaceFromCtx(ctx));
           if (!trace) return { found: false, kind, id: params.id, body: "", meta: {} };
           return {
             found: true,
@@ -196,7 +208,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
           };
         }
         if (kind === "policy") {
-          const policy = await core.getPolicy(params.id);
+          const policy = await core.getPolicy(params.id, namespaceFromCtx(ctx));
           if (!policy) return { found: false, kind, id: params.id, body: "", meta: {} };
           return {
             found: true,
@@ -213,7 +225,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
             },
           };
         }
-        const wm = await core.getWorldModel(params.id);
+        const wm = await core.getWorldModel(params.id, namespaceFromCtx(ctx));
         if (!wm) return { found: false, kind, id: params.id, body: "", meta: {} };
         return {
           found: true,
@@ -229,7 +241,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
 
   // ── memory_timeline ──
   api.registerTool(
-    (_ctx: OpenClawPluginToolContext): AgentToolDescriptor<typeof MemoryTimelineParams> => ({
+    (ctx: OpenClawPluginToolContext): AgentToolDescriptor<typeof MemoryTimelineParams> => ({
       name: "memory_timeline",
       label: "Memory Timeline",
       description:
@@ -238,7 +250,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
       parameters: MemoryTimelineParams,
       async execute(_toolCallId: string, params: MemoryTimelineParamsT) {
         const core = await resolveCore(opts);
-        const traces = await core.timeline({ episodeId: params.episodeId as never });
+        const traces = await core.timeline({ episodeId: params.episodeId as never, namespace: namespaceFromCtx(ctx) });
         const limited = traces.slice(0, params.limit ?? 20);
         return {
           episodeId: params.episodeId,
@@ -258,7 +270,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
 
   // ── skill_list ──
   api.registerTool(
-    (_ctx: OpenClawPluginToolContext): AgentToolDescriptor<typeof SkillListParams> => ({
+    (ctx: OpenClawPluginToolContext): AgentToolDescriptor<typeof SkillListParams> => ({
       name: "skill_list",
       label: "Skill List",
       description:
@@ -269,6 +281,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
         const skills = await core.listSkills({
           status: params.status,
           limit: params.limit,
+          namespace: namespaceFromCtx(ctx),
         });
         return {
           skills: skills.map((s) => ({
@@ -296,7 +309,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
   // only the world-model snippets so the agent can inject domain
   // knowledge on demand.
   api.registerTool(
-    (_ctx: OpenClawPluginToolContext): AgentToolDescriptor<typeof EnvironmentQueryParams> => ({
+    (ctx: OpenClawPluginToolContext): AgentToolDescriptor<typeof EnvironmentQueryParams> => ({
       name: "memory_environment",
       label: "Environment Knowledge",
       description:
@@ -314,7 +327,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
         // dump.
         const core = await resolveCore(opts);
         if (!query) {
-          const rows = await core.listWorldModels({ limit: cap, offset: 0 });
+          const rows = await core.listWorldModels({ limit: cap, offset: 0, namespace: namespaceFromCtx(ctx) });
           return {
             worldModels: rows.map((w) => ({
               id: w.id,
@@ -330,6 +343,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
         // cosine ranking apply, then keep only the tier-3 hits.
         const res = await core.searchMemory({
           agent: opts.agent,
+          namespace: namespaceFromCtx(ctx),
           query,
           topK: { tier1: 0, tier2: 0, tier3: cap },
         });
@@ -362,6 +376,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
           recordUse: true,
           recordTrial: true,
           sessionId: sessionFromCtx(ctx) as never,
+          namespace: namespaceFromCtx(ctx),
           toolCallId,
         });
         if (!skill) return { found: false, skill: null };

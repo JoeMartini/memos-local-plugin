@@ -42,6 +42,7 @@ import type {
   SubagentOutcomeDTO,
   TraceDTO,
   WorldModelDTO,
+  RuntimeNamespace,
 } from "../../agent-contract/dto.js";
 import type { CoreEvent } from "../../agent-contract/events.js";
 import type { LogRecord } from "../../agent-contract/log-record.js";
@@ -83,12 +84,21 @@ import {
 } from "../llm/host-bridge.js";
 
 import { createPipeline } from "./orchestrator.js";
+import { wrapRetrievalRepos } from "./retrieval-repos.js";
 import type { PipelineDeps, PipelineHandle } from "./types.js";
+import {
+  namespaceFromHints,
+  namespaceMeta,
+  normalizeNamespace,
+  ownerFromNamespace,
+  isVisibleTo,
+} from "../runtime/namespace.js";
 
 // ─── Public bootstrap helpers ───────────────────────────────────────────────
 
 export interface BootstrapOptions {
   agent: AgentKind;
+  namespace?: RuntimeNamespace;
   /** Optional pre-resolved home. If omitted, derived from `resolveHome`. */
   home?: ResolvedHome;
   /** Optional pre-resolved config. If omitted, we load from disk. */
@@ -152,6 +162,7 @@ export async function bootstrapMemoryCoreFull(
     channel: "core.pipeline.bootstrap",
     ctx: { agent: options.agent },
   });
+  const namespace = normalizeNamespace(options.namespace, options.agent);
 
   // 1. Storage.
   const db = openDb({ filepath: home.dbFile, agent: options.agent });
@@ -392,6 +403,7 @@ export async function bootstrapMemoryCoreFull(
     reflectLlm: reflectLlm ?? llm,
     embedder,
     log,
+    namespace,
     now: options.now,
   };
   const handle = createPipeline(deps);
@@ -442,6 +454,7 @@ export function createMemoryCore(
   const skillRunDurationBySkill = new Map<string, number>();
   const l2StartedAtByEpisode = new Map<string, number>();
   let l3StartedAt: number | null = null;
+  let activeNamespace = handle.namespace;
   // Most recent episode that triggered an L3 abstraction run. Set by
   // the L2 → L3 hop on `l2.policy.induced` / `l2.policy.updated`,
   // consumed by L3 lifecycle writers below. The L3 subscriber is
@@ -457,6 +470,37 @@ export function createMemoryCore(
         "memory-core is shut down",
       );
     }
+  }
+
+  function namespaceFor(
+    agent: AgentKind,
+    input?: { namespace?: RuntimeNamespace; contextHints?: Record<string, unknown>; meta?: Record<string, unknown> },
+  ): RuntimeNamespace {
+    return namespaceFromHints(agent, input?.contextHints ?? input?.meta, input?.namespace ?? activeNamespace);
+  }
+
+  function withNamespaceMeta(
+    agent: AgentKind,
+    meta?: Record<string, unknown>,
+    namespace?: RuntimeNamespace,
+  ): { meta: Record<string, unknown>; namespace: RuntimeNamespace } {
+    const ns = namespaceFromHints(agent, meta, namespace ?? handle.namespace);
+    return { namespace: ns, meta: { ...(meta ?? {}), ...namespaceMeta(ns) } };
+  }
+
+  function visibleToCurrent(row: {
+    ownerAgentKind?: AgentKind;
+    ownerProfileId?: string;
+    share?: { scope?: string | null } | null;
+  }, ns: RuntimeNamespace = activeNamespace): boolean {
+    return isVisibleTo(row, ns);
+  }
+
+  function ownedByCurrent(row: {
+    ownerAgentKind?: AgentKind;
+    ownerProfileId?: string;
+  }, ns: RuntimeNamespace = activeNamespace): boolean {
+    return row.ownerAgentKind === ns.agentKind && row.ownerProfileId === ns.profileId;
   }
 
   // ─── Stale topic auto-finalize ──
@@ -1092,6 +1136,7 @@ export function createMemoryCore(
       version: pkgVersion,
       uptimeMs: Date.now() - bootAt,
       agent: handle.agent,
+      namespace: activeNamespace,
       paths: {
         home: home.root,
         config: home.configFile,
@@ -1120,12 +1165,15 @@ export function createMemoryCore(
     agent: AgentKind;
     sessionId?: SessionId;
     meta?: Record<string, unknown>;
+    namespace?: RuntimeNamespace;
   }): Promise<SessionId> {
     ensureLive();
+    const { meta } = withNamespaceMeta(input.agent, input.meta, input.namespace);
+    activeNamespace = namespaceFromHints(input.agent, meta, input.namespace ?? activeNamespace);
     const snap = handle.sessionManager.openSession({
       id: input.sessionId,
       agent: input.agent,
-      meta: input.meta ?? {},
+      meta,
     });
     return snap.id as SessionId;
   }
@@ -1208,8 +1256,18 @@ export function createMemoryCore(
     const startedAt = Date.now();
     let ok = true;
     let packet: Awaited<ReturnType<typeof handle.onTurnStart>> | null = null;
+    const ns = namespaceFor(turn.agent, turn);
+    activeNamespace = ns;
+    const namespacedTurn = {
+      ...turn,
+      namespace: ns,
+      contextHints: {
+        ...(turn.contextHints ?? {}),
+        ...namespaceMeta(ns),
+      },
+    };
     try {
-      packet = await handle.onTurnStart(turn);
+      packet = await handle.onTurnStart(namespacedTurn);
 
       // The orchestrator stamps the *routed* session / episode id onto the
       // packet (V7 §0.1 may create, reopen, or migrate to a new session),
@@ -1218,6 +1276,7 @@ export function createMemoryCore(
       // `query.episodeId`, instead of having to keep their own cache.
       const query: RetrievalQueryDTO = {
         agent: turn.agent,
+        namespace: ns,
         sessionId: packet.sessionId,
         episodeId: packet.episodeId,
         query: turn.userText,
@@ -1298,7 +1357,16 @@ export function createMemoryCore(
     result: Parameters<MemoryCore["onTurnEnd"]>[0],
   ): Promise<{ traceId: string; episodeId: EpisodeId }> {
     ensureLive();
-    const outcome = await handle.onTurnEnd(result);
+      const ns = namespaceFor(result.agent, result);
+      activeNamespace = ns;
+      const outcome = await handle.onTurnEnd({
+        ...result,
+        namespace: ns,
+        contextHints: {
+          ...(result.contextHints ?? {}),
+          ...namespaceMeta(ns),
+        },
+      });
     // Return the real row id produced by the synchronous lite capture.
     // Feedback submits this id as a FK, so a synthetic placeholder would
     // cause SQLite "FOREIGN KEY constraint failed" later.
@@ -1327,6 +1395,7 @@ export function createMemoryCore(
     const id = randomUUID();
     const row: FeedbackRow = {
       id,
+      ...ownerFromNamespace(handle.namespace),
       ts,
       episodeId: feedback.episodeId ?? null,
       traceId: feedback.traceId ?? null,
@@ -1386,9 +1455,11 @@ export function createMemoryCore(
     const normalizedOutcome = outcome.outcome ?? (outcome.error ? "error" : "unknown");
     const childToolCalls = outcome.toolCalls ?? [];
 
-    await openSession({ agent: outcome.agent, sessionId: outcome.sessionId });
+    const ns = namespaceFor(outcome.agent, outcome);
+    await openSession({ agent: outcome.agent, sessionId: outcome.sessionId, namespace: ns });
     const recorded = await onTurnEnd({
       agent: outcome.agent,
+      namespace: ns,
       sessionId: outcome.sessionId,
       episodeId: outcome.episodeId ?? ("" as EpisodeId),
       agentText: `Subagent task: ${task}\n\nSubagent result: ${result}`,
@@ -1666,7 +1737,13 @@ export function createMemoryCore(
     query: RetrievalQueryDTO,
   ): Promise<RetrievalResultDTO> {
     ensureLive();
-    const deps = handle.retrievalDeps();
+    const ns = query.namespace ?? activeNamespace;
+    activeNamespace = ns;
+    const deps = {
+      ...handle.retrievalDeps(),
+      namespace: ns,
+      repos: wrapRetrievalRepos(handle.repos, ns),
+    };
     const { turnStartRetrieve } = await import("../retrieval/retrieve.js");
     const sessionId =
       query.sessionId ??
@@ -1709,6 +1786,7 @@ export function createMemoryCore(
       const result = await turnStartRetrieve(deps, {
         reason: "turn_start",
         agent: query.agent,
+        namespace: ns,
         sessionId,
         episodeId: query.episodeId,
         userText: query.query,
@@ -1803,10 +1881,11 @@ export function createMemoryCore(
     }
   }
 
-  async function getTrace(id: string): Promise<TraceDTO | null> {
+  async function getTrace(id: string, namespace?: RuntimeNamespace): Promise<TraceDTO | null> {
     ensureLive();
+    if (namespace) activeNamespace = namespace;
     const row = handle.repos.traces.getById(id);
-    return row ? traceRowToDTO(row, handle.repos.episodes.getById(row.episodeId)) : null;
+    return row && visibleToCurrent(row) ? traceRowToDTO(row, handle.repos.episodes.getById(row.episodeId)) : null;
   }
 
   async function updateTrace(
@@ -1820,7 +1899,7 @@ export function createMemoryCore(
   ): Promise<TraceDTO | null> {
     ensureLive();
     const existing = handle.repos.traces.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     handle.repos.traces.updateBody(id, patch);
     const updated = handle.repos.traces.getById(id);
     return updated
@@ -1831,7 +1910,7 @@ export function createMemoryCore(
   async function deleteTrace(id: string): Promise<{ deleted: boolean }> {
     ensureLive();
     const existing = handle.repos.traces.getById(id);
-    if (!existing) return { deleted: false };
+    if (!existing || !ownedByCurrent(existing)) return { deleted: false };
     handle.repos.traces.deleteById(id);
     return { deleted: true };
   }
@@ -1843,7 +1922,7 @@ export function createMemoryCore(
     // The viewer's bulk delete is low-frequency (dozens at a time).
     for (const id of ids) {
       const existing = handle.repos.traces.getById(id);
-      if (!existing) continue;
+      if (!existing || !ownedByCurrent(existing)) continue;
       handle.repos.traces.deleteById(id);
       deleted++;
     }
@@ -1853,14 +1932,14 @@ export function createMemoryCore(
   async function shareTrace(
     id: string,
     share: {
-      scope: "private" | "public" | "hub" | null;
+      scope: "private" | "local" | "public" | "hub" | null;
       target?: string | null;
       sharedAt?: number | null;
     },
   ): Promise<TraceDTO | null> {
     ensureLive();
     const existing = handle.repos.traces.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     handle.repos.traces.updateShare(id, share);
     const updated = handle.repos.traces.getById(id);
     return updated
@@ -1868,10 +1947,11 @@ export function createMemoryCore(
       : null;
   }
 
-  async function getPolicy(id: string): Promise<PolicyDTO | null> {
+  async function getPolicy(id: string, namespace?: RuntimeNamespace): Promise<PolicyDTO | null> {
     ensureLive();
+    if (namespace) activeNamespace = namespace;
     const row = handle.repos.policies.getById(id);
-    return row ? policyRowToDTO(row) : null;
+    return row && visibleToCurrent(row) ? policyRowToDTO(row) : null;
   }
 
   async function listPolicies(input?: {
@@ -1889,13 +1969,14 @@ export function createMemoryCore(
       limit: limit + offset + (needle ? 200 : 0),
       offset: 0,
     });
+    const visibleRows = rows.filter((r) => visibleToCurrent(r));
     const filtered = needle
-      ? rows.filter((r) =>
+      ? visibleRows.filter((r) =>
           (r.title + "\n" + r.trigger + "\n" + r.procedure)
             .toLowerCase()
             .includes(needle),
         )
-      : rows;
+      : visibleRows;
     return filtered.slice(offset, offset + limit).map(policyRowToDTO);
   }
 
@@ -1906,12 +1987,12 @@ export function createMemoryCore(
     ensureLive();
     const needle = (input?.q ?? "").trim().toLowerCase();
     if (!needle) {
-      return handle.repos.policies.count({ status: input?.status });
+      return handle.repos.policies.list({ status: input?.status, limit: 100_000 }).filter((r) => visibleToCurrent(r)).length;
     }
     // q is a client-side substring match; mirror `listPolicies` and
     // walk the full filtered result. Caller passes no limit/offset
     // so the natural list pages through everything.
-    const rows = handle.repos.policies.list({ status: input?.status });
+    const rows = handle.repos.policies.list({ status: input?.status }).filter((r) => visibleToCurrent(r));
     return rows.filter((r) =>
       (r.title + "\n" + r.trigger + "\n" + r.procedure)
         .toLowerCase()
@@ -1925,7 +2006,7 @@ export function createMemoryCore(
   ): Promise<PolicyDTO | null> {
     ensureLive();
     const existing = handle.repos.policies.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     handle.repos.policies.upsert({ ...existing, status, updatedAt: Date.now() });
     const updated = handle.repos.policies.getById(id);
     return updated ? policyRowToDTO(updated) : null;
@@ -1934,7 +2015,7 @@ export function createMemoryCore(
   async function deletePolicy(id: string): Promise<{ deleted: boolean }> {
     ensureLive();
     const existing = handle.repos.policies.getById(id);
-    if (!existing) return { deleted: false };
+    if (!existing || !ownedByCurrent(existing)) return { deleted: false };
     handle.repos.policies.deleteById(id);
     return { deleted: true };
   }
@@ -1945,7 +2026,7 @@ export function createMemoryCore(
   ): Promise<PolicyDTO | null> {
     ensureLive();
     const existing = handle.repos.policies.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     const current = existing.decisionGuidance;
     const nextPref = dedupeStrings([
       ...current.preference,
@@ -1970,17 +2051,18 @@ export function createMemoryCore(
     return updated ? policyRowToDTO(updated) : null;
   }
 
-  async function getWorldModel(id: string): Promise<WorldModelDTO | null> {
+  async function getWorldModel(id: string, namespace?: RuntimeNamespace): Promise<WorldModelDTO | null> {
     ensureLive();
+    if (namespace) activeNamespace = namespace;
     const row = handle.repos.worldModel.getById(id);
-    return row ? worldModelRowToDTO(row) : null;
+    return row && visibleToCurrent(row) ? worldModelRowToDTO(row) : null;
   }
 
   async function countWorldModels(input?: { q?: string }): Promise<number> {
     ensureLive();
     const needle = (input?.q ?? "").trim().toLowerCase();
-    if (!needle) return handle.repos.worldModel.count();
-    const rows = handle.repos.worldModel.list({});
+    const rows = handle.repos.worldModel.list({ limit: 100_000 }).filter((r) => visibleToCurrent(r));
+    if (!needle) return rows.length;
     return rows.filter((r) =>
       (r.title + "\n" + r.body).toLowerCase().includes(needle),
     ).length;
@@ -1990,8 +2072,10 @@ export function createMemoryCore(
     limit?: number;
     offset?: number;
     q?: string;
+    namespace?: RuntimeNamespace;
   }): Promise<WorldModelDTO[]> {
     ensureLive();
+    if (input?.namespace) activeNamespace = input.namespace;
     const limit = Math.max(1, Math.min(500, input?.limit ?? 50));
     const offset = Math.max(0, input?.offset ?? 0);
     const needle = (input?.q ?? "").trim().toLowerCase();
@@ -1999,18 +2083,19 @@ export function createMemoryCore(
       limit: limit + offset + (needle ? 200 : 0),
       offset: 0,
     });
+    const visibleRows = rows.filter((r) => visibleToCurrent(r));
     const filtered = needle
-      ? rows.filter((r) =>
+      ? visibleRows.filter((r) =>
           (r.title + "\n" + r.body).toLowerCase().includes(needle),
         )
-      : rows;
+      : visibleRows;
     return filtered.slice(offset, offset + limit).map(worldModelRowToDTO);
   }
 
   async function deleteWorldModel(id: string): Promise<{ deleted: boolean }> {
     ensureLive();
     const existing = handle.repos.worldModel.getById(id);
-    if (!existing) return { deleted: false };
+    if (!existing || !ownedByCurrent(existing)) return { deleted: false };
     handle.repos.worldModel.deleteById(id);
     return { deleted: true };
   }
@@ -2018,14 +2103,14 @@ export function createMemoryCore(
   async function sharePolicy(
     id: string,
     share: {
-      scope: "private" | "public" | "hub" | null;
+      scope: "private" | "local" | "public" | "hub" | null;
       target?: string | null;
       sharedAt?: number | null;
     },
   ): Promise<PolicyDTO | null> {
     ensureLive();
     const existing = handle.repos.policies.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     handle.repos.policies.updateShare(id, share);
     const updated = handle.repos.policies.getById(id);
     return updated ? policyRowToDTO(updated) : null;
@@ -2034,14 +2119,14 @@ export function createMemoryCore(
   async function shareWorldModel(
     id: string,
     share: {
-      scope: "private" | "public" | "hub" | null;
+      scope: "private" | "local" | "public" | "hub" | null;
       target?: string | null;
       sharedAt?: number | null;
     },
   ): Promise<WorldModelDTO | null> {
     ensureLive();
     const existing = handle.repos.worldModel.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     handle.repos.worldModel.updateShare(id, share);
     const updated = handle.repos.worldModel.getById(id);
     return updated ? worldModelRowToDTO(updated) : null;
@@ -2059,7 +2144,7 @@ export function createMemoryCore(
   ): Promise<PolicyDTO | null> {
     ensureLive();
     const existing = handle.repos.policies.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     handle.repos.policies.updateContent(id, patch);
     const updated = handle.repos.policies.getById(id);
     return updated ? policyRowToDTO(updated) : null;
@@ -2071,7 +2156,7 @@ export function createMemoryCore(
   ): Promise<WorldModelDTO | null> {
     ensureLive();
     const existing = handle.repos.worldModel.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     if (patch.title !== undefined || patch.body !== undefined) {
       handle.repos.worldModel.updateContent(id, {
         title: patch.title,
@@ -2088,7 +2173,7 @@ export function createMemoryCore(
   async function archiveWorldModel(id: string): Promise<WorldModelDTO | null> {
     ensureLive();
     const existing = handle.repos.worldModel.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     if (existing.status !== "archived") {
       handle.repos.worldModel.setStatus(id, "archived", Date.now());
     }
@@ -2099,7 +2184,7 @@ export function createMemoryCore(
   async function unarchiveWorldModel(id: string): Promise<WorldModelDTO | null> {
     ensureLive();
     const existing = handle.repos.worldModel.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     if (existing.status === "archived") {
       handle.repos.worldModel.setStatus(id, "active", Date.now());
     }
@@ -2118,14 +2203,14 @@ export function createMemoryCore(
       limit: input.limit ?? 50,
       offset: input.offset ?? 0,
     });
-    return rows.map((r: EpisodeRow) => r.id as EpisodeId);
+    return rows.filter((r: EpisodeRow) => visibleToCurrent(r)).map((r: EpisodeRow) => r.id as EpisodeId);
   }
 
   async function countEpisodes(input?: {
     sessionId?: SessionId;
   }): Promise<number> {
     ensureLive();
-    return handle.repos.episodes.count({ sessionId: input?.sessionId });
+    return handle.repos.episodes.list({ sessionId: input?.sessionId, limit: 100_000 }).filter((r) => visibleToCurrent(r)).length;
   }
 
   async function listEpisodeRows(input?: {
@@ -2145,7 +2230,7 @@ export function createMemoryCore(
       sessionId: input?.sessionId,
       limit: input?.limit ?? 50,
       offset: input?.offset ?? 0,
-    });
+    }).filter((r) => visibleToCurrent(r));
 
     // Build reverse indexes for the skill-status derivation. Rebuilt
     // per call rather than cached because the base table volumes are
@@ -2254,6 +2339,9 @@ export function createMemoryCore(
       return {
         id: r.id,
         sessionId: r.sessionId,
+        ownerAgentKind: r.ownerAgentKind,
+        ownerProfileId: r.ownerProfileId,
+        ownerWorkspaceId: r.ownerWorkspaceId ?? null,
         startedAt: r.startedAt,
         endedAt: r.endedAt ?? undefined,
         status: r.status,
@@ -2280,14 +2368,17 @@ export function createMemoryCore(
 
   async function timeline(input: {
     episodeId: EpisodeId;
+    namespace?: RuntimeNamespace;
   }): Promise<TraceDTO[]> {
     ensureLive();
+    if (input.namespace) activeNamespace = input.namespace;
     const episode = handle.repos.episodes.getById(input.episodeId);
+    if (episode && !visibleToCurrent(episode)) return [];
     const rows = handle.repos.traces.list({
       episodeId: input.episodeId,
       limit: 500,
       newestFirst: false,
-    });
+    }).filter((r) => visibleToCurrent(r));
     return orderTraceRowsForEpisode(rows, episode?.traceIds ?? []).map((row) =>
       traceRowToDTO(row, episode),
     );
@@ -2328,14 +2419,17 @@ export function createMemoryCore(
   }): Promise<number> {
     ensureLive();
     const needle = (input?.q ?? "").trim().toLowerCase();
+    const visible = (r: TraceRow) => visibleToCurrent(r);
     if (!needle) {
-      return input?.groupByTurn
-        ? handle.repos.traces.countTurns({ sessionId: input?.sessionId })
-        : handle.repos.traces.count({ sessionId: input?.sessionId });
+      const rows = handle.repos.traces.list({ sessionId: input?.sessionId, limit: 100_000 }).filter(visible);
+      if (!input?.groupByTurn) return rows.length;
+      const turnKeys = new Set<string>();
+      for (const r of rows) turnKeys.add(`${r.episodeId ?? "_"}:${r.turnId}`);
+      return turnKeys.size;
     }
     // q substring scan — mirror `listTraces`. Walk all matching
     // traces from the repo (no limit) and apply the same filter.
-    const rows = handle.repos.traces.list({ sessionId: input?.sessionId });
+    const rows = handle.repos.traces.list({ sessionId: input?.sessionId }).filter(visible);
     const matched = rows.filter((r) => {
       return traceSearchHaystack(r).includes(needle);
     });
@@ -2367,6 +2461,7 @@ export function createMemoryCore(
           offset,
         });
         const rows = handle.repos.traces.listByTurnKeys(turnKeys);
+        const visibleRows = rows.filter((r) => visibleToCurrent(r));
         // The frontend's `buildGroups` preserves first-encounter order
         // when bucketing traces by turnKey. We need newest turn first
         // (matching `listTurnKeys` DESC order), with the episode's
@@ -2375,8 +2470,8 @@ export function createMemoryCore(
         turnKeys.forEach((k, i) =>
           turnOrder.set(`${k.episodeId ?? "_"}:${k.turnId}`, i),
         );
-        const traceOrder = traceOrderLookup(rows);
-        rows.sort((a, b) => {
+        const traceOrder = traceOrderLookup(visibleRows);
+        visibleRows.sort((a, b) => {
           const ka = `${a.episodeId ?? "_"}:${a.turnId}`;
           const kb = `${b.episodeId ?? "_"}:${b.turnId}`;
           const ia = turnOrder.get(ka) ?? 0;
@@ -2384,10 +2479,10 @@ export function createMemoryCore(
           if (ia !== ib) return ia - ib;
           return compareTraceRowsForEpisodeOrder(a, b, traceOrder);
         });
-        return traceRowsToDTOs(rows);
+        return traceRowsToDTOs(visibleRows);
       }
       // Search + group: scan, filter, then paginate by distinct turn key.
-      const allRows = handle.repos.traces.list({ sessionId: input?.sessionId });
+      const allRows = handle.repos.traces.list({ sessionId: input?.sessionId }).filter((r) => visibleToCurrent(r));
       const matched = allRows.filter((r) => {
         return traceSearchHaystack(r).includes(needle);
       });
@@ -2408,7 +2503,7 @@ export function createMemoryCore(
       );
       // Once a turn matches the search, return the whole turn so the
       // Memories card uses the same step list as the Tasks timeline.
-      const rows = handle.repos.traces.listByTurnKeys(orderedKeys);
+      const rows = handle.repos.traces.listByTurnKeys(orderedKeys).filter((r) => visibleToCurrent(r));
       const traceOrder = traceOrderLookup(rows);
       const traces = rows
         .sort((a, b) => {
@@ -2425,10 +2520,10 @@ export function createMemoryCore(
     if (!needle) {
       const rows = handle.repos.traces.list({
         sessionId: input?.sessionId,
-        limit,
-        offset,
-      });
-      return traceRowsToDTOs(rows);
+        limit: limit + offset + 500,
+        offset: 0,
+      }).filter((r) => visibleToCurrent(r));
+      return traceRowsToDTOs(rows.slice(offset, offset + limit));
     }
     // Substring search: SQLite LIKE would need an index. For the
     // viewer's interactive filter the current volumes (low thousands
@@ -2440,6 +2535,7 @@ export function createMemoryCore(
       offset: 0,
     });
     const filtered = rows.filter((r) => {
+      if (!visibleToCurrent(r)) return false;
       return traceSearchHaystack(r).includes(needle);
     });
     return traceRowsToDTOs(filtered.slice(offset, offset + limit));
@@ -2486,21 +2582,22 @@ export function createMemoryCore(
 
   // ─── Skills ──
   async function listSkills(
-    input?: { status?: SkillDTO["status"]; limit?: number },
+    input?: { status?: SkillDTO["status"]; limit?: number; namespace?: RuntimeNamespace },
   ): Promise<SkillDTO[]> {
     ensureLive();
+    if (input?.namespace) activeNamespace = input.namespace;
     const rows = handle.repos.skills.list({
       status: input?.status,
-      limit: input?.limit ?? 50,
+      limit: 5_000,
     });
-    return rows.map(skillRowToDTO);
+    return rows.filter((r) => visibleToCurrent(r)).slice(0, input?.limit ?? 50).map(skillRowToDTO);
   }
 
   async function countSkills(input?: {
     status?: SkillDTO["status"];
   }): Promise<number> {
     ensureLive();
-    return handle.repos.skills.count({ status: input?.status });
+    return handle.repos.skills.list({ status: input?.status, limit: 5_000 }).filter((r) => visibleToCurrent(r)).length;
   }
 
   async function getSkill(
@@ -2513,11 +2610,13 @@ export function createMemoryCore(
       traceId?: string;
       turnId?: number;
       toolCallId?: string;
+      namespace?: RuntimeNamespace;
     },
   ): Promise<SkillDTO | null> {
     ensureLive();
+    if (opts?.namespace) activeNamespace = opts.namespace;
     const row = handle.repos.skills.getById(id);
-    if (!row) return null;
+    if (!row || !visibleToCurrent(row)) return null;
     if (opts?.recordUse) {
       handle.repos.skills.recordUse(id, Date.now());
       if (opts.recordTrial) {
@@ -2555,6 +2654,9 @@ export function createMemoryCore(
     }
     handle.repos.skillTrials.createPending({
       id: `st_${randomUUID()}`,
+      ownerAgentKind: episode.ownerAgentKind,
+      ownerProfileId: episode.ownerProfileId,
+      ownerWorkspaceId: episode.ownerWorkspaceId,
       skillId,
       sessionId: opts.sessionId ?? episode.sessionId ?? null,
       episodeId: episode.id,
@@ -3007,6 +3109,7 @@ export function createMemoryCore(
     if (!existing) {
       throw new MemosError("skill_not_found", `skill not found: ${id}`);
     }
+    if (!ownedByCurrent(existing)) return;
     const now = Date.now();
     handle.repos.skills.setStatus(id, "archived", now);
     handle.buses.skill.emit({
@@ -3034,7 +3137,7 @@ export function createMemoryCore(
   async function deleteSkill(id: SkillId): Promise<{ deleted: boolean }> {
     ensureLive();
     const existing = handle.repos.skills.getById(id);
-    if (!existing) return { deleted: false };
+    if (!existing || !ownedByCurrent(existing)) return { deleted: false };
     handle.repos.skills.deleteById(id);
     return { deleted: true };
   }
@@ -3042,7 +3145,7 @@ export function createMemoryCore(
   async function reactivateSkill(id: SkillId): Promise<SkillDTO | null> {
     ensureLive();
     const existing = handle.repos.skills.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     const now = Date.now();
     handle.repos.skills.setStatus(id, "active", now);
     if (existing.status !== "active") {
@@ -3067,7 +3170,7 @@ export function createMemoryCore(
   ): Promise<SkillDTO | null> {
     ensureLive();
     const existing = handle.repos.skills.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     handle.repos.skills.updateContent(id, patch);
     const updated = handle.repos.skills.getById(id);
     return updated ? skillRowToDTO(updated) : null;
@@ -3076,14 +3179,14 @@ export function createMemoryCore(
   async function shareSkill(
     id: SkillId,
     share: {
-      scope: "private" | "public" | "hub" | null;
+      scope: "private" | "local" | "public" | "hub" | null;
       target?: string | null;
       sharedAt?: number | null;
     },
   ): Promise<SkillDTO | null> {
     ensureLive();
     const existing = handle.repos.skills.getById(id);
-    if (!existing) return null;
+    if (!existing || !ownedByCurrent(existing)) return null;
     handle.repos.skills.updateShare(id, share);
     const updated = handle.repos.skills.getById(id);
     return updated ? skillRowToDTO(updated) : null;
@@ -3456,6 +3559,9 @@ function compareTraceRowsForEpisodeOrder(
 export function traceRowToDTO(row: TraceRow, episode?: EpisodeRow | null): TraceDTO {
   return {
     id: row.id,
+    ownerAgentKind: row.ownerAgentKind,
+    ownerProfileId: row.ownerProfileId,
+    ownerWorkspaceId: row.ownerWorkspaceId ?? null,
     episodeId: row.episodeId,
     sessionId: row.sessionId,
     ts: row.ts,
@@ -3487,6 +3593,9 @@ function episodeRewardSkipped(episode?: EpisodeRow | null): boolean {
 export function policyRowToDTO(row: PolicyRow): PolicyDTO {
   return {
     id: row.id,
+    ownerAgentKind: row.ownerAgentKind,
+    ownerProfileId: row.ownerProfileId,
+    ownerWorkspaceId: row.ownerWorkspaceId ?? null,
     title: row.title,
     trigger: row.trigger,
     procedure: row.procedure,
@@ -3531,6 +3640,9 @@ export function worldModelRowToDTO(row: WorldModelRow): WorldModelDTO {
   const s = row.structure;
   return {
     id: row.id,
+    ownerAgentKind: row.ownerAgentKind,
+    ownerProfileId: row.ownerProfileId,
+    ownerWorkspaceId: row.ownerWorkspaceId ?? null,
     title: row.title,
     body: row.body,
     structure: {
@@ -3570,6 +3682,9 @@ export function skillRowToDTO(row: SkillRow): SkillDTO {
   };
   return {
     id: row.id,
+    ownerAgentKind: row.ownerAgentKind,
+    ownerProfileId: row.ownerProfileId,
+    ownerWorkspaceId: row.ownerWorkspaceId ?? null,
     name: row.name,
     status: row.status,
     invocationGuide: row.invocationGuide,

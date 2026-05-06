@@ -5,6 +5,9 @@ import {
   buildPageClauses,
   fromJsonText,
   joinWhere,
+  normalizeShareForStorage,
+  ownerFieldsFromRaw,
+  ownerParamsFromRow,
   timeRangeWhere,
   toJsonText,
 } from "./_helpers.js";
@@ -12,6 +15,10 @@ import {
 const COLUMNS = [
   "id",
   "session_id",
+  "owner_agent_kind",
+  "owner_profile_id",
+  "owner_workspace_id",
+  "share_scope",
   "started_at",
   "ended_at",
   "trace_ids_json",
@@ -47,6 +54,8 @@ export function makeEpisodesRepo(db: StorageDb) {
       insert.run({
         id: row.id,
         session_id: row.sessionId,
+        ...ownerParamsFromRow(row),
+        share_scope: normalizeShareForStorage(row.share?.scope),
         started_at: row.startedAt,
         ended_at: row.endedAt ?? null,
         trace_ids_json: toJsonText(row.traceIds),
@@ -60,6 +69,8 @@ export function makeEpisodesRepo(db: StorageDb) {
       replace.run({
         id: row.id,
         session_id: row.sessionId,
+        ...ownerParamsFromRow(row),
+        share_scope: normalizeShareForStorage(row.share?.scope),
         started_at: row.startedAt,
         ended_at: row.endedAt ?? null,
         trace_ids_json: toJsonText(row.traceIds),
@@ -164,6 +175,10 @@ export function makeEpisodesRepo(db: StorageDb) {
 interface RawEpisodeRow {
   id: string;
   session_id: string;
+  owner_agent_kind: string;
+  owner_profile_id: string;
+  owner_workspace_id: string | null;
+  share_scope: string;
   started_at: number;
   ended_at: number | null;
   trace_ids_json: string;
@@ -176,6 +191,8 @@ function mapRow(r: RawEpisodeRow): EpisodeRow & EpisodeMetaRow {
   return {
     id: r.id,
     sessionId: r.session_id,
+    ...ownerFieldsFromRaw(r),
+    share: { scope: normalizeShareForStorage(r.share_scope) as "private" | "local" | "public" | "hub" },
     startedAt: r.started_at,
     endedAt: r.ended_at,
     traceIds: fromJsonText<string[]>(r.trace_ids_json, []),

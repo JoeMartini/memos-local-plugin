@@ -7,6 +7,9 @@ import {
   fromBlob,
   fromJsonText,
   joinWhere,
+  normalizeShareForStorage,
+  ownerFieldsFromRaw,
+  ownerParamsFromRow,
   timeRangeWhere,
   toBlob,
   toJsonText,
@@ -14,6 +17,9 @@ import {
 
 const COLUMNS = [
   "id",
+  "owner_agent_kind",
+  "owner_profile_id",
+  "owner_workspace_id",
   "title",
   "trigger",
   "procedure",
@@ -39,6 +45,9 @@ export interface PolicySearchMeta {
   status: "candidate" | "active" | "archived";
   support: number;
   gain: number;
+  owner_agent_kind?: string;
+  owner_profile_id?: string;
+  owner_workspace_id?: string | null;
 }
 
 export function makePoliciesRepo(db: StorageDb) {
@@ -144,7 +153,7 @@ export function makePoliciesRepo(db: StorageDb) {
       return scanAndTopK<PolicySearchMeta>(
         db,
         "policies",
-        ["title", "status", "support", "gain"],
+        ["title", "status", "support", "gain", "owner_agent_kind", "owner_profile_id", "owner_workspace_id"],
         query,
         k,
         {
@@ -167,7 +176,7 @@ export function makePoliciesRepo(db: StorageDb) {
     updateShare(
       id: PolicyId,
       share: {
-        scope: "private" | "public" | "hub" | null;
+        scope: "private" | "local" | "public" | "hub" | null;
         target?: string | null;
         sharedAt?: number | null;
       },
@@ -181,7 +190,7 @@ export function makePoliciesRepo(db: StorageDb) {
         `UPDATE policies SET share_scope=@share_scope, share_target=@share_target, shared_at=@shared_at WHERE id=@id`,
       ).run({
         id,
-        share_scope: share.scope,
+        share_scope: normalizeShareForStorage(share.scope),
         share_target: share.target ?? null,
         shared_at: share.sharedAt ?? null,
       });
@@ -243,6 +252,9 @@ export function makePoliciesRepo(db: StorageDb) {
 
 interface RawPolicyRow {
   id: string;
+  owner_agent_kind: string;
+  owner_profile_id: string;
+  owner_workspace_id: string | null;
   title: string;
   trigger: string;
   procedure: string;
@@ -271,6 +283,7 @@ const EMPTY_GUIDANCE: PolicyRow["decisionGuidance"] = Object.freeze({
 function rowToParams(row: PolicyRow): Record<string, unknown> {
   return {
     id: row.id,
+    ...ownerParamsFromRow(row),
     title: row.title,
     trigger: row.trigger,
     procedure: row.procedure,
@@ -288,7 +301,7 @@ function rowToParams(row: PolicyRow): Record<string, unknown> {
     vec: toBlob(row.vec),
     created_at: row.createdAt,
     updated_at: row.updatedAt,
-    share_scope: row.share?.scope ?? null,
+    share_scope: normalizeShareForStorage(row.share?.scope),
     share_target: row.share?.target ?? null,
     shared_at: row.share?.sharedAt ?? null,
     edited_at: row.editedAt ?? null,
@@ -298,6 +311,7 @@ function rowToParams(row: PolicyRow): Record<string, unknown> {
 function mapRow(r: RawPolicyRow): PolicyRow {
   return {
     id: r.id,
+    ...ownerFieldsFromRaw(r),
     title: r.title,
     trigger: r.trigger,
     procedure: r.procedure,
@@ -315,7 +329,7 @@ function mapRow(r: RawPolicyRow): PolicyRow {
     share:
       r.share_scope != null
         ? {
-            scope: r.share_scope as "private" | "public" | "hub",
+            scope: normalizeShareForStorage(r.share_scope) as "private" | "local" | "public" | "hub",
             target: r.share_target,
             sharedAt: r.shared_at,
           }

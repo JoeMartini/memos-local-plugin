@@ -279,8 +279,10 @@ function persistRepair(
   draft: DecisionRepairDraft,
   ts: EpochMs,
 ): DecisionRepairRow {
+  const owner = ownerFromRepairEvidence(repos, draft);
   const row: DecisionRepairRow = {
     id: ids.decisionRepair(),
+    ...owner,
     ts,
     contextHash: draft.contextHash,
     preference: draft.preference,
@@ -291,6 +293,19 @@ function persistRepair(
   };
   repos.decisionRepairs.insert(row);
   return row;
+}
+
+function ownerFromRepairEvidence(
+  repos: Repos,
+  draft: DecisionRepairDraft,
+): { ownerAgentKind: string; ownerProfileId: string; ownerWorkspaceId: string | null } {
+  const traceId = draft.highValueTraceIds[0] ?? draft.lowValueTraceIds[0];
+  const trace = traceId ? repos.traces.getById(traceId) : null;
+  return {
+    ownerAgentKind: trace?.ownerAgentKind ?? "unknown",
+    ownerProfileId: trace?.ownerProfileId ?? "default",
+    ownerWorkspaceId: trace?.ownerWorkspaceId ?? null,
+  };
 }
 
 function skip(

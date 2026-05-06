@@ -64,6 +64,7 @@ import type {
   TurnInputDTO,
   TurnResultDTO,
   TurnStartCtx,
+  RuntimeNamespace,
 } from "../../agent-contract/dto.js";
 import type {
   SkillInvokeCtx,
@@ -134,6 +135,7 @@ export interface PipelineDeps {
   reflectLlm: LlmClient | null;
   embedder: Embedder | null;
   log: Logger;
+  namespace: RuntimeNamespace;
   /** Injection hook so tests can provide a fake clock. */
   now?: () => number;
 }
@@ -147,6 +149,7 @@ export interface PipelineHandle {
   readonly home: ResolvedHome;
   readonly config: ResolvedConfig;
   readonly algorithm: PipelineAlgorithmConfig;
+  readonly namespace: RuntimeNamespace;
 
   // Infrastructure (adapters that want direct access).
   readonly db: StorageDb;
