@@ -23,6 +23,7 @@ import type {
   AgentKind,
   EpisodeId,
   RetrievalResultDTO,
+  RuntimeNamespace,
   SessionId,
   ToolCallDTO,
   TurnInputDTO,
@@ -623,6 +624,23 @@ export function bridgeSessionId(agentId: string, sessionKey: string): SessionId 
   return `openclaw::${agentId}::${sessionKey}`;
 }
 
+function namespaceFromAgentCtx(ctx: {
+  agentId?: string;
+  sessionKey?: string;
+  workspaceDir?: string;
+  agentDir?: string;
+}): RuntimeNamespace {
+  const profileId = (ctx.agentId || "main").trim() || "main";
+  const workspacePath = ctx.workspaceDir || ctx.agentDir || undefined;
+  return {
+    agentKind: "openclaw",
+    profileId,
+    profileLabel: profileId,
+    workspacePath,
+    sessionKey: ctx.sessionKey,
+  };
+}
+
 /**
  * Ephemeral OpenClaw sub-agents (slug generator, boot-check probes,
  * approval prompts, …) open their own run inside the same plugin host
@@ -766,11 +784,17 @@ export function createOpenClawBridge(opts: BridgeOptions): BridgeHandle {
   async function ensureSession(
     agentId: string | undefined,
     sessionKey: string | undefined,
+    namespace?: RuntimeNamespace,
   ): Promise<SessionId> {
     const effectiveAgent = agentId ?? "main";
     const effectiveKey = sessionKey ?? "default";
     const sid = bridgeSessionId(effectiveAgent, effectiveKey);
-    await opts.core.openSession({ agent: opts.agent, sessionId: sid });
+    await opts.core.openSession({
+      agent: opts.agent,
+      sessionId: sid,
+      namespace,
+      meta: namespace ? { namespace } : undefined,
+    });
     return sid;
   }
 
@@ -818,16 +842,19 @@ export function createOpenClawBridge(opts: BridgeOptions): BridgeHandle {
       const prompt = stripOpenClawUserEnvelope(rawPrompt);
       if (!prompt) return;
 
-      const sessionId = await ensureSession(ctx.agentId, ctx.sessionKey);
+      const namespace = namespaceFromAgentCtx(ctx);
+      const sessionId = await ensureSession(ctx.agentId, ctx.sessionKey, namespace);
       lastUserTextBySession.set(sessionId, prompt);
 
       const turn: TurnInputDTO = {
         agent: opts.agent,
+        namespace,
         sessionId,
         userText: prompt,
         ts: now(),
         contextHints: {
           agentId: ctx.agentId,
+          namespace,
           sessionKey: ctx.sessionKey,
           sessionId: ctx.sessionId,
           runId: ctx.runId,
@@ -876,6 +903,7 @@ export function createOpenClawBridge(opts: BridgeOptions): BridgeHandle {
       // trace / episode, so there's nothing to persist here either.
       return;
     }
+    const namespace = namespaceFromAgentCtx(ctx);
     const sessionId = bridgeSessionId(ctx.agentId ?? "main", ctx.sessionKey ?? "default");
     const allMessages = Array.isArray(event.messages) ? event.messages : [];
 
@@ -964,7 +992,7 @@ export function createOpenClawBridge(opts: BridgeOptions): BridgeHandle {
           });
           return;
         }
-        await opts.core.openSession({ agent: opts.agent, sessionId });
+        await opts.core.openSession({ agent: opts.agent, sessionId, namespace, meta: { namespace } });
         episodeId = await opts.core.openEpisode({
           sessionId,
           userMessage: turn.userText,
@@ -974,12 +1002,14 @@ export function createOpenClawBridge(opts: BridgeOptions): BridgeHandle {
 
       const turnResult: TurnResultDTO = {
         agent: opts.agent,
+        namespace,
         sessionId,
         episodeId,
         agentText: turn.agentText,
         agentThinking: turn.agentThinking,
         toolCalls: turn.toolCalls,
         reflection: turn.reflection,
+        contextHints: { namespace },
         ts: now(),
       };
 
@@ -1068,7 +1098,7 @@ export function createOpenClawBridge(opts: BridgeOptions): BridgeHandle {
   ): Promise<void> {
     if (isEphemeralSessionKey(ctx.sessionKey)) return;
     try {
-      await ensureSession(ctx.agentId, ctx.sessionKey);
+      await ensureSession(ctx.agentId, ctx.sessionKey, namespaceFromAgentCtx(ctx));
       opts.log.debug("memos.session.started", {
         sessionId: event.sessionId,
         sessionKey: ctx.sessionKey,

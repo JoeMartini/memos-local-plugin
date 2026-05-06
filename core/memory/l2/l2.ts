@@ -227,6 +227,10 @@ export async function runL2(
         inducedBy: `${L2_INDUCTION_PROMPT.id}.v${L2_INDUCTION_PROMPT.version}`,
         now: input.now ?? Date.now(),
       });
+      const owner = ownerFromTraces(traces);
+      policy.ownerAgentKind = owner.ownerAgentKind;
+      policy.ownerProfileId = owner.ownerProfileId;
+      policy.ownerWorkspaceId = owner.ownerWorkspaceId;
       try {
         repos.policies.insert(policy);
         if (!policy.vec) {
@@ -378,6 +382,19 @@ export async function runL2(
     timings,
     startedAt,
     completedAt,
+  };
+}
+
+function ownerFromTraces(traces: readonly TraceRow[]): {
+  ownerAgentKind: string;
+  ownerProfileId: string;
+  ownerWorkspaceId: string | null;
+} {
+  const first = traces[0];
+  return {
+    ownerAgentKind: first?.ownerAgentKind ?? "unknown",
+    ownerProfileId: first?.ownerProfileId ?? "default",
+    ownerWorkspaceId: first?.ownerWorkspaceId ?? null,
   };
 }
 

@@ -333,7 +333,7 @@ function WorldModelDrawer({
   const [mode, setMode] = useState<"view" | "edit" | "share">("view");
   const [title, setTitle] = useState(worldModel.title);
   const [body, setBody] = useState(worldModel.body ?? "");
-  const [scope, setScope] = useState<"private" | "public" | "hub">(
+  const [scope, setScope] = useState<"private" | "local" | "public" | "hub">(
     worldModel.share?.scope ?? "public",
   );
   const [busy, setBusy] = useState(false);
@@ -395,7 +395,7 @@ function WorldModelDrawer({
     }
   };
 
-  const submitShare = async (s: "private" | "public" | "hub" | null) => {
+  const submitShare = async (s: "private" | "local" | "public" | "hub" | null) => {
     setBusy(true);
     try {
       await api.post(
@@ -543,7 +543,7 @@ function WorldModelDrawer({
               <div class="modal__field">
                 <label>{t("memories.share.scope")}</label>
                 <div class="vstack" style="gap:var(--sp-2)">
-                  {(["private", "public", "hub"] as const).map((v) => (
+                  {(["private", "local", "public", "hub"] as const).map((v) => (
                     <label
                       key={v}
                       class="hstack"

@@ -255,6 +255,21 @@ class MemTensorProvider(MemoryProvider):
         """Return True when a global Hermes hook belongs to this provider."""
         return not session_id or not self._session_id or session_id == self._session_id
 
+    def _runtime_namespace(self) -> dict[str, Any]:
+        profile_id = (self._agent_identity or "").strip() or "default"
+        normalized_home = self._hermes_home.replace("\\", "/").rstrip("/")
+        if normalized_home:
+            marker = "/profiles/"
+            if marker in normalized_home:
+                profile_id = normalized_home.rsplit(marker, 1)[-1].split("/", 1)[0] or profile_id
+            elif normalized_home.endswith("/.hermes") and profile_id in ("", "hermes"):
+                profile_id = "default"
+        return {
+            "agentKind": "hermes",
+            "profileId": profile_id,
+            "profileLabel": profile_id,
+        }
+
     def _register_tool_call_hook(self) -> None:
         if self._hook_registered:
             return
@@ -999,6 +1014,7 @@ class MemTensorProvider(MemoryProvider):
                 max_results = self._int_arg(args, "maxResults", 10, 1, 50)
                 params: dict[str, Any] = {
                     "agent": "hermes",
+                    "namespace": self._runtime_namespace(),
                     "query": query,
                     "topK": {
                         "tier1": max_results,
@@ -1026,7 +1042,9 @@ class MemTensorProvider(MemoryProvider):
                 method = methods.get(kind)
                 if method is None:
                     return json.dumps({"error": f"unknown memory kind: {kind}"})
-                item = self._bridge.request(method, {"id": item_id})
+                item = self._bridge.request(
+                    method, {"id": item_id, "namespace": self._runtime_namespace()}
+                )
                 if not item:
                     return json.dumps({"found": False, "kind": kind, "id": item_id})
                 if kind == "trace":
@@ -1071,14 +1089,17 @@ class MemTensorProvider(MemoryProvider):
             if tool_name == "memory_timeline":
                 resp = self._bridge.request(
                     "memory.timeline",
-                    {"episodeId": args.get("episodeId", self._episode_id)},
+                    {
+                        "episodeId": args.get("episodeId", self._episode_id),
+                        "namespace": self._runtime_namespace(),
+                    },
                 )
                 limit = self._int_arg(args, "limit", 20, 1, 100)
                 traces = resp.get("traces", [])[:limit]
                 return json.dumps({"traces": traces})
             if tool_name == "skill_list":
                 limit = self._int_arg(args, "limit", 10, 1, 50)
-                params = {"limit": limit}
+                params = {"limit": limit, "namespace": self._runtime_namespace()}
                 if args.get("status"):
                     params["status"] = args["status"]
                 return json.dumps(self._bridge.request("skill.list", params))
@@ -1088,7 +1109,7 @@ class MemTensorProvider(MemoryProvider):
                 if not query:
                     resp = self._bridge.request(
                         "memory.list_world_models",
-                        {"limit": limit, "offset": 0},
+                        {"limit": limit, "offset": 0, "namespace": self._runtime_namespace()},
                     )
                     return json.dumps(
                         {
@@ -1106,6 +1127,7 @@ class MemTensorProvider(MemoryProvider):
                     "memory.search",
                     {
                         "agent": "hermes",
+                        "namespace": self._runtime_namespace(),
                         "query": query,
                         "topK": {"tier1": 0, "tier2": 0, "tier3": limit},
                     },
@@ -1138,6 +1160,7 @@ class MemTensorProvider(MemoryProvider):
                     "skill.get",
                     {
                         "id": skill_id,
+                        "namespace": self._runtime_namespace(),
                         "recordTrial": True,
                         "sessionId": self._session_id,
                         "episodeId": self._episode_id or None,
@@ -1423,10 +1446,13 @@ class MemTensorProvider(MemoryProvider):
             {
                 "agent": "hermes",
                 "sessionId": requested_session,
+                "namespace": self._runtime_namespace(),
                 "meta": {
                     "hermesHome": self._hermes_home,
                     "platform": self._platform,
                     "agentIdentity": self._agent_identity,
+                    "profileId": self._runtime_namespace()["profileId"],
+                    "namespace": self._runtime_namespace(),
                     **host_runtime,
                 },
             },
@@ -1503,10 +1529,12 @@ class MemTensorProvider(MemoryProvider):
             "turn.start",
             {
                 "agent": "hermes",
+                "namespace": self._runtime_namespace(),
                 "sessionId": session_id or self._session_id,
                 "userText": query,
                 "contextHints": {
                     "agentIdentity": self._agent_identity,
+                    "namespace": self._runtime_namespace(),
                     **host_runtime,
                 },
                 "ts": int(time.time() * 1000),
@@ -1542,6 +1570,7 @@ class MemTensorProvider(MemoryProvider):
         ]
         payload: dict[str, Any] = {
             "agent": "hermes",
+            "namespace": self._runtime_namespace(),
             "sessionId": self._session_id,
             "episodeId": self._episode_id,
             "agentText": assistant_content,
@@ -1549,6 +1578,7 @@ class MemTensorProvider(MemoryProvider):
             "toolCalls": clean_tool_calls,
             "contextHints": {
                 "agentIdentity": self._agent_identity,
+                "namespace": self._runtime_namespace(),
                 **self._host_runtime_context(),
             },
             "ts": ts_ms,

@@ -1,10 +1,13 @@
 import type { EpisodeId, SkillId, SkillTrialRow } from "../../types.js";
 import type { StorageDb } from "../types.js";
 import { buildInsert } from "../tx.js";
-import { fromJsonText, toJsonText } from "./_helpers.js";
+import { fromJsonText, ownerFieldsFromRaw, ownerParamsFromRow, toJsonText } from "./_helpers.js";
 
 const COLUMNS = [
   "id",
+  "owner_agent_kind",
+  "owner_profile_id",
+  "owner_workspace_id",
   "skill_id",
   "session_id",
   "episode_id",
@@ -83,6 +86,9 @@ export function makeSkillTrialsRepo(db: StorageDb) {
 
 interface RawSkillTrialRow {
   id: string;
+  owner_agent_kind: string;
+  owner_profile_id: string;
+  owner_workspace_id: string | null;
   skill_id: string;
   session_id: string | null;
   episode_id: string;
@@ -98,6 +104,7 @@ interface RawSkillTrialRow {
 function rowToParams(row: SkillTrialRow): Record<string, unknown> {
   return {
     id: row.id,
+    ...ownerParamsFromRow(row),
     skill_id: row.skillId,
     session_id: row.sessionId,
     episode_id: row.episodeId,
@@ -114,6 +121,7 @@ function rowToParams(row: SkillTrialRow): Record<string, unknown> {
 function mapRow(row: RawSkillTrialRow): SkillTrialRow {
   return {
     id: row.id,
+    ...ownerFieldsFromRaw(row),
     skillId: row.skill_id as SkillId,
     sessionId: row.session_id,
     episodeId: row.episode_id as EpisodeId,

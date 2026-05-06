@@ -9,6 +9,23 @@
 
 export type AgentKind = "openclaw" | "hermes" | string;
 
+export type ShareScope = "private" | "local" | "public" | "hub";
+
+export interface RuntimeNamespace {
+  agentKind: AgentKind;
+  profileId: string;
+  profileLabel?: string;
+  workspaceId?: string;
+  workspacePath?: string;
+  sessionKey?: string;
+}
+
+export interface OwnershipDTO {
+  ownerAgentKind?: AgentKind;
+  ownerProfileId?: string;
+  ownerWorkspaceId?: string | null;
+}
+
 export type SessionId = string;
 export type EpisodeId = string;
 export type TraceId = string;
@@ -71,6 +88,7 @@ export interface ToolCallDTO {
 export interface TurnInputDTO {
   agent: AgentKind;
   sessionId: SessionId;
+  namespace?: RuntimeNamespace;
   /** Optional pre-existing episodeId (for continued tasks). */
   episodeId?: EpisodeId;
   /** Free-form text the user said this turn. */
@@ -85,6 +103,7 @@ export interface TurnResultDTO {
   agent: AgentKind;
   sessionId: SessionId;
   episodeId: EpisodeId;
+  namespace?: RuntimeNamespace;
   /** Free-form text the agent emitted. */
   agentText: string;
   /**
@@ -122,6 +141,7 @@ export type SubagentOutcome =
 
 export interface SubagentOutcomeDTO {
   agent: AgentKind;
+  namespace?: RuntimeNamespace;
   /** Parent session that requested the delegation. */
   sessionId: SessionId;
   /** Parent episode to append the delegation result to, when known. */
@@ -142,7 +162,7 @@ export interface SubagentOutcomeDTO {
 
 // ─── Memory items ─────────────────────────────────────────────────────────────
 
-export interface TraceDTO {
+export interface TraceDTO extends OwnershipDTO {
   id: TraceId;
   episodeId: EpisodeId;
   sessionId: SessionId;
@@ -164,7 +184,7 @@ export interface TraceDTO {
    * "共享 / 取消共享" button label.
    */
   share?: {
-    scope: "private" | "public" | "hub";
+    scope: ShareScope;
     target?: string | null;
     sharedAt?: EpochMs | null;
   } | null;
@@ -226,7 +246,7 @@ export interface ApiLogDTO {
   calledAt: EpochMs;
 }
 
-export interface PolicyDTO {
+export interface PolicyDTO extends OwnershipDTO {
   id: PolicyId;
   title: string;
   trigger: string;
@@ -246,7 +266,7 @@ export interface PolicyDTO {
    * shape as {@link TraceDTO.share}.
    */
   share?: {
-    scope: "private" | "public" | "hub";
+    scope: ShareScope;
     target?: string | null;
     sharedAt?: EpochMs | null;
   } | null;
@@ -293,7 +313,7 @@ export interface WorldModelStructureEntryDTO {
   evidenceIds?: string[];
 }
 
-export interface WorldModelDTO {
+export interface WorldModelDTO extends OwnershipDTO {
   id: WorldModelId;
   title: string;
   /** Free-form prose summarizing structure/patterns/constraints. */
@@ -333,7 +353,7 @@ export interface WorldModelDTO {
   status: "active" | "archived";
   /** Sharing state (migration 009). `null` = private/not shared. */
   share?: {
-    scope: "private" | "public" | "hub";
+    scope: ShareScope;
     target?: string | null;
     sharedAt?: EpochMs | null;
   } | null;
@@ -341,7 +361,7 @@ export interface WorldModelDTO {
   editedAt?: EpochMs;
 }
 
-export interface SkillDTO {
+export interface SkillDTO extends OwnershipDTO {
   id: SkillId;
   name: string;
   /** "candidate" while still on trial, then "active", then "archived". */
@@ -389,7 +409,7 @@ export interface SkillDTO {
   version: number;
   /** Sharing state (migration 009). `null` = private/not shared. */
   share?: {
-    scope: "private" | "public" | "hub";
+    scope: ShareScope;
     target?: string | null;
     sharedAt?: EpochMs | null;
   } | null;
@@ -401,7 +421,7 @@ export interface SkillDTO {
   lastUsedAt?: EpochMs | null;
 }
 
-export interface EpisodeDTO {
+export interface EpisodeDTO extends OwnershipDTO {
   id: EpisodeId;
   sessionId: SessionId;
   startedAt: EpochMs;
@@ -419,6 +439,9 @@ export interface EpisodeDTO {
 export interface EpisodeListItemDTO {
   id: EpisodeId;
   sessionId: SessionId;
+  ownerAgentKind?: AgentKind;
+  ownerProfileId?: string;
+  ownerWorkspaceId?: string | null;
   startedAt: EpochMs;
   endedAt?: EpochMs;
   status: "open" | "closed";
@@ -506,6 +529,7 @@ export interface FeedbackDTO {
 
 export interface RetrievalQueryDTO {
   agent: AgentKind;
+  namespace?: RuntimeNamespace;
   sessionId?: SessionId;
   episodeId?: EpisodeId;
   query: string;
@@ -522,6 +546,10 @@ export interface RetrievalHitDTO {
   refKind: "skill" | "trace" | "episode" | "world-model";
   score: number;
   snippet: string;
+  ownerAgentKind?: AgentKind;
+  ownerProfileId?: string;
+  ownerWorkspaceId?: string | null;
+  shareScope?: ShareScope;
 }
 
 export interface RetrievalResultDTO {
@@ -545,6 +573,7 @@ export type RetrievalReason =
 
 export interface TurnStartCtx {
   agent: AgentKind;
+  namespace?: RuntimeNamespace;
   sessionId: SessionId;
   episodeId?: EpisodeId;
   userText: string;
@@ -555,6 +584,7 @@ export interface TurnStartCtx {
 
 export interface ToolDrivenCtx {
   agent: AgentKind;
+  namespace?: RuntimeNamespace;
   sessionId: SessionId;
   episodeId?: EpisodeId;
   /** Which memory tool was called (memory_search / memory_timeline / …). */
@@ -566,6 +596,7 @@ export interface ToolDrivenCtx {
 
 export interface RepairCtx {
   agent: AgentKind;
+  namespace?: RuntimeNamespace;
   sessionId: SessionId;
   episodeId?: EpisodeId;
   /** Which tool has been failing. */

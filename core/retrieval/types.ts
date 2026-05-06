@@ -17,6 +17,7 @@ import type {
   ToolDrivenCtx,
   TurnStartCtx,
   EpochMs,
+  RuntimeNamespace,
 } from "../../agent-contract/dto.js";
 
 import type {
@@ -536,6 +537,7 @@ export interface RetrievalDeps {
   repos: RetrievalRepos;
   embedder: RetrievalEmbedder;
   config: RetrievalConfig;
+  namespace: RuntimeNamespace;
   now: () => EpochMs;
   /**
    * Optional LLM used by the post-rank relevance filter
@@ -630,6 +632,7 @@ export type RetrievalCtx =
 /** Called when the host model decides to invoke a specific Skill. */
 export interface SkillInvokeCtx {
   agent: AgentKind;
+  namespace?: RuntimeNamespace;
   sessionId: SessionId;
   episodeId?: EpisodeId;
   /** Skill id we're about to run (or a free-form query if id unknown). */
@@ -642,6 +645,7 @@ export interface SkillInvokeCtx {
 /** Called when a sub-agent is spawned with a mission query. */
 export interface SubAgentCtx {
   agent: AgentKind;
+  namespace?: RuntimeNamespace;
   sessionId: SessionId;
   episodeId?: EpisodeId;
   /** The sub-agent mission / system prompt head. */

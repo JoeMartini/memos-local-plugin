@@ -28,6 +28,7 @@ import type {
   TurnInputDTO,
   TurnResultDTO,
   WorldModelDTO,
+  RuntimeNamespace,
 } from "./dto.js";
 import type { CoreEvent } from "./events.js";
 import type { LogRecord } from "./log-record.js";
@@ -39,6 +40,7 @@ export interface CoreHealth {
   version: string;
   uptimeMs: number;
   agent: AgentKind;
+  namespace?: RuntimeNamespace;
   paths: {
     home: string;
     config: string;
@@ -129,6 +131,7 @@ export interface MemoryCore {
     agent: AgentKind;
     sessionId?: SessionId;
     meta?: Record<string, unknown>;
+    namespace?: RuntimeNamespace;
   }): Promise<SessionId>;
   closeSession(sessionId: SessionId): Promise<void>;
   openEpisode(input: {
@@ -163,7 +166,7 @@ export interface MemoryCore {
 
   // ── memory queries ──
   searchMemory(query: RetrievalQueryDTO): Promise<RetrievalResultDTO>;
-  getTrace(id: string): Promise<TraceDTO | null>;
+  getTrace(id: string, namespace?: RuntimeNamespace): Promise<TraceDTO | null>;
   /**
    * Mutate a single trace's user-facing fields (role / summary /
    * body). Never touches algorithmic signals. Returns the updated
@@ -194,13 +197,13 @@ export interface MemoryCore {
   shareTrace(
     id: string,
     share: {
-      scope: "private" | "public" | "hub" | null;
+      scope: "private" | "local" | "public" | "hub" | null;
       target?: string | null;
       sharedAt?: number | null;
     },
   ): Promise<TraceDTO | null>;
-  getPolicy(id: string): Promise<PolicyDTO | null>;
-  getWorldModel(id: string): Promise<WorldModelDTO | null>;
+  getPolicy(id: string, namespace?: RuntimeNamespace): Promise<PolicyDTO | null>;
+  getWorldModel(id: string, namespace?: RuntimeNamespace): Promise<WorldModelDTO | null>;
   /**
    * List L2 policies ("经验") — newest-first. The viewer uses this
    * for the Experiences panel.
@@ -223,6 +226,7 @@ export interface MemoryCore {
     limit?: number;
     offset?: number;
     q?: string;
+    namespace?: RuntimeNamespace;
   }): Promise<WorldModelDTO[]>;
   /** Total world-model rows matching the same filter. */
   countWorldModels(input?: { q?: string }): Promise<number>;
@@ -256,7 +260,7 @@ export interface MemoryCore {
   sharePolicy(
     id: string,
     share: {
-      scope: "private" | "public" | "hub" | null;
+      scope: "private" | "local" | "public" | "hub" | null;
       target?: string | null;
       sharedAt?: number | null;
     },
@@ -268,7 +272,7 @@ export interface MemoryCore {
   shareWorldModel(
     id: string,
     share: {
-      scope: "private" | "public" | "hub" | null;
+      scope: "private" | "local" | "public" | "hub" | null;
       target?: string | null;
       sharedAt?: number | null;
     },
@@ -313,7 +317,7 @@ export interface MemoryCore {
   }): Promise<EpisodeListItemDTO[]>;
   /** Total episode rows matching the same filter (no limit/offset). */
   countEpisodes(input?: { sessionId?: SessionId }): Promise<number>;
-  timeline(input: { episodeId: EpisodeId }): Promise<TraceDTO[]>;
+  timeline(input: { episodeId: EpisodeId; namespace?: RuntimeNamespace }): Promise<TraceDTO[]>;
   /**
    * Reverse-chronological trace listing for the Memories viewer.
    *
@@ -356,7 +360,7 @@ export interface MemoryCore {
   }): Promise<{ logs: ApiLogDTO[]; total: number }>;
 
   // ── skills ──
-  listSkills(input?: { status?: SkillDTO["status"]; limit?: number }): Promise<SkillDTO[]>;
+  listSkills(input?: { status?: SkillDTO["status"]; limit?: number; namespace?: RuntimeNamespace }): Promise<SkillDTO[]>;
   /** Total skill rows matching the same filter (no limit). */
   countSkills(input?: { status?: SkillDTO["status"] }): Promise<number>;
   getSkill(id: SkillId, opts?: {
@@ -367,6 +371,7 @@ export interface MemoryCore {
     traceId?: string;
     turnId?: EpochMs;
     toolCallId?: string;
+    namespace?: RuntimeNamespace;
   }): Promise<SkillDTO | null>;
   archiveSkill(id: SkillId, reason?: string): Promise<void>;
   /**
@@ -391,7 +396,7 @@ export interface MemoryCore {
   shareSkill(
     id: SkillId,
     share: {
-      scope: "private" | "public" | "hub" | null;
+      scope: "private" | "local" | "public" | "hub" | null;
       target?: string | null;
       sharedAt?: number | null;
     },

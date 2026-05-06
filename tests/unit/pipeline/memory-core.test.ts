@@ -40,6 +40,7 @@ function buildDeps(h: TmpDbHandle): PipelineDeps {
     reflectLlm: null,
     embedder: fakeEmbedder({ dimensions: DEFAULT_CONFIG.embedding.dimensions }),
     log: rootLogger.child({ channel: "test.memory-core" }),
+    namespace: { agentKind: "openclaw", profileId: "main" },
     now: () => 1_700_000_000_000,
   };
 }
@@ -127,6 +128,51 @@ describe("MemoryCore façade", () => {
     expect(res.tierLatencyMs).toBeDefined();
     expect(typeof res.injectedContext).toBe("string");
     expect(res.query.query).toBe("how do I build this project?");
+  });
+
+  it("isolates private traces by namespace and exposes local shared traces", async () => {
+    pipeline = createPipeline(buildDeps(db!));
+    core = createMemoryCore(
+      pipeline,
+      resolveHome("openclaw", "/tmp/memos-mc-test"),
+      "test",
+    );
+    await core.init();
+
+    const mainNs = { agentKind: "openclaw", profileId: "main" };
+    const reviewerNs = { agentKind: "openclaw", profileId: "reviewer" };
+
+    const start = await core.onTurnStart({
+      agent: "openclaw",
+      namespace: mainNs,
+      sessionId: "s-main",
+      userText: "remember namespace private trace",
+      ts: 1_700_000_000_001,
+    });
+    await core.onTurnEnd({
+      agent: "openclaw",
+      namespace: mainNs,
+      sessionId: "s-main",
+      episodeId: start.query.episodeId!,
+      agentText: "stored only for main",
+      toolCalls: [],
+      ts: 1_700_000_000_002,
+    });
+
+    const ownerRows = await core.listTraces({ limit: 10 });
+    expect(ownerRows).toHaveLength(1);
+    expect(ownerRows[0]?.ownerProfileId).toBe("main");
+
+    await core.openSession({ agent: "openclaw", sessionId: "s-reviewer", namespace: reviewerNs });
+    expect(await core.listTraces({ limit: 10 })).toHaveLength(0);
+
+    await core.openSession({ agent: "openclaw", sessionId: "s-main", namespace: mainNs });
+    await core.shareTrace(ownerRows[0]!.id, { scope: "local" });
+
+    await core.openSession({ agent: "openclaw", sessionId: "s-reviewer", namespace: reviewerNs });
+    const sharedRows = await core.listTraces({ limit: 10 });
+    expect(sharedRows).toHaveLength(1);
+    expect(sharedRows[0]?.share?.scope).toBe("local");
   });
 
   it("records visible subagent task and result in the parent episode", async () => {

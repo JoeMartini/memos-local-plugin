@@ -142,6 +142,7 @@ async function main(): Promise<void> {
 
   const { core, config, home } = await bootstrapMemoryCoreFull({
     agent: args.agent,
+    namespace: { agentKind: args.agent, profileId: "default" },
     pkgVersion,
     // Skip in daemon mode — daemon has no stdio, so reverse RPC
     // can't ever fire and registering would just hide the "no
