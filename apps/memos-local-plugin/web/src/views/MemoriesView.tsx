@@ -88,7 +88,7 @@ interface MemoryGroup {
   aggValue: number;
   aggAlpha: number;
   hasReflection: boolean;
-  scope: "private" | "public" | "hub";
+  scope: "private" | "local" | "public" | "hub";
   shared: boolean;
 }
 
@@ -385,7 +385,7 @@ export function MemoriesView() {
    */
   const applyShareGroup = async (
     g: MemoryGroup,
-    scope: "private" | "public" | "hub" | null,
+    scope: "private" | "local" | "public" | "hub" | null,
   ) => {
     try {
       const updates = await Promise.all(
@@ -896,7 +896,7 @@ function buildGroups(traces: readonly TraceDTO[]): MemoryGroup[] {
     const ids = bucket.map((t) => t.id);
     const sumV = bucket.reduce((acc, t) => acc + (t.value ?? 0), 0);
     const sumA = bucket.reduce((acc, t) => acc + (t.alpha ?? 0), 0);
-    const scope: "private" | "public" | "hub" = head.share?.scope ?? "private";
+    const scope: "private" | "local" | "public" | "hub" = head.share?.scope ?? "private";
     return {
       turnKey: key,
       episodeId: head.episodeId ?? null,
@@ -1028,7 +1028,7 @@ function TraceDrawer({
       tags?: string[];
     },
   ) => Promise<void> | void;
-  onShare: (scope: "private" | "public" | "hub" | null) => Promise<void> | void;
+  onShare: (scope: "private" | "local" | "public" | "hub" | null) => Promise<void> | void;
   onDelete: () => Promise<void> | void;
 }) {
   const head = group.head;
@@ -1037,7 +1037,7 @@ function TraceDrawer({
   const [userText, setUserText] = useState(head.userText ?? "");
   const [agentText, setAgentText] = useState(head.agentText ?? "");
   const [tags, setTags] = useState((head.tags ?? []).join(", "));
-  const [scope, setScope] = useState<"private" | "public" | "hub">(
+  const [scope, setScope] = useState<"private" | "local" | "public" | "hub">(
     head.share?.scope ?? "public",
   );
 
@@ -1064,7 +1064,7 @@ function TraceDrawer({
     setMode("view");
   };
 
-  const submitShare = (s: "private" | "public" | "hub" | null) => {
+  const submitShare = (s: "private" | "local" | "public" | "hub" | null) => {
     void onShare(s);
     setMode("view");
   };
@@ -1209,7 +1209,7 @@ function TraceDrawer({
               <div class="modal__field">
                 <label>{t("memories.share.scope")}</label>
                 <div class="vstack" style="gap:var(--sp-2)">
-                  {(["private", "public", "hub"] as const).map((v) => (
+                  {(["private", "local", "public", "hub"] as const).map((v) => (
                     <label
                       key={v}
                       class="hstack"

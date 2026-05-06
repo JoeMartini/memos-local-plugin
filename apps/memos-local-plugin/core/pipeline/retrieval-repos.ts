@@ -9,9 +9,10 @@
 
 import type { RetrievalRepos } from "../retrieval/types.js";
 import type { Repos } from "../storage/repos/index.js";
-import type { TraceId } from "../../agent-contract/dto.js";
+import type { RuntimeNamespace, TraceId } from "../../agent-contract/dto.js";
+import { isVisibleTo } from "../runtime/namespace.js";
 
-export function wrapRetrievalRepos(repos: Repos): RetrievalRepos {
+export function wrapRetrievalRepos(repos: Repos, namespace: RuntimeNamespace): RetrievalRepos {
   return {
     skills: {
       searchByVector(query, k, opts) {
@@ -19,7 +20,7 @@ export function wrapRetrievalRepos(repos: Repos): RetrievalRepos {
       },
       getById(id) {
         const row = repos.skills.getById(id);
-        if (!row) return null;
+        if (!row || !isVisibleTo(row, namespace)) return null;
         return {
           id: row.id,
           name: row.name,
@@ -36,7 +37,7 @@ export function wrapRetrievalRepos(repos: Repos): RetrievalRepos {
       },
       getManyByIds(ids) {
         const rows = repos.traces.getManyByIds(ids as readonly TraceId[]);
-        return rows.map((r) => ({
+        return rows.filter((r) => isVisibleTo(r, namespace)).map((r) => ({
           id: r.id,
           episodeId: r.episodeId,
           sessionId: r.sessionId,
@@ -53,7 +54,7 @@ export function wrapRetrievalRepos(repos: Repos): RetrievalRepos {
       },
       searchByErrorSignature(fragments, limit, opts) {
         const rows = repos.traces.searchByErrorSignature(fragments, limit, opts);
-        return rows.map((r) => ({
+        return rows.filter((r) => isVisibleTo(r, namespace)).map((r) => ({
           id: r.id,
           episodeId: r.episodeId,
           sessionId: r.sessionId,
@@ -75,7 +76,7 @@ export function wrapRetrievalRepos(repos: Repos): RetrievalRepos {
       },
       getById(id) {
         const row = repos.worldModel.getById(id);
-        if (!row) return null;
+        if (!row || !isVisibleTo(row, namespace)) return null;
         return {
           id: row.id,
           title: row.title,
@@ -93,7 +94,7 @@ export function wrapRetrievalRepos(repos: Repos): RetrievalRepos {
         const rows = repos.policies.list(
           filter && filter.status ? { status: filter.status } : {},
         );
-        return rows.map((r) => ({
+        return rows.filter((r) => isVisibleTo(r, namespace)).map((r) => ({
           id: r.id,
           title: r.title,
           sourceEpisodeIds: r.sourceEpisodeIds,
@@ -102,7 +103,7 @@ export function wrapRetrievalRepos(repos: Repos): RetrievalRepos {
       },
       getById(id) {
         const row = repos.policies.getById(id);
-        if (!row) return null;
+        if (!row || !isVisibleTo(row, namespace)) return null;
         return {
           id: row.id,
           title: row.title,

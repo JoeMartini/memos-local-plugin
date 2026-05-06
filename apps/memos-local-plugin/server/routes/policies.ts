@@ -152,7 +152,7 @@ export function registerPoliciesRoutes(routes: Routes, deps: ServerDeps): void {
       return;
     }
     const body = parseJson<{
-      scope?: "private" | "public" | "hub" | null;
+      scope?: "private" | "local" | "public" | "hub" | null;
       target?: string | null;
     }>(ctx);
     const scope = body.scope === undefined ? "public" : body.scope;
@@ -373,7 +373,7 @@ export function registerPoliciesRoutes(routes: Routes, deps: ServerDeps): void {
       return;
     }
     const body = parseJson<{
-      scope?: "private" | "public" | "hub" | null;
+      scope?: "private" | "local" | "public" | "hub" | null;
       target?: string | null;
     }>(ctx);
     const scope = body.scope === undefined ? "public" : body.scope;

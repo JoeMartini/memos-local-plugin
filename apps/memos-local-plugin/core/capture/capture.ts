@@ -506,6 +506,7 @@ export function createCaptureRunner(deps: CaptureDeps): CaptureRunner {
     vecs: VecPair[],
     episode: CaptureInput["episode"],
   ): TraceRow[] {
+    const owner = ownerFromEpisode(episode);
     const traces: TraceCandidate[] = scored.map((s, i) => ({
       ...s,
       traceId: ids.trace() as TraceId,
@@ -517,6 +518,7 @@ export function createCaptureRunner(deps: CaptureDeps): CaptureRunner {
       id: t.traceId,
       episodeId: episode.id,
       sessionId: episode.sessionId,
+      ...owner,
       ts: t.ts,
       userText: t.userText,
       agentText: t.agentText,
@@ -549,6 +551,19 @@ export function createCaptureRunner(deps: CaptureDeps): CaptureRunner {
       turnId: pickTurnId(t.meta, t.ts),
       schemaVersion: 1,
     }));
+  }
+
+  function ownerFromEpisode(episode: CaptureInput["episode"]) {
+    const meta = episode.meta ?? {};
+    const contextHints =
+      meta.contextHints && typeof meta.contextHints === "object"
+        ? (meta.contextHints as Record<string, unknown>)
+        : {};
+    return {
+      ownerAgentKind: stringMeta(meta, "ownerAgentKind") ?? stringMeta(contextHints, "ownerAgentKind") ?? "unknown",
+      ownerProfileId: stringMeta(meta, "ownerProfileId") ?? stringMeta(contextHints, "ownerProfileId") ?? "default",
+      ownerWorkspaceId: stringMeta(meta, "ownerWorkspaceId") ?? stringMeta(contextHints, "ownerWorkspaceId") ?? null,
+    };
   }
 
   function buildTraceCandidates(
@@ -1001,6 +1016,11 @@ function traceActionText(row: Pick<TraceRow, "agentText" | "toolCalls">): string
     .map((t) => `${t.name}(${safeStringify(t.input).slice(0, 300)})`)
     .join("; ");
   return [row.agentText.trim(), toolSig].filter((s) => s.length > 0).join("\n---\n") || "(empty)";
+}
+
+function stringMeta(meta: Record<string, unknown>, key: string): string | undefined {
+  const value = meta[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function safeStringify(v: unknown): string {

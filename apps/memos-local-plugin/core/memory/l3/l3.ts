@@ -270,6 +270,10 @@ export async function runL3(
         inducedBy: `${L3_ABSTRACTION_PROMPT.id}.v${L3_ABSTRACTION_PROMPT.version}`,
         now,
       });
+      const owner = ownerFromPolicies(cluster.policies);
+      wm.ownerAgentKind = owner.ownerAgentKind;
+      wm.ownerProfileId = owner.ownerProfileId;
+      wm.ownerWorkspaceId = owner.ownerWorkspaceId;
       try {
         repos.worldModel.insert(wm);
         if (!wm.vec) {
@@ -332,6 +336,19 @@ export async function runL3(
     timings,
     startedAt,
     completedAt,
+  };
+}
+
+function ownerFromPolicies(policies: readonly { ownerAgentKind?: string; ownerProfileId?: string; ownerWorkspaceId?: string | null }[]): {
+  ownerAgentKind: string;
+  ownerProfileId: string;
+  ownerWorkspaceId: string | null;
+} {
+  const first = policies[0];
+  return {
+    ownerAgentKind: first?.ownerAgentKind ?? "unknown",
+    ownerProfileId: first?.ownerProfileId ?? "default",
+    ownerWorkspaceId: first?.ownerWorkspaceId ?? null,
   };
 }
 

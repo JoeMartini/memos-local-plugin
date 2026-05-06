@@ -471,7 +471,7 @@ function SkillDrawer({
   const [mode, setMode] = useState<"view" | "edit" | "share">("view");
   const [name, setName] = useState(skill.name);
   const [guide, setGuide] = useState(skill.invocationGuide ?? "");
-  const [scope, setScope] = useState<"private" | "public" | "hub">(
+  const [scope, setScope] = useState<"private" | "local" | "public" | "hub">(
     skill.share?.scope ?? "public",
   );
   const [busy, setBusy] = useState(false);
@@ -555,7 +555,7 @@ function SkillDrawer({
     }
   };
 
-  const submitShare = async (s: "private" | "public" | "hub" | null) => {
+  const submitShare = async (s: "private" | "local" | "public" | "hub" | null) => {
     setBusy(true);
     try {
       await api.post(`/api/v1/skills/${encodeURIComponent(skill.id)}/share`, {
@@ -859,7 +859,7 @@ function SkillDrawer({
               <div class="modal__field">
                 <label>{t("memories.share.scope")}</label>
                 <div class="vstack" style="gap:var(--sp-2)">
-                  {(["private", "public", "hub"] as const).map((v) => (
+                  {(["private", "local", "public", "hub"] as const).map((v) => (
                     <label
                       key={v}
                       class="hstack"

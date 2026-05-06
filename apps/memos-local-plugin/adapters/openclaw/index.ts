@@ -84,6 +84,7 @@ async function createRuntime(api: OpenClawPluginApi): Promise<PluginRuntime> {
   // viewer port to bind.
   const { core, config, home } = await bootstrapMemoryCoreFull({
     agent: "openclaw",
+    namespace: { agentKind: "openclaw", profileId: "main" },
     pkgVersion: PLUGIN_VERSION,
   });
   await core.init();

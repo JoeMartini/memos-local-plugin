@@ -130,6 +130,9 @@ export function createEpisodeManager(deps: EpisodeManagerDeps): EpisodeManager {
       deps.episodesRepo.insert({
         id,
         sessionId: input.sessionId,
+        ownerAgentKind: stringMeta(snap.meta, "ownerAgentKind") ?? "unknown",
+        ownerProfileId: stringMeta(snap.meta, "ownerProfileId") ?? "default",
+        ownerWorkspaceId: stringMeta(snap.meta, "ownerWorkspaceId") ?? null,
         startedAt,
         endedAt: null,
         traceIds: [],
@@ -348,6 +351,11 @@ export function createEpisodeManager(deps: EpisodeManagerDeps): EpisodeManager {
       return out;
     },
   };
+}
+
+function stringMeta(meta: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = meta?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function rewardScoredAt(meta: Record<string, unknown>): unknown {

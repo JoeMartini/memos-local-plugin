@@ -122,6 +122,9 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
     deps.sessionsRepo.upsertIfMissing({
       id,
       agent: input.agent,
+      ownerAgentKind: stringMeta(input.meta, "ownerAgentKind") ?? input.agent,
+      ownerProfileId: stringMeta(input.meta, "ownerProfileId") ?? "default",
+      ownerWorkspaceId: stringMeta(input.meta, "ownerWorkspaceId") ?? null,
       startedAt: ts,
       lastSeenAt: ts,
       meta: input.meta ?? {},
@@ -379,6 +382,11 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
 
     shutdown,
   };
+}
+
+function stringMeta(meta: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = meta?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 // Re-export helpers tests will want to use.

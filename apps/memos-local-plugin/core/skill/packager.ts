@@ -99,6 +99,9 @@ export async function buildSkillRow(
 
   const row: SkillRow = {
     id,
+    ownerAgentKind: existing?.ownerAgentKind ?? policy.ownerAgentKind,
+    ownerProfileId: existing?.ownerProfileId ?? policy.ownerProfileId,
+    ownerWorkspaceId: existing?.ownerWorkspaceId ?? policy.ownerWorkspaceId,
     name: draft.name,
     status: "candidate",
     invocationGuide,
