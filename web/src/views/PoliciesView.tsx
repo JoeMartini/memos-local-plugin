@@ -15,10 +15,12 @@ import { api } from "../api/client";
 import { t } from "../stores/i18n";
 import { Icon } from "../components/Icon";
 import { Pager } from "../components/Pager";
+import { ShareScopePill } from "../components/ShareScopePill";
 import { route } from "../stores/router";
 import { clearEntryId, linkTo } from "../stores/cross-link";
 import type { PolicyDTO } from "../api/types";
 import { areAllIdsSelected, toggleIdsInSelection } from "../utils/selection";
+import { loadHubSharingEnabled } from "../utils/share";
 
 interface PolicyUsage {
   skills: Array<{ id: string; name: string; status: string; eta: number }>;
@@ -58,6 +60,12 @@ export function PoliciesView() {
       return n;
     });
   };
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    void loadHubSharingEnabled({ force: true, signal: ctrl.signal });
+    return () => ctrl.abort();
+  }, []);
 
   const load = async (opts: { q: string; status: StatusFilter; page: number }) => {
     setLoading(true);
@@ -246,6 +254,7 @@ export function PoliciesView() {
               <div class="mem-card__body">
                 <div class="mem-card__title">{p.title || "(untitled)"}</div>
                 <div class="mem-card__meta">
+                  <ShareScopePill scope={p.share?.scope} />
                   <span class={`pill pill--${p.status}`}>{t(`status.${p.status}` as never)}</span>
                   <span>support {p.support}</span>
                   <span>gain {p.gain.toFixed(2)}</span>
@@ -303,7 +312,10 @@ export function PoliciesView() {
             setDetail(null);
             clearEntryId();
           }}
-          onUpdated={(updated) => setDetail(updated)}
+          onUpdated={(updated) => {
+            setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+            setDetail(updated);
+          }}
           onStatusChange={async (p, next) => {
             await setPolicyStatus(p, next);
             // refresh the drawer with the new status.
@@ -463,6 +475,7 @@ function PolicyDrawer({
             <h3 class="card__title" style="font-size:var(--fs-md)">{t("tasks.detail.meta")}</h3>
             <dl style="display:grid;grid-template-columns:120px 1fr;gap:6px 16px;margin:0;font-size:var(--fs-sm)">
               <dt class="muted">{t("memories.field.status")}</dt><dd><span class={`pill pill--${policy.status}`}>{t(`status.${policy.status}` as never)}</span></dd>
+              <dt class="muted">{t("memories.field.share")}</dt><dd><ShareScopePill scope={policy.share?.scope} /></dd>
               <dt class="muted">{t("memories.field.support")}</dt><dd>{policy.support}</dd>
               <dt class="muted">{t("memories.field.gain")}</dt><dd>{policy.gain.toFixed(3)}</dd>
               <dt class="muted">{t("memories.field.createdAt")}</dt><dd>{new Date(policy.createdAt).toLocaleString()}</dd>

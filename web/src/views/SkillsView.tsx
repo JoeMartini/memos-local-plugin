@@ -15,10 +15,12 @@ import { openSse } from "../api/sse";
 import { t } from "../stores/i18n";
 import { Icon } from "../components/Icon";
 import { Pager } from "../components/Pager";
+import { ShareScopePill } from "../components/ShareScopePill";
 import { route } from "../stores/router";
 import { clearEntryId, linkTo } from "../stores/cross-link";
 import type { CoreEvent, SkillDTO } from "../api/types";
 import { areAllIdsSelected, toggleIdsInSelection } from "../utils/selection";
+import { loadHubSharingEnabled } from "../utils/share";
 
 interface SkillUsage {
   sourcePolicies: Array<{
@@ -73,6 +75,12 @@ export function SkillsView() {
       return n;
     });
   };
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    void loadHubSharingEnabled({ force: true, signal: ctrl.signal });
+    return () => ctrl.abort();
+  }, []);
 
   const load = async (nextPage: number = 0) => {
     setLoading(true);
@@ -270,6 +278,7 @@ export function SkillsView() {
                 <div class="mem-card__body">
                   <div class="mem-card__title">{s.name}</div>
                   <div class="mem-card__meta">
+                    <ShareScopePill scope={s.share?.scope} />
                     <span class={`pill pill--${s.status}`}>
                       {t(`status.${s.status}` as "status.active")}
                     </span>
@@ -614,6 +623,8 @@ function SkillDrawer({
                   {t(`status.${skill.status}` as "status.active")}
                 </span>
               </dd>
+              <dt class="muted">{t("memories.field.share")}</dt>
+              <dd><ShareScopePill scope={skill.share?.scope} /></dd>
               <dt class="muted">{t("skills.detail.version")}</dt>
               <dd>v{skill.version ?? 1}</dd>
               <dt class="muted">{t("memories.field.eta")}</dt>
