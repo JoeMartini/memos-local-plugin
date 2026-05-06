@@ -417,7 +417,7 @@ const HEADER_BY_REASON: Record<RetrievalReason, string> = {
 };
 
 const FOOTER_LINES_COMMON: readonly string[] = [
-  "- `memory_search(query, maxResults?)` — re-query with a shorter / rephrased string",
+  "- `memory_search(query, maxResults?, tier1topK?, tier2topK?, tier3topK?)` — re-query with a shorter / rephrased string",
   "- `memory_get(id, kind?)` — fetch a full trace / policy / world-model body by refId",
   "- `memory_timeline(episodeId, limit?)` — expand an episode into its step-by-step traces",
 ];

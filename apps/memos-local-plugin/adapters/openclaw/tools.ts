@@ -42,7 +42,28 @@ const DEFAULT_BODY_CAP = 1200;
 
 const MemorySearchParams = Type.Object({
   query: Type.String({ minLength: 1, description: "Free-text query (2–5 key words)." }),
-  maxResults: Type.Optional(Type.Integer({ minimum: 1, maximum: 50, default: 10 })),
+  maxResults: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+  tier1topK: Type.Optional(
+    Type.Integer({
+      minimum: 0,
+      maximum: 100,
+      description: "Override Skill (Tier 1) topK for this search only.",
+    }),
+  ),
+  tier2topK: Type.Optional(
+    Type.Integer({
+      minimum: 0,
+      maximum: 100,
+      description: "Override trace/episode (Tier 2) topK for this search only.",
+    }),
+  ),
+  tier3topK: Type.Optional(
+    Type.Integer({
+      minimum: 0,
+      maximum: 100,
+      description: "Override world-model (Tier 3) topK for this search only.",
+    }),
+  ),
   sessionScope: Type.Optional(
     Type.Boolean({
       default: false,
@@ -147,16 +168,15 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
         const started = Date.now();
         const core = await resolveCore(opts);
         const sessionId = params.sessionScope ? sessionFromCtx(ctx) : undefined;
+        const maxResults = params.maxResults !== undefined
+          ? Math.min(params.maxResults, 50)
+          : undefined;
         const result = await core.searchMemory({
           agent: opts.agent,
           namespace: namespaceFromCtx(ctx),
           sessionId: sessionId as never,
           query: params.query,
-          topK: {
-            tier1: Math.min(params.maxResults ?? 10, 50),
-            tier2: Math.min(params.maxResults ?? 10, 50),
-            tier3: Math.min(params.maxResults ?? 10, 50),
-          },
+          topK: topKParams(params, maxResults),
         });
         return {
           hits: result.hits.map((h) => ({
@@ -402,6 +422,25 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
     }),
     { name: "skill_get" },
   );
+}
+
+function topKParams(
+  params: MemorySearchParamsT,
+  maxResults: number | undefined,
+): { tier1?: number; tier2?: number; tier3?: number } | undefined {
+  if (
+    params.tier1topK === undefined &&
+    params.tier2topK === undefined &&
+    params.tier3topK === undefined &&
+    maxResults === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    tier1: params.tier1topK ?? maxResults,
+    tier2: params.tier2topK ?? maxResults,
+    tier3: params.tier3topK ?? maxResults,
+  };
 }
 
 /** Exposed for tests + documentation. */
