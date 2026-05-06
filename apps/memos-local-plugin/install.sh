@@ -733,10 +733,10 @@ CFGEOF
       # The process stays alive to serve the Memory Viewer.
       ( cd "${prefix}" && nohup "${node_bin}" "${tsx_bin}" "${bridge_cts}" --agent=hermes --daemon >"${daemon_log}" 2>&1 & )
 
-      if wait_for_viewer "${HERMES_PORT}"; then
+      if wait_for_viewer "${HERMES_PORT}" 120; then
         success "Memory Viewer daemon running"
       else
-        error "Memory Viewer did not respond within 30s."
+        error "Memory Viewer did not respond within 120s."
         warn "Re-install dependencies and re-run: cd ${prefix} && npm install"
         return 1
       fi

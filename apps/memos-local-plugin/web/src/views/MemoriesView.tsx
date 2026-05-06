@@ -52,10 +52,12 @@ import { api } from "../api/client";
 import { t } from "../stores/i18n";
 import { Icon } from "../components/Icon";
 import { Pager } from "../components/Pager";
+import { ShareScopePill } from "../components/ShareScopePill";
 import { route } from "../stores/router";
 import { clearEntryId } from "../stores/cross-link";
 import type { TraceDTO } from "../api/types";
 import { areAllIdsSelected, toggleIdsInSelection } from "../utils/selection";
+import { loadHubSharingEnabled } from "../utils/share";
 
 type RoleFilter = "" | "user" | "assistant" | "tool";
 
@@ -112,6 +114,12 @@ export function MemoriesView() {
     setToast({ msg, kind });
     setTimeout(() => setToast(null), 2400);
   };
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    void loadHubSharingEnabled({ force: true, signal: ctrl.signal });
+    return () => ctrl.abort();
+  }, []);
 
   const loadPage = async (opts: { q: string; page: number }) => {
     setLoading(true);
@@ -524,7 +532,6 @@ export function MemoriesView() {
           {groups.map((g) => {
             const isSel = isGroupSelected(g);
             const line = pickSummary(g.head);
-            const scope = g.scope;
             const stepLabel =
               g.traces.length > 1
                 ? t("memories.card.steps", { n: g.traces.length })
@@ -558,9 +565,7 @@ export function MemoriesView() {
                 <div class="mem-card__body">
                   <div class="mem-card__title">{line}</div>
                   <div class="mem-card__meta">
-                    <span class={`pill pill--share-${scope}`}>
-                      {t(`memories.share.scope.${scope}` as never).split(" (")[0]}
-                    </span>
+                    <ShareScopePill scope={g.scope} />
                     <span>{formatTs(g.ts)}</span>
                     <span class="mono">{groupScoreLabel(g)}</span>
                     {g.toolCount > 0 && (
@@ -1109,7 +1114,7 @@ function TraceDrawer({
                   <dd>{head.priority.toFixed(3)}</dd>
                   <dt class="muted">{t("memories.field.share")}</dt>
                   <dd>
-                    <span class={`pill pill--share-${group.scope}`}>{group.scope}</span>
+                    <ShareScopePill scope={group.scope} />
                   </dd>
                   {head.tags && head.tags.length > 0 && (
                     <>
