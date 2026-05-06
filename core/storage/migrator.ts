@@ -43,7 +43,13 @@ export interface MigrationsResult {
  */
 export function defaultMigrationsDir(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
-  return path.join(here, "migrations");
+  const compiled = path.join(here, "migrations");
+  if (fs.existsSync(compiled)) return compiled;
+
+  // Local package installs keep source files for debugging; this fallback
+  // makes compiled code resilient if runtime assets were not copied.
+  const source = path.resolve(here, "..", "..", "..", "core", "storage", "migrations");
+  return fs.existsSync(source) ? source : compiled;
 }
 
 export function discoverMigrations(dir: string): MigrationFile[] {
