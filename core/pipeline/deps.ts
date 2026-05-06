@@ -347,7 +347,7 @@ export function buildRetrievalDeps(
 ): RetrievalDeps {
   const embedder = deps.embedder;
   return {
-    repos: wrapRetrievalRepos(deps.repos),
+    repos: wrapRetrievalRepos(deps.repos, deps.namespace),
     embedder: embedder
       ? {
           embed: (text, role) =>
@@ -360,6 +360,7 @@ export function buildRetrievalDeps(
             new Float32Array(0) as unknown as import("../types.js").EmbeddingVector,
         },
     config: algorithm.retrieval,
+    namespace: deps.namespace,
     now: deps.now ?? Date.now,
     llm: deps.llm,
   };

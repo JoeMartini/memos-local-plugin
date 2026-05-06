@@ -35,6 +35,7 @@ function buildDeps(h: TmpDbHandle): PipelineDeps {
     reflectLlm: null,
     embedder: fakeEmbedder({ dimensions: DEFAULT_CONFIG.embedding.dimensions }),
     log: rootLogger.child({ channel: "test.pipeline" }),
+    namespace: { agentKind: "openclaw", profileId: "main" },
     now: () => 1_700_000_000_000,
   };
 }

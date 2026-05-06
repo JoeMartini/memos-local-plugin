@@ -157,6 +157,16 @@ function applyMigration(db: StorageDb, file: MigrationFile): void {
     ensureSkillUsageColumns(db);
     return;
   }
+  if (file.version === 6 && file.name === "world-model-version") {
+    if (tableExists(db, "world_model")) {
+      ensureColumn(db, "world_model", "version", "INTEGER NOT NULL DEFAULT 1");
+    }
+    return;
+  }
+  if (file.version === 7 && file.name === "namespace-visibility") {
+    ensureNamespaceVisibilityColumns(db);
+    return;
+  }
   db.exec(fs.readFileSync(file.fullPath, "utf8"));
 }
 
@@ -191,6 +201,77 @@ function ensureSkillUsageColumns(db: StorageDb): void {
   }
   if (!columns.has("last_used_at")) {
     db.exec(`ALTER TABLE skills ADD COLUMN last_used_at INTEGER`);
+  }
+}
+
+function ensureNamespaceVisibilityColumns(db: StorageDb): void {
+  const ownerTables = [
+    "sessions",
+    "episodes",
+    "traces",
+    "policies",
+    "world_model",
+    "skills",
+    "feedback",
+    "decision_repairs",
+    "l2_candidate_pool",
+    "skill_trials",
+    "api_logs",
+    "audit_events",
+  ];
+  for (const table of ownerTables) {
+    if (!tableExists(db, table)) continue;
+    ensureColumn(db, table, "owner_agent_kind", "TEXT NOT NULL DEFAULT 'unknown'");
+    ensureColumn(db, table, "owner_profile_id", "TEXT NOT NULL DEFAULT 'default'");
+    ensureColumn(db, table, "owner_workspace_id", "TEXT");
+  }
+  for (const table of ["episodes", "traces", "policies", "world_model", "skills"]) {
+    if (!tableExists(db, table)) continue;
+    ensureColumn(db, table, "share_scope", "TEXT DEFAULT 'private'");
+    db.exec(`UPDATE ${table} SET share_scope='private' WHERE share_scope IS NULL`);
+  }
+
+  execIfTable(db, "skills", `DROP INDEX IF EXISTS uq_skills_name`);
+  execIfTable(db, "sessions", `CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_agent_kind, owner_profile_id, last_seen_at DESC)`);
+  execIfTable(db, "episodes", `CREATE INDEX IF NOT EXISTS idx_episodes_owner ON episodes(owner_agent_kind, owner_profile_id, started_at DESC)`);
+  execIfTable(db, "episodes", `CREATE INDEX IF NOT EXISTS idx_episodes_share ON episodes(share_scope, started_at DESC)`);
+  execIfTable(db, "traces", `CREATE INDEX IF NOT EXISTS idx_traces_owner ON traces(owner_agent_kind, owner_profile_id, ts DESC)`);
+  execIfTable(db, "traces", `CREATE INDEX IF NOT EXISTS idx_traces_share ON traces(share_scope, ts DESC)`);
+  execIfTable(db, "policies", `CREATE INDEX IF NOT EXISTS idx_policies_owner ON policies(owner_agent_kind, owner_profile_id, updated_at DESC)`);
+  execIfTable(db, "policies", `CREATE INDEX IF NOT EXISTS idx_policies_share ON policies(share_scope, updated_at DESC)`);
+  execIfTable(db, "world_model", `CREATE INDEX IF NOT EXISTS idx_world_owner ON world_model(owner_agent_kind, owner_profile_id, updated_at DESC)`);
+  execIfTable(db, "world_model", `CREATE INDEX IF NOT EXISTS idx_world_share ON world_model(share_scope, updated_at DESC)`);
+  execIfTable(db, "skills", `CREATE UNIQUE INDEX IF NOT EXISTS uq_skills_owner_name ON skills(owner_agent_kind, owner_profile_id, name)`);
+  execIfTable(db, "skills", `CREATE INDEX IF NOT EXISTS idx_skills_owner ON skills(owner_agent_kind, owner_profile_id, updated_at DESC)`);
+  execIfTable(db, "skills", `CREATE INDEX IF NOT EXISTS idx_skills_share ON skills(share_scope, updated_at DESC)`);
+  execIfTable(db, "feedback", `CREATE INDEX IF NOT EXISTS idx_feedback_owner ON feedback(owner_agent_kind, owner_profile_id, ts DESC)`);
+  execIfTable(db, "decision_repairs", `CREATE INDEX IF NOT EXISTS idx_repairs_owner ON decision_repairs(owner_agent_kind, owner_profile_id, ts DESC)`);
+  execIfTable(db, "l2_candidate_pool", `CREATE INDEX IF NOT EXISTS idx_l2_candidate_owner ON l2_candidate_pool(owner_agent_kind, owner_profile_id, expires_at)`);
+  execIfTable(db, "skill_trials", `CREATE INDEX IF NOT EXISTS idx_skill_trials_owner ON skill_trials(owner_agent_kind, owner_profile_id, created_at DESC)`);
+  execIfTable(db, "api_logs", `CREATE INDEX IF NOT EXISTS idx_api_logs_owner ON api_logs(owner_agent_kind, owner_profile_id, called_at DESC)`);
+  execIfTable(db, "audit_events", `CREATE INDEX IF NOT EXISTS idx_audit_owner ON audit_events(owner_agent_kind, owner_profile_id, ts DESC)`);
+}
+
+function execIfTable(db: StorageDb, table: string, sql: string): void {
+  if (tableExists(db, table)) db.exec(sql);
+}
+
+function tableExists(db: StorageDb, table: string): boolean {
+  return Boolean(
+    db.prepare<{ name: string }, { name: string }>(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name=@name`,
+    ).get({ name: table }),
+  );
+}
+
+function ensureColumn(db: StorageDb, table: string, column: string, definition: string): void {
+  const columns = new Set(
+    db.prepare<unknown, { name: string }>(`PRAGMA table_info(${table})`)
+      .all()
+      .map((row) => row.name),
+  );
+  if (!columns.has(column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 }
 

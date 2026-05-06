@@ -30,16 +30,24 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 CREATE TABLE IF NOT EXISTS sessions (
   id            TEXT    PRIMARY KEY,
   agent         TEXT    NOT NULL,
+  owner_agent_kind TEXT NOT NULL DEFAULT 'unknown',
+  owner_profile_id TEXT NOT NULL DEFAULT 'default',
+  owner_workspace_id TEXT,
   started_at    INTEGER NOT NULL,
   last_seen_at  INTEGER NOT NULL,
   meta_json     TEXT    NOT NULL DEFAULT '{}' CHECK (json_valid(meta_json))
 ) STRICT;
 
+CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_agent_kind, owner_profile_id, last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_last_seen ON sessions(last_seen_at DESC);
 
 CREATE TABLE IF NOT EXISTS episodes (
   id            TEXT    PRIMARY KEY,
   session_id    TEXT    NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  owner_agent_kind TEXT NOT NULL DEFAULT 'unknown',
+  owner_profile_id TEXT NOT NULL DEFAULT 'default',
+  owner_workspace_id TEXT,
+  share_scope   TEXT    DEFAULT 'private',
   started_at    INTEGER NOT NULL,
   ended_at      INTEGER,
   trace_ids_json TEXT   NOT NULL DEFAULT '[]' CHECK (json_valid(trace_ids_json)),
@@ -48,6 +56,8 @@ CREATE TABLE IF NOT EXISTS episodes (
   meta_json     TEXT    NOT NULL DEFAULT '{}' CHECK (json_valid(meta_json))
 ) STRICT;
 
+CREATE INDEX IF NOT EXISTS idx_episodes_owner ON episodes(owner_agent_kind, owner_profile_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_episodes_share ON episodes(share_scope, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_episodes_session ON episodes(session_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_episodes_status ON episodes(status, started_at DESC);
 
@@ -65,6 +75,9 @@ CREATE TABLE IF NOT EXISTS traces (
   id                    TEXT    PRIMARY KEY,
   episode_id            TEXT    NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
   session_id            TEXT    NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  owner_agent_kind      TEXT    NOT NULL DEFAULT 'unknown',
+  owner_profile_id      TEXT    NOT NULL DEFAULT 'default',
+  owner_workspace_id    TEXT,
   ts                    INTEGER NOT NULL,
   user_text             TEXT    NOT NULL,
   agent_text            TEXT    NOT NULL,
@@ -80,13 +93,15 @@ CREATE TABLE IF NOT EXISTS traces (
   error_signatures_json TEXT    NOT NULL DEFAULT '[]' CHECK (json_valid(error_signatures_json)),
   vec_summary           BLOB,
   vec_action            BLOB,
-  share_scope           TEXT,
+  share_scope           TEXT    DEFAULT 'private',
   share_target          TEXT,
   shared_at             INTEGER,
   turn_id               INTEGER NOT NULL,
   schema_version        INTEGER NOT NULL DEFAULT 1
 ) STRICT;
 
+CREATE INDEX IF NOT EXISTS idx_traces_owner        ON traces(owner_agent_kind, owner_profile_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_traces_share        ON traces(share_scope, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_traces_episode_ts   ON traces(episode_id, ts);
 CREATE INDEX IF NOT EXISTS idx_traces_session_ts   ON traces(session_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_traces_priority     ON traces(priority DESC);
@@ -104,6 +119,9 @@ CREATE INDEX IF NOT EXISTS idx_traces_episode_turn ON traces(episode_id, turn_id
 -- without a null branch.
 CREATE TABLE IF NOT EXISTS policies (
   id                       TEXT    PRIMARY KEY,
+  owner_agent_kind         TEXT    NOT NULL DEFAULT 'unknown',
+  owner_profile_id         TEXT    NOT NULL DEFAULT 'default',
+  owner_workspace_id       TEXT,
   title                    TEXT    NOT NULL,
   trigger                  TEXT    NOT NULL,
   procedure                TEXT    NOT NULL,
@@ -119,18 +137,23 @@ CREATE TABLE IF NOT EXISTS policies (
   vec                      BLOB,
   created_at               INTEGER NOT NULL,
   updated_at               INTEGER NOT NULL,
-  share_scope              TEXT,
+  share_scope              TEXT    DEFAULT 'private',
   share_target             TEXT,
   shared_at                INTEGER,
   edited_at                INTEGER
 ) STRICT;
 
+CREATE INDEX IF NOT EXISTS idx_policies_owner   ON policies(owner_agent_kind, owner_profile_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_policies_share   ON policies(share_scope, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_policies_status  ON policies(status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_policies_support ON policies(support DESC, gain DESC);
 
 -- Candidate pool for incremental L2 induction (V7 §2.4.1 step 3).
 CREATE TABLE IF NOT EXISTS l2_candidate_pool (
   id                      TEXT    PRIMARY KEY,
+  owner_agent_kind        TEXT    NOT NULL DEFAULT 'unknown',
+  owner_profile_id        TEXT    NOT NULL DEFAULT 'default',
+  owner_workspace_id      TEXT,
   policy_id               TEXT REFERENCES policies(id) ON DELETE SET NULL,
   evidence_trace_ids_json TEXT    NOT NULL DEFAULT '[]' CHECK (json_valid(evidence_trace_ids_json)),
   signature               TEXT    NOT NULL,
@@ -139,6 +162,7 @@ CREATE TABLE IF NOT EXISTS l2_candidate_pool (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_l2_candidate_sig     ON l2_candidate_pool(signature);
+CREATE INDEX IF NOT EXISTS idx_l2_candidate_owner   ON l2_candidate_pool(owner_agent_kind, owner_profile_id, expires_at);
 CREATE INDEX IF NOT EXISTS idx_l2_candidate_expires ON l2_candidate_pool(expires_at);
 
 -- ─── L3 World-model ─────────────────────────────────────────────────────────
@@ -147,6 +171,9 @@ CREATE INDEX IF NOT EXISTS idx_l2_candidate_expires ON l2_candidate_pool(expires
 -- 012 squashed in.
 CREATE TABLE IF NOT EXISTS world_model (
   id                   TEXT    PRIMARY KEY,
+  owner_agent_kind     TEXT    NOT NULL DEFAULT 'unknown',
+  owner_profile_id     TEXT    NOT NULL DEFAULT 'default',
+  owner_workspace_id   TEXT,
   title                TEXT    NOT NULL,
   body                 TEXT    NOT NULL,
   policy_ids_json      TEXT    NOT NULL DEFAULT '[]' CHECK (json_valid(policy_ids_json)),
@@ -160,7 +187,7 @@ CREATE TABLE IF NOT EXISTS world_model (
   vec                  BLOB,
   created_at           INTEGER NOT NULL,
   updated_at           INTEGER NOT NULL,
-  share_scope          TEXT,
+  share_scope          TEXT    DEFAULT 'private',
   share_target         TEXT,
   shared_at            INTEGER,
   edited_at            INTEGER,
@@ -168,6 +195,8 @@ CREATE TABLE IF NOT EXISTS world_model (
   archived_at          INTEGER
 ) STRICT;
 
+CREATE INDEX IF NOT EXISTS idx_world_owner      ON world_model(owner_agent_kind, owner_profile_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_world_share      ON world_model(share_scope, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_world_updated    ON world_model(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_world_confidence ON world_model(confidence DESC);
 
@@ -177,6 +206,9 @@ CREATE INDEX IF NOT EXISTS idx_world_confidence ON world_model(confidence DESC);
 -- (014) are all baked in.
 CREATE TABLE IF NOT EXISTS skills (
   id                    TEXT    PRIMARY KEY,
+  owner_agent_kind      TEXT    NOT NULL DEFAULT 'unknown',
+  owner_profile_id      TEXT    NOT NULL DEFAULT 'default',
+  owner_workspace_id    TEXT,
   name                  TEXT    NOT NULL,
   status                TEXT    NOT NULL CHECK (status IN ('candidate','active','archived')) DEFAULT 'candidate',
   invocation_guide      TEXT    NOT NULL,
@@ -193,18 +225,23 @@ CREATE TABLE IF NOT EXISTS skills (
   created_at            INTEGER NOT NULL,
   updated_at            INTEGER NOT NULL,
   version               INTEGER NOT NULL DEFAULT 1,
-  share_scope           TEXT,
+  share_scope           TEXT    DEFAULT 'private',
   share_target          TEXT,
   shared_at             INTEGER,
   edited_at             INTEGER
 ) STRICT;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_skills_name ON skills(name);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_skills_owner_name ON skills(owner_agent_kind, owner_profile_id, name);
+CREATE INDEX IF NOT EXISTS idx_skills_owner ON skills(owner_agent_kind, owner_profile_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_skills_share ON skills(share_scope, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_skills_status ON skills(status, eta DESC);
 
 -- ─── Feedback ───────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS feedback (
   id          TEXT    PRIMARY KEY,
+  owner_agent_kind TEXT NOT NULL DEFAULT 'unknown',
+  owner_profile_id TEXT NOT NULL DEFAULT 'default',
+  owner_workspace_id TEXT,
   ts          INTEGER NOT NULL,
   episode_id  TEXT REFERENCES episodes(id) ON DELETE SET NULL,
   trace_id    TEXT REFERENCES traces(id)   ON DELETE SET NULL,
@@ -216,12 +253,16 @@ CREATE TABLE IF NOT EXISTS feedback (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_feedback_ts      ON feedback(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_owner   ON feedback(owner_agent_kind, owner_profile_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_feedback_trace   ON feedback(trace_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_episode ON feedback(episode_id);
 
 -- ─── Decision repair history ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS decision_repairs (
   id                     TEXT    PRIMARY KEY,
+  owner_agent_kind       TEXT    NOT NULL DEFAULT 'unknown',
+  owner_profile_id       TEXT    NOT NULL DEFAULT 'default',
+  owner_workspace_id     TEXT,
   ts                     INTEGER NOT NULL,
   context_hash           TEXT    NOT NULL,
   preference             TEXT    NOT NULL,
@@ -232,11 +273,15 @@ CREATE TABLE IF NOT EXISTS decision_repairs (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_repairs_ts      ON decision_repairs(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_repairs_owner   ON decision_repairs(owner_agent_kind, owner_profile_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_repairs_context ON decision_repairs(context_hash);
 
 -- ─── Audit log (database-side). The file-based audit.log is separate. ──────
 CREATE TABLE IF NOT EXISTS audit_events (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_agent_kind TEXT NOT NULL DEFAULT 'unknown',
+  owner_profile_id TEXT NOT NULL DEFAULT 'default',
+  owner_workspace_id TEXT,
   ts          INTEGER NOT NULL,
   actor       TEXT    NOT NULL,          -- "user" | "system" | "hub:<user>"
   kind        TEXT    NOT NULL,          -- "config.update" | "skill.retire" | ...
@@ -245,6 +290,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_audit_ts   ON audit_events(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_owner ON audit_events(owner_agent_kind, owner_profile_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_kind ON audit_events(kind, ts DESC);
 
 -- ─── API call log (was migration 007) ───────────────────────────────────────
@@ -252,6 +298,9 @@ CREATE INDEX IF NOT EXISTS idx_audit_kind ON audit_events(kind, ts DESC);
 -- higher level if the volume grows big.
 CREATE TABLE IF NOT EXISTS api_logs (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_agent_kind TEXT NOT NULL DEFAULT 'unknown',
+  owner_profile_id TEXT NOT NULL DEFAULT 'default',
+  owner_workspace_id TEXT,
   tool_name    TEXT    NOT NULL,
   input_json   TEXT    NOT NULL DEFAULT '{}',
   output_json  TEXT    NOT NULL DEFAULT '',
@@ -261,6 +310,7 @@ CREATE TABLE IF NOT EXISTS api_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_logs_called_at ON api_logs(called_at DESC);
+CREATE INDEX IF NOT EXISTS idx_api_logs_owner ON api_logs(owner_agent_kind, owner_profile_id, called_at DESC);
 CREATE INDEX IF NOT EXISTS idx_api_logs_tool_time ON api_logs(tool_name, called_at DESC);
 
 -- ─── Generic key-value store ───────────────────────────────────────────────

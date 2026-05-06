@@ -392,7 +392,7 @@ function PolicyDrawer({
   const [procedure, setProcedure] = useState(policy.procedure);
   const [verification, setVerification] = useState(policy.verification);
   const [boundary, setBoundary] = useState(policy.boundary);
-  const [scope, setScope] = useState<"private" | "public" | "hub">(
+  const [scope, setScope] = useState<"private" | "local" | "public" | "hub">(
     policy.share?.scope ?? "public",
   );
   const [busy, setBusy] = useState(false);
@@ -426,7 +426,7 @@ function PolicyDrawer({
     }
   };
 
-  const submitShare = async (s: "private" | "public" | "hub" | null) => {
+  const submitShare = async (s: "private" | "local" | "public" | "hub" | null) => {
     setBusy(true);
     try {
       const updated = await api.post<PolicyDTO>(
@@ -638,7 +638,7 @@ function PolicyDrawer({
               <div class="modal__field">
                 <label>{t("memories.share.scope")}</label>
                 <div class="vstack" style="gap:var(--sp-2)">
-                  {(["private", "public", "hub"] as const).map((v) => (
+                  {(["private", "local", "public", "hub"] as const).map((v) => (
                     <label
                       key={v}
                       class="hstack"

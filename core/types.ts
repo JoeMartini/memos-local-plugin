@@ -20,6 +20,7 @@ import type {
   TraceId,
   ValueScore,
   WorldModelId,
+  ShareScope,
 } from "../agent-contract/dto.js";
 
 // ─── Re-exports for convenience ──────────────────────────────────────────────
@@ -40,7 +41,15 @@ export type {
   TraceId,
   ValueScore,
   WorldModelId,
+  RuntimeNamespace,
+  ShareScope,
 } from "../agent-contract/dto.js";
+
+export interface OwnedRow {
+  ownerAgentKind?: string;
+  ownerProfileId?: string;
+  ownerWorkspaceId?: string | null;
+}
 
 // ─── Embeddings ──────────────────────────────────────────────────────────────
 
@@ -55,7 +64,7 @@ export interface Embedded<T> {
 
 // ─── Memory rows (storage-shaped, before being serialized to DTO) ────────────
 
-export interface TraceRow {
+export interface TraceRow extends OwnedRow {
   id: TraceId;
   episodeId: EpisodeId;
   sessionId: SessionId;
@@ -76,7 +85,7 @@ export interface TraceRow {
    * can annotate rows and make the Hub sync round-trippable.
    */
   share?: {
-    scope: "private" | "public" | "hub";
+    scope: ShareScope;
     target?: string | null;
     sharedAt?: EpochMs | null;
   } | null;
@@ -134,7 +143,7 @@ export interface TraceRow {
   schemaVersion: number;
 }
 
-export interface PolicyRow {
+export interface PolicyRow extends OwnedRow {
   id: PolicyId;
   title: string;
   trigger: string;
@@ -161,7 +170,7 @@ export interface PolicyRow {
   updatedAt: EpochMs;
   /** Sharing state (migration 009). Mirrors `TraceRow.share`. */
   share?: {
-    scope: "private" | "public" | "hub";
+    scope: ShareScope;
     target?: string | null;
     sharedAt?: EpochMs | null;
   } | null;
@@ -191,7 +200,7 @@ export interface WorldModelStructureEntry {
   evidenceIds?: string[];
 }
 
-export interface WorldModelRow {
+export interface WorldModelRow extends OwnedRow {
   id: WorldModelId;
   title: string;
   /** Rendered markdown summary, used by prompts + viewer + embedding. */
@@ -222,7 +231,7 @@ export interface WorldModelRow {
   archivedAt?: EpochMs | null;
   /** Sharing state (migration 009). */
   share?: {
-    scope: "private" | "public" | "hub";
+    scope: ShareScope;
     target?: string | null;
     sharedAt?: EpochMs | null;
   } | null;
@@ -230,7 +239,7 @@ export interface WorldModelRow {
   editedAt?: EpochMs | null;
 }
 
-export interface SkillRow {
+export interface SkillRow extends OwnedRow {
   id: SkillId;
   name: string;
   status: "candidate" | "active" | "archived";
@@ -263,7 +272,7 @@ export interface SkillRow {
   version: number;
   /** Sharing state (migration 009). */
   share?: {
-    scope: "private" | "public" | "hub";
+    scope: ShareScope;
     target?: string | null;
     sharedAt?: EpochMs | null;
   } | null;
@@ -275,7 +284,7 @@ export interface SkillRow {
   lastUsedAt?: EpochMs | null;
 }
 
-export interface SkillTrialRow {
+export interface SkillTrialRow extends OwnedRow {
   id: string;
   skillId: SkillId;
   sessionId: SessionId | null;
@@ -289,9 +298,14 @@ export interface SkillTrialRow {
   evidence: Record<string, unknown>;
 }
 
-export interface EpisodeRow {
+export interface EpisodeRow extends OwnedRow {
   id: EpisodeId;
   sessionId: SessionId;
+  share?: {
+    scope: ShareScope;
+    target?: string | null;
+    sharedAt?: EpochMs | null;
+  } | null;
   startedAt: EpochMs;
   endedAt: EpochMs | null;
   traceIds: TraceId[];
@@ -300,7 +314,7 @@ export interface EpisodeRow {
   status: "open" | "closed";
 }
 
-export interface FeedbackRow {
+export interface FeedbackRow extends OwnedRow {
   id: FeedbackId;
   ts: EpochMs;
   episodeId: EpisodeId | null;
@@ -312,7 +326,7 @@ export interface FeedbackRow {
   raw: unknown;
 }
 
-export interface CandidatePoolRow {
+export interface CandidatePoolRow extends OwnedRow {
   id: string;
   policyId: PolicyId | null;        // null until promoted
   evidenceTraceIds: TraceId[];
@@ -321,7 +335,7 @@ export interface CandidatePoolRow {
   expiresAt: EpochMs;
 }
 
-export interface DecisionRepairRow {
+export interface DecisionRepairRow extends OwnedRow {
   id: string;
   ts: EpochMs;
   contextHash: string;

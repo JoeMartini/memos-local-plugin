@@ -1,7 +1,7 @@
 import { signal } from "@preact/signals";
 import { api } from "../api/client";
 
-export type ShareScope = "private" | "public" | "hub";
+export type ShareScope = "private" | "local" | "public" | "hub";
 
 interface SharingConfig {
   hub?: {

@@ -7,7 +7,10 @@ import {
   fromBlob,
   fromJsonText,
   joinWhere,
+  normalizeShareForStorage,
   nullable,
+  ownerFieldsFromRaw,
+  ownerParamsFromRow,
   timeRangeWhere,
   toBlob,
   toJsonText,
@@ -17,6 +20,9 @@ const COLUMNS = [
   "id",
   "episode_id",
   "session_id",
+  "owner_agent_kind",
+  "owner_profile_id",
+  "owner_workspace_id",
   "ts",
   "user_text",
   "agent_text",
@@ -45,6 +51,9 @@ export type TraceSearchMeta = {
   value: number;
   episode_id: EpisodeId;
   session_id: SessionId;
+  owner_agent_kind?: string;
+  owner_profile_id?: string;
+  owner_workspace_id?: string | null;
   tags_json?: string;
   error_signatures_json?: string;
 };
@@ -259,7 +268,17 @@ export function makeTracesRepo(db: StorageDb) {
       return scanAndTopK<TraceSearchMeta>(
         db,
         "traces",
-        ["ts", "priority", "value", "episode_id", "session_id", "tags_json"],
+        [
+          "ts",
+          "priority",
+          "value",
+          "episode_id",
+          "session_id",
+          "owner_agent_kind",
+          "owner_profile_id",
+          "owner_workspace_id",
+          "tags_json",
+        ],
         query,
         k,
         {
@@ -314,6 +333,9 @@ export function makeTracesRepo(db: StorageDb) {
                t.value       AS value,
                t.episode_id  AS episode_id,
                t.session_id  AS session_id,
+               t.owner_agent_kind AS owner_agent_kind,
+               t.owner_profile_id AS owner_profile_id,
+               t.owner_workspace_id AS owner_workspace_id,
                t.tags_json   AS tags_json,
                t.error_signatures_json AS error_signatures_json
           FROM traces_fts f
@@ -337,6 +359,9 @@ export function makeTracesRepo(db: StorageDb) {
           value: r.value,
           episode_id: r.episode_id as EpisodeId,
           session_id: r.session_id as SessionId,
+          owner_agent_kind: r.owner_agent_kind,
+          owner_profile_id: r.owner_profile_id,
+          owner_workspace_id: r.owner_workspace_id,
           tags_json: r.tags_json,
           error_signatures_json: r.error_signatures_json,
         },
@@ -383,6 +408,7 @@ export function makeTracesRepo(db: StorageDb) {
       const extra = opts.where ? ` AND (${opts.where})` : "";
       const sql = `
         SELECT id, ts, priority, value, episode_id, session_id, tags_json,
+               owner_agent_kind, owner_profile_id, owner_workspace_id,
                error_signatures_json
           FROM traces
          WHERE (${ors.join(" OR ")})${extra}
@@ -398,6 +424,9 @@ export function makeTracesRepo(db: StorageDb) {
           value: r.value,
           episode_id: r.episode_id as EpisodeId,
           session_id: r.session_id as SessionId,
+          owner_agent_kind: r.owner_agent_kind,
+          owner_profile_id: r.owner_profile_id,
+          owner_workspace_id: r.owner_workspace_id,
           tags_json: r.tags_json,
           error_signatures_json: r.error_signatures_json,
         },
@@ -532,7 +561,7 @@ export function makeTracesRepo(db: StorageDb) {
     updateShare(
       id: TraceId,
       share: {
-        scope: "private" | "public" | "hub" | null;
+        scope: "private" | "local" | "public" | "hub" | null;
         target?: string | null;
         sharedAt?: number | null;
       },
@@ -546,7 +575,7 @@ export function makeTracesRepo(db: StorageDb) {
         `UPDATE traces SET share_scope=@share_scope, share_target=@share_target, shared_at=@shared_at WHERE id=@id`,
       ).run({
         id,
-        share_scope: share.scope,
+        share_scope: normalizeShareForStorage(share.scope),
         share_target: share.target ?? null,
         shared_at: share.sharedAt ?? null,
       });
@@ -561,6 +590,9 @@ interface RawHit {
   value: number;
   episode_id: string;
   session_id: string;
+  owner_agent_kind: string;
+  owner_profile_id: string;
+  owner_workspace_id: string | null;
   tags_json: string;
   error_signatures_json: string;
 }
@@ -569,6 +601,9 @@ interface RawTraceRow {
   id: string;
   episode_id: string;
   session_id: string;
+  owner_agent_kind: string;
+  owner_profile_id: string;
+  owner_workspace_id: string | null;
   ts: number;
   user_text: string;
   agent_text: string;
@@ -619,6 +654,7 @@ function rowToParams(row: TraceRow): Record<string, unknown> {
     id: row.id,
     episode_id: row.episodeId,
     session_id: row.sessionId,
+    ...ownerParamsFromRow(row),
     ts: row.ts,
     user_text: row.userText,
     agent_text: row.agentText,
@@ -634,7 +670,7 @@ function rowToParams(row: TraceRow): Record<string, unknown> {
     error_signatures_json: toJsonText(normalizeSignatures(row.errorSignatures)),
     vec_summary: toBlob(row.vecSummary),
     vec_action: toBlob(row.vecAction),
-    share_scope: row.share?.scope ?? null,
+    share_scope: normalizeShareForStorage(row.share?.scope),
     share_target: row.share?.target ?? null,
     shared_at: row.share?.sharedAt ?? null,
     turn_id: row.turnId ?? null,
@@ -647,6 +683,7 @@ function mapRow(r: RawTraceRow): TraceRow {
     id: r.id,
     episodeId: r.episode_id,
     sessionId: r.session_id,
+    ...ownerFieldsFromRaw(r),
     ts: r.ts,
     userText: r.user_text,
     agentText: r.agent_text,
@@ -665,7 +702,7 @@ function mapRow(r: RawTraceRow): TraceRow {
     share:
       r.share_scope != null
         ? {
-            scope: r.share_scope as "private" | "public" | "hub",
+            scope: normalizeShareForStorage(r.share_scope) as "private" | "local" | "public" | "hub",
             target: r.share_target,
             sharedAt: r.shared_at,
           }

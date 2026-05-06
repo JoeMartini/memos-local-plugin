@@ -49,6 +49,7 @@ import {
   extractAlgorithmConfig,
   pipelineLogger,
 } from "./deps.js";
+import { wrapRetrievalRepos } from "./retrieval-repos.js";
 import type {
   PipelineAlgorithmConfig,
   PipelineBuses,
@@ -839,6 +840,14 @@ export function createPipeline(deps: PipelineDeps): PipelineHandle {
   const retrievalDeps = buildRetrievalDeps(deps, algorithm);
   const turnStartRetrievalStats = new Map<string, RetrievalResult["stats"]>();
 
+  function retrievalDepsFor(namespace = deps.namespace): typeof retrievalDeps {
+    return {
+      ...retrievalDeps,
+      namespace,
+      repos: wrapRetrievalRepos(deps.repos, namespace),
+    };
+  }
+
   async function retrieveTurnStart(input: TurnInputDTO): Promise<InjectionPacket> {
     const ctx = {
       reason: "turn_start" as const,
@@ -850,7 +859,7 @@ export function createPipeline(deps: PipelineDeps): PipelineHandle {
       ts: input.ts,
     };
     const result: RetrievalResult = await turnStartRetrieve(
-      retrievalDeps,
+      retrievalDepsFor(input.namespace),
       ctx,
       { events: buses.retrieval },
     );
@@ -866,7 +875,7 @@ export function createPipeline(deps: PipelineDeps): PipelineHandle {
 
   async function retrieveToolDriven(ctx: ToolDrivenCtx): Promise<InjectionPacket> {
     const result = await toolDrivenRetrieve(
-      retrievalDeps,
+      retrievalDepsFor(ctx.namespace),
       { reason: "tool_driven", ...ctx },
       { events: buses.retrieval },
     );
@@ -875,7 +884,7 @@ export function createPipeline(deps: PipelineDeps): PipelineHandle {
 
   async function retrieveSkillInvoke(ctx: SkillInvokeCtx): Promise<InjectionPacket> {
     const result = await skillInvokeRetrieve(
-      retrievalDeps,
+      retrievalDepsFor(ctx.namespace),
       { reason: "skill_invoke", ...ctx },
       { events: buses.retrieval },
     );
@@ -884,7 +893,7 @@ export function createPipeline(deps: PipelineDeps): PipelineHandle {
 
   async function retrieveSubAgent(ctx: SubAgentCtx): Promise<InjectionPacket> {
     const result = await subAgentRetrieve(
-      retrievalDeps,
+      retrievalDepsFor(ctx.namespace),
       { reason: "sub_agent", ...ctx },
       { events: buses.retrieval },
     );
@@ -893,7 +902,7 @@ export function createPipeline(deps: PipelineDeps): PipelineHandle {
 
   async function retrieveRepair(ctx: RepairCtx): Promise<InjectionPacket | null> {
     const result = await repairRetrieve(
-      retrievalDeps,
+      retrievalDepsFor(ctx.namespace),
       { reason: "decision_repair", ...ctx },
       { events: buses.retrieval },
     );
@@ -914,6 +923,7 @@ export function createPipeline(deps: PipelineDeps): PipelineHandle {
       initialSessionId,
       input.userText,
       {
+        ...(input.contextHints ?? {}),
         contextHints: input.contextHints ?? {},
         agent: input.agent,
         startedAtTurnTs: input.ts,
@@ -1289,6 +1299,7 @@ export function createPipeline(deps: PipelineDeps): PipelineHandle {
     home: deps.home,
     config: deps.config,
     algorithm,
+    namespace: deps.namespace,
     db: deps.db,
     repos: deps.repos,
     llm: deps.llm,

@@ -124,6 +124,7 @@ function buildCore(root: string, version: string): {
     reflectLlm: null,
     embedder: semanticFakeEmbedder(config.embedding.dimensions),
     log: rootLogger.child({ channel: "test.adapters.hermes.persistence" }),
+    namespace: { agentKind: "hermes", profileId: "default" },
     now: () => 1_700_000_000_000,
   };
   const pipeline = createPipeline(deps);
