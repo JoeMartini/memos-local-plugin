@@ -368,7 +368,10 @@ class MemTensorProviderTests(unittest.TestCase):
 
         skills = json.loads(p.handle_tool_call("skill_list", {"status": "active", "limit": 3}))
         self.assertEqual(skills["skills"][0]["id"], "sk-1")
-        self.assertEqual(bridge.calls[-1], ("skill.list", {"limit": 3, "status": "active"}))
+        self.assertEqual(bridge.calls[-1][0], "skill.list")
+        self.assertEqual(bridge.calls[-1][1]["limit"], 3)
+        self.assertEqual(bridge.calls[-1][1]["status"], "active")
+        self.assertEqual(bridge.calls[-1][1]["namespace"]["agentKind"], "hermes")
 
         env = json.loads(p.handle_tool_call("memory_environment", {"limit": 2}))
         self.assertFalse(env["queried"])
