@@ -23,6 +23,7 @@
  *   - We import **types only** from `./openclaw-api.ts`; the real SDK is
  *     injected by the host at load time.
  */
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,7 +44,7 @@ import type { ServerHandle } from "../../server/types.js";
 // ─── Plugin metadata ───────────────────────────────────────────────────────
 
 export const PLUGIN_ID = "memos-local-plugin";
-export const PLUGIN_VERSION = "2.0.0-beta.1";
+export const PLUGIN_VERSION = "2.0.0-beta.5";
 
 // ─── Runtime state (per plugin load) ───────────────────────────────────────
 
@@ -62,15 +63,16 @@ interface PluginRuntime {
 
 /** Locate the bundled viewer static assets relative to the plugin root. */
 function resolveViewerStaticRoot(): string | undefined {
-  // When the plugin ships as an npm tarball the built viewer sits at
-  // `<plugin>/web/dist/` (included via `package.json::files`). During local
-  // development `web/dist` is only present after `npm run build:web`.
-  // Either way we resolve relative to this file's directory.
+  // Built packages load from `<plugin>/dist/adapters`; source tests load
+  // from `<plugin>/adapters`. The viewer bundle remains at `web/dist`.
   try {
     const thisFile = fileURLToPath(import.meta.url);
     const adapterDir = path.dirname(thisFile); // .../adapters/openclaw
-    const candidate = path.resolve(adapterDir, "..", "..", "web", "dist");
-    return candidate;
+    const candidates = [
+      path.resolve(adapterDir, "..", "..", "..", "web", "dist"),
+      path.resolve(adapterDir, "..", "..", "web", "dist"),
+    ];
+    return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
   } catch {
     return undefined;
   }
