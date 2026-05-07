@@ -3806,11 +3806,15 @@ function applyTopKOverride(
   topK: RetrievalQueryDTO["topK"] | undefined,
 ): RetrievalConfig {
   if (!topK) return config;
+  const tier1TopK = clampTopK(topK.tier1, config.tier1TopK);
+  const tier2TopK = clampTopK(topK.tier2, config.tier2TopK);
+  const tier3TopK = clampTopK(topK.tier3, config.tier3TopK);
   return {
     ...config,
-    tier1TopK: clampTopK(topK.tier1, config.tier1TopK),
-    tier2TopK: clampTopK(topK.tier2, config.tier2TopK),
-    tier3TopK: clampTopK(topK.tier3, config.tier3TopK),
+    tier1TopK,
+    tier2TopK,
+    tier3TopK,
+    llmFilterMaxKeep: tier1TopK + tier2TopK + tier3TopK,
   };
 }
 

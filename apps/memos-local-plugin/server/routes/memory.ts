@@ -101,7 +101,10 @@ export function registerMemoryRoutes(
   });
 }
 
-function validateSearchQuery(ctx: RouteContext, query: string): boolean {
+function validateSearchQuery(
+  ctx: RouteContext,
+  query: string,
+): boolean {
   if (query.length <= MAX_SEARCH_QUERY_CHARS) return true;
   writeError(
     ctx,
