@@ -231,7 +231,13 @@ class MemTensorProvider(MemoryProvider):
             "`memory_get`, `memory_timeline`, `memory_environment`, "
             "`skill_list`, or `skill_get` when prior context or learned "
             "procedures would help. Relevant memories are automatically "
-            "injected at the start of every turn."
+            "injected at the start of every turn.\n\n"
+            "**Not the same as repo skills:** Hermes' `<available_skills>` / "
+            "`skill_view(name=…)` load **repository SKILL.md** files. "
+            "`skill_get` / `skill_list` refer to **MemOS-crystallized** "
+            "skills (learned from your runs). If both apply, you may use "
+            "both: repo skills for product conventions, MemOS skills for "
+            "workflows proven on *your* past tasks."
         )
 
     # ─── Episode tracking ─────────────────────────────────────────────────
