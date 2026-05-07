@@ -694,6 +694,13 @@ const en = {
   "settings.hub.address": "Hub address",
   "settings.hub.userToken": "Your user token",
   "settings.hub.teamToken": "Team token",
+  "settings.hub.help.title": "How to configure team sharing",
+  "settings.hub.help.role":
+    "Host a hub when this machine is the team endpoint; join a hub when you connect to another teammate's hub address.",
+  "settings.hub.help.tokens":
+    "Team token authorizes the shared workspace. User token identifies your personal member identity and permissions.",
+  "settings.hub.teamToken.placeholder": "Shared workspace token",
+  "settings.hub.userToken.placeholder": "Your personal access token",
   "settings.general.lang": "Display language",
   "settings.general.theme": "Theme",
   "settings.general.theme.light": "Light",
@@ -1338,6 +1345,13 @@ const zh: Record<TranslationKey, string> = {
   "settings.hub.address": "Hub 地址",
   "settings.hub.userToken": "个人 Token",
   "settings.hub.teamToken": "团队 Token",
+  "settings.hub.help.title": "团队分享配置说明",
+  "settings.hub.help.role":
+    "本机作为团队入口时选择托管 Hub；连接到其他成员的 Hub 地址时选择加入 Hub。",
+  "settings.hub.help.tokens":
+    "团队 Token 用于授权共享工作区；个人 Token 用于标识你的成员身份和权限边界。",
+  "settings.hub.teamToken.placeholder": "共享工作区 Token",
+  "settings.hub.userToken.placeholder": "你的个人访问 Token",
   "settings.general.lang": "显示语言",
   "settings.general.theme": "主题",
   "settings.general.theme.light": "浅色",
