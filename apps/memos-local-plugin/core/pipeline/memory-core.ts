@@ -63,6 +63,7 @@ import type {
   PolicyId,
   PolicyRow,
   SkillRow,
+  EpochMs,
   TraceId,
   TraceRow,
   WorldModelId,
@@ -1007,12 +1008,29 @@ export function createMemoryCore(
         });
       }
       if (tr.toolCalls.length > 0) {
-        turns.push({
-          id: `${tr.id}:tool`,
-          ts: tr.ts,
-          role: "tool",
-          content: JSON.stringify(tr.toolCalls),
-          meta: { toolCalls: tr.toolCalls },
+        tr.toolCalls.forEach((toolCall, idx) => {
+          turns.push({
+            id: `${tr.id}:tool:${idx}`,
+            ts: (toolCall.endedAt ?? toolCall.startedAt ?? tr.ts) as EpochMs,
+            role: "tool",
+            content:
+              typeof toolCall.output === "string"
+                ? toolCall.output
+                : toolCall.output == null
+                  ? ""
+                  : JSON.stringify(toolCall.output),
+            meta: {
+              name: toolCall.name,
+              input: toolCall.input,
+              output: toolCall.output,
+              errorCode: toolCall.errorCode,
+              toolCallId: toolCall.toolCallId,
+              startedAt: toolCall.startedAt,
+              endedAt: toolCall.endedAt,
+              thinkingBefore: toolCall.thinkingBefore,
+              assistantTextBefore: toolCall.assistantTextBefore,
+            },
+          });
         });
       }
       if (tr.agentText) {
