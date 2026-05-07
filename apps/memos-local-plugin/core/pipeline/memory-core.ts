@@ -71,6 +71,7 @@ import type {
 } from "../types.js";
 import type { ResolvedConfig, ResolvedHome } from "../config/index.js";
 import { loadConfig, resolveHome, SECRET_FIELD_PATHS } from "../config/index.js";
+import { feedbackText, runFeedbackExperience } from "../experience/feedback-builder.js";
 import { rootLogger } from "../logger/index.js";
 import type { Logger } from "../logger/types.js";
 import { openDb } from "../storage/connection.js";
@@ -95,6 +96,7 @@ import {
   isVisibleTo,
 } from "../runtime/namespace.js";
 import type { RetrievalConfig } from "../retrieval/types.js";
+import type { UserFeedback } from "../reward/types.js";
 
 // ─── Public bootstrap helpers ───────────────────────────────────────────────
 
@@ -126,6 +128,8 @@ export interface BootstrapOptions {
    * client closes over.
    */
   hostLlmBridge?: HostLlmBridge | null;
+  /** Optional telemetry instance for ARMS RUM reporting. */
+  telemetry?: import("../telemetry/index.js").Telemetry | null;
 }
 
 export interface BootstrapResult {
@@ -411,6 +415,7 @@ export async function bootstrapMemoryCoreFull(
   const handle = createPipeline(deps);
 
   const core = createMemoryCore(handle, home, options.pkgVersion ?? "dev", {
+    telemetry: options.telemetry ?? null,
     onShutdown: () => {
       try {
         db.close();
@@ -430,6 +435,8 @@ export async function bootstrapMemoryCoreFull(
 export interface CreateMemoryCoreOptions {
   /** Called after the pipeline has shut down. */
   onShutdown?: () => void | Promise<void>;
+  /** Optional telemetry instance for ARMS RUM reporting. */
+  telemetry?: import("../telemetry/index.js").Telemetry | null;
 }
 
 /**
@@ -448,6 +455,7 @@ export function createMemoryCore(
 ): MemoryCore {
   const bootAt = Date.now();
   const log = rootLogger.child({ channel: "core.pipeline.memory-core" });
+  let telemetry = options.telemetry ?? null;
   let initialized = false;
   let shutDown = false;
   /** Per-episode monotonic step counter for tool outcomes. */
@@ -1086,6 +1094,9 @@ export function createMemoryCore(
     try {
       await handle.shutdown("memory-core.shutdown");
     } finally {
+      if (telemetry) {
+        await telemetry.shutdown();
+      }
       if (options.onShutdown) {
         await options.onShutdown();
       }
@@ -1369,6 +1380,13 @@ export function createMemoryCore(
           err: logErr instanceof Error ? logErr.message : String(logErr),
         });
       }
+      if (telemetry && ok) {
+        telemetry.trackTurnStart(
+          turn.agent,
+          Date.now() - startedAt,
+          packet?.snippets?.length ?? 0,
+        );
+      }
     }
   }
 
@@ -1386,13 +1404,13 @@ export function createMemoryCore(
           ...namespaceMeta(ns),
         },
       });
-    // Return the real row id produced by the synchronous lite capture.
-    // Feedback submits this id as a FK, so a synthetic placeholder would
-    // cause SQLite "FOREIGN KEY constraint failed" later.
     const traceIds = outcome.traceIds.length > 0
       ? outcome.traceIds
       : outcome.episode?.traceIds ?? [];
     const lastTraceId = traceIds[traceIds.length - 1] ?? "";
+    if (telemetry) {
+      telemetry.trackTurnEnd(result.agent, traceIds.length);
+    }
     return {
       traceId: lastTraceId,
       episodeId: outcome.episodeId,
@@ -1403,7 +1421,10 @@ export function createMemoryCore(
     feedback: Omit<FeedbackDTO, "id" | "ts"> & { ts?: number },
   ): Promise<FeedbackDTO> {
     ensureLive();
-    if (feedback.traceId && !handle.repos.traces.getById(feedback.traceId as TraceId)) {
+    const targetTrace = feedback.traceId
+      ? handle.repos.traces.getById(feedback.traceId as TraceId)
+      : null;
+    if (feedback.traceId && !targetTrace) {
       throw new MemosError(
         "trace_not_found",
         `trace not found: ${feedback.traceId}`,
@@ -1424,13 +1445,134 @@ export function createMemoryCore(
       rationale: feedback.rationale ?? null,
       raw: feedback.raw ?? null,
     };
-    handle.repos.feedback.insert(row);
+    handle.db.tx(() => {
+      handle.repos.feedback.insert(row);
+      if (targetTrace) {
+        const explicitValue = aggregateTraceFeedbackValue(
+          handle.repos.feedback.getForTrace(targetTrace.id),
+        );
+        handle.repos.traces.updateScore(targetTrace.id, {
+          value: explicitValue,
+          alpha: targetTrace.alpha,
+          rHuman: explicitValue,
+          priority: Math.max(targetTrace.priority, Math.abs(explicitValue)),
+        });
+      }
+    });
 
-    // Push the human signal into the reward loop via the capture bus.
-    // The feedback subscriber also listens for user feedback via its
-    // own input channel, but for the JSON-RPC path we go through the
-    // repository so every code path persists.
+    const episode = row.episodeId
+      ? handle.repos.episodes.getById(row.episodeId as EpisodeId)
+      : null;
+    const trace = row.traceId
+      ? handle.repos.traces.getById(row.traceId as TraceId)
+      : null;
+    const sessionId = episode?.sessionId ?? trace?.sessionId ?? null;
+    const text = feedbackText(row);
+
+    if (episode && sessionId) {
+      const rewardFeedback: UserFeedback = {
+        id: row.id as UserFeedback["id"],
+        episodeId: episode.id,
+        sessionId,
+        traceId: row.traceId as TraceId | null,
+        ts: row.ts,
+        channel: row.channel,
+        polarity: row.polarity,
+        magnitude: row.magnitude,
+        text: text || null,
+        rationale: row.rationale,
+      };
+      try {
+        await handle.rewardRunner.run({
+          episodeId: episode.id,
+          feedback: [rewardFeedback],
+          trigger: "explicit_feedback",
+        });
+      } catch (err) {
+        log.warn("feedback.reward_failed", {
+          episodeId: episode.id,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (text && sessionId) {
+      try {
+        await handle.feedback.submitUserFeedback({
+          text,
+          sessionId,
+          episodeId: episode?.id,
+          context: text.slice(0, 300),
+        });
+      } catch (err) {
+        log.warn("feedback.repair_failed", {
+          episodeId: episode?.id,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    let policyId: PolicyId | undefined;
+    try {
+      const experience = await runFeedbackExperience(
+        { feedback: row, episode, trace },
+        {
+          repos: handle.repos,
+          embedder: handle.embedder,
+          llm: handle.llm ?? undefined,
+          namespace: handle.namespace,
+          now: Date.now,
+        },
+      );
+      policyId = experience.policyId;
+    } catch (err) {
+      log.warn("feedback.experience_failed", {
+        episodeId: episode?.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    try {
+      await handle.l2.drain();
+      if (policyId) {
+        await handle.skills.runOnce({ trigger: "manual", policyId });
+      }
+      if (episode) {
+        await handle.l3.runOnce({ trigger: "manual", episodeId: episode.id });
+      }
+      await handle.skills.flush();
+      await handle.feedback.flush();
+      await handle.l3.drain();
+    } catch (err) {
+      log.warn("feedback.downstream_flush_failed", {
+        episodeId: episode?.id,
+        policyId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    if (telemetry) {
+      telemetry.trackFeedback(
+        handle.namespace.agentKind,
+        feedback.polarity,
+      );
+    }
     return toFeedbackDTO(row);
+  }
+
+  function aggregateTraceFeedbackValue(rows: readonly FeedbackRow[]): number {
+    if (rows.length === 0) return 0;
+    let sum = 0;
+    let weight = 0;
+    for (const feedbackRow of rows) {
+      const magnitude = clamp01(feedbackRow.magnitude);
+      if (magnitude === 0 || feedbackRow.polarity === "neutral") continue;
+      const signed = feedbackRow.polarity === "positive" ? magnitude : -magnitude;
+      sum += signed;
+      weight += magnitude;
+    }
+    if (weight === 0) return 0;
+    return clampSigned(sum / weight);
   }
 
   function recordToolOutcome(outcome: {
@@ -1899,6 +2041,13 @@ export function createMemoryCore(
           err: logErr instanceof Error ? logErr.message : String(logErr),
         });
       }
+      if (telemetry && ok) {
+        telemetry.trackMemorySearch(
+          query.agent,
+          Date.now() - startedAt,
+          candidates.length,
+        );
+      }
     }
   }
 
@@ -1932,7 +2081,10 @@ export function createMemoryCore(
     ensureLive();
     const existing = handle.repos.traces.getById(id);
     if (!existing || !ownedByCurrent(existing)) return { deleted: false };
-    handle.repos.traces.deleteById(id);
+    handle.db.tx(() => {
+      handle.repos.episodes.removeTraceIds(existing.episodeId, [id]);
+      handle.repos.traces.deleteById(id);
+    });
     return { deleted: true };
   }
 
@@ -1944,7 +2096,10 @@ export function createMemoryCore(
     for (const id of ids) {
       const existing = handle.repos.traces.getById(id);
       if (!existing || !ownedByCurrent(existing)) continue;
-      handle.repos.traces.deleteById(id);
+      handle.db.tx(() => {
+        handle.repos.episodes.removeTraceIds(existing.episodeId, [id]);
+        handle.repos.traces.deleteById(id);
+      });
       deleted++;
     }
     return { deleted };
@@ -3012,12 +3167,20 @@ export function createMemoryCore(
           support: dto.support ?? 0,
           gain: dto.gain ?? 0,
           status: dto.status,
-          sourceEpisodeIds: [],
+          experienceType: dto.experienceType ?? "success_pattern",
+          evidencePolarity: dto.evidencePolarity ?? "positive",
+          salience: dto.salience ?? 0,
+          confidence: dto.confidence ?? 0.5,
+          skillEligible: dto.skillEligible !== false,
+          sourceEpisodeIds: dto.sourceEpisodeIds ?? [],
+          sourceFeedbackIds: dto.sourceFeedbackIds ?? [],
+          sourceTraceIds: dto.sourceTraceIds ?? [],
           inducedBy: "import",
           decisionGuidance: {
             preference: [...(dto.preference ?? [])],
             antiPattern: [...(dto.antiPattern ?? [])],
           },
+          verifierMeta: dto.verifierMeta ?? null,
           vec: null,
           createdAt: dto.createdAt ?? Date.now(),
           updatedAt: dto.updatedAt ?? Date.now(),
@@ -3234,6 +3397,7 @@ export function createMemoryCore(
     init,
     shutdown,
     health,
+    bindTelemetry(t: import("../telemetry/index.js").Telemetry) { telemetry = t; },
     openSession,
     closeSession,
     openEpisode,
@@ -3625,6 +3789,11 @@ export function policyRowToDTO(row: PolicyRow): PolicyDTO {
     support: row.support,
     gain: row.gain,
     status: row.status,
+    experienceType: row.experienceType ?? "success_pattern",
+    evidencePolarity: row.evidencePolarity ?? "positive",
+    salience: row.salience ?? 0,
+    confidence: row.confidence ?? 0.5,
+    skillEligible: row.skillEligible !== false,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     // PolicyDTO surface keeps the flat shape the viewer's PoliciesView
@@ -3634,6 +3803,9 @@ export function policyRowToDTO(row: PolicyRow): PolicyDTO {
     preference: row.decisionGuidance.preference,
     antiPattern: row.decisionGuidance.antiPattern,
     sourceEpisodeIds: [...(row.sourceEpisodeIds ?? [])],
+    sourceFeedbackIds: [...(row.sourceFeedbackIds ?? [])],
+    sourceTraceIds: [...(row.sourceTraceIds ?? [])],
+    verifierMeta: row.verifierMeta ?? null,
     share: row.share ?? null,
     editedAt: row.editedAt ?? undefined,
   };
@@ -3747,6 +3919,7 @@ export function inferTier(
     | "skill"
     | "trace"
     | "episode"
+    | "experience"
     | "world-model"
     | "preference"
     | "anti-pattern",
@@ -3761,11 +3934,15 @@ function applyTopKOverride(
   topK: RetrievalQueryDTO["topK"] | undefined,
 ): RetrievalConfig {
   if (!topK) return config;
+  const tier1TopK = clampTopK(topK.tier1, config.tier1TopK);
+  const tier2TopK = clampTopK(topK.tier2, config.tier2TopK);
+  const tier3TopK = clampTopK(topK.tier3, config.tier3TopK);
   return {
     ...config,
-    tier1TopK: clampTopK(topK.tier1, config.tier1TopK),
-    tier2TopK: clampTopK(topK.tier2, config.tier2TopK),
-    tier3TopK: clampTopK(topK.tier3, config.tier3TopK),
+    tier1TopK,
+    tier2TopK,
+    tier3TopK,
+    llmFilterMaxKeep: tier1TopK + tier2TopK + tier3TopK,
   };
 }
 
@@ -3773,6 +3950,20 @@ function clampTopK(value: number | undefined, fallback: number): number {
   if (value === undefined) return fallback;
   if (!Number.isFinite(value)) return fallback;
   return Math.min(Math.max(0, Math.trunc(value)), 100);
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+function clampSigned(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (value < -1) return -1;
+  if (value > 1) return 1;
+  return value;
 }
 
 function eventTime(evt: unknown): number {

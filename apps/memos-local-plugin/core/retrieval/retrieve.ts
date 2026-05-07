@@ -33,12 +33,14 @@ import { buildQuery, type CompiledQuery } from "./query-builder.js";
 import type { RetrievalEventBus } from "./events.js";
 import { toPacket, renderSnippetForDebug } from "./injector.js";
 import { llmFilterCandidates } from "./llm-filter.js";
-import { rank } from "./ranker.js";
+import { rank, type RankedCandidate } from "./ranker.js";
 import { runTier1 } from "./tier1-skill.js";
+import { runTier2Experience } from "./tier2-experience.js";
 import { runTier2 } from "./tier2-trace.js";
 import { runTier3 } from "./tier3-world.js";
 import type {
   EpisodeCandidate,
+  ExperienceCandidate,
   RetrievalCtx,
   RetrievalDeps,
   RetrievalResult,
@@ -259,6 +261,14 @@ async function runAll(
           )
         : Promise.resolve({ traces: [], episodes: [] });
 
+    const tier2ExperiencePromise: Promise<ExperienceCandidate[]> =
+      wantTier2 && !!queryVec && !noUsableChannel
+        ? runTier2Experience(
+            { repos: deps.repos, config: deps.config },
+            { queryVec },
+          )
+        : Promise.resolve([]);
+
     const tier3Start = Date.now();
     const tier3Promise: Promise<WorldModelCandidate[]> =
       wantTier3 && !noUsableChannel
@@ -272,9 +282,10 @@ async function runAll(
           )
         : Promise.resolve([]);
 
-    const [tier1, tier2, tier3] = await Promise.all([
+    const [tier1, tier2, tier2Experiences, tier3] = await Promise.all([
       tier1Promise,
       tier2Promise,
+      tier2ExperiencePromise,
       tier3Promise,
     ]);
 
@@ -284,16 +295,25 @@ async function runAll(
 
     const fuseStart = Date.now();
     const rawCandidateCount =
-      tier1.length + tier2.traces.length + tier2.episodes.length + tier3.length;
+      tier1.length +
+      tier2.traces.length +
+      tier2.episodes.length +
+      tier2Experiences.length +
+      tier3.length;
     const ranked = rank({
       tier1,
       tier2Traces: tier2.traces,
       tier2Episodes: tier2.episodes,
+      tier2Experiences,
       tier3,
       limit: plan.limit,
       config: deps.config,
       now: deps.now(),
     });
+    const mechanicalRanked = ctx.reason !== "decision_repair" &&
+      requiresKeywordConfirmation(compiled.text)
+      ? ranked.ranked.filter(hasKeywordChannel)
+      : ranked.ranked;
     const fuseLatencyMs = Date.now() - fuseStart;
 
     // ─── LLM relevance filter ──────────────────────────────────────────
@@ -305,7 +325,7 @@ async function runAll(
     const queryText =
       (ctx as { userText?: string }).userText ?? compiled.text ?? "";
     const filtered = await llmFilterCandidates(
-      { query: queryText, ranked: ranked.ranked, episodeId },
+      { query: queryText, ranked: mechanicalRanked, episodeId },
       {
         llm: deps.llm ?? null,
         log,
@@ -316,7 +336,7 @@ async function runAll(
       outcome: filtered.outcome,
       sufficient: filtered.sufficient,
       raw: rawCandidateCount,
-      afterThreshold: ranked.ranked.length,
+      afterThreshold: mechanicalRanked.length,
       droppedByThreshold: ranked.droppedByThreshold,
       thresholdFloor: round(ranked.thresholdFloor, 3),
       topRelevance: round(ranked.topRelevance, 3),
@@ -380,7 +400,7 @@ async function runAll(
       sessionId,
       episodeId,
       tier1Count: tier1.length,
-      tier2Count: tier2.traces.length + tier2.episodes.length,
+      tier2Count: tier2.traces.length + tier2.episodes.length + tier2Experiences.length,
       tier3Count: tier3.length,
       tier1LatencyMs,
       tier2LatencyMs,
@@ -395,7 +415,7 @@ async function runAll(
       droppedByThresholdCount: ranked.droppedByThreshold,
       thresholdFloor: ranked.thresholdFloor,
       topRelevance: ranked.topRelevance,
-      rankedCount: ranked.ranked.length,
+      rankedCount: mechanicalRanked.length,
       llmFilterOutcome: filtered.outcome,
       llmFilterSufficient: filtered.sufficient ?? undefined,
       llmFilterKept: filtered.kept.length,
@@ -409,6 +429,7 @@ async function runAll(
       tier1: tier1.length,
       tier2: tier2.traces.length,
       tier2Ep: tier2.episodes.length,
+      tier2Experience: tier2Experiences.length,
       tier3: tier3.length,
       kept: packet.snippets.length,
       totalMs: stats.totalLatencyMs,
@@ -485,6 +506,23 @@ function emptyResult(
       embedding: { attempted: false, ok: false, degraded: false },
     },
   };
+}
+
+function requiresKeywordConfirmation(text: string): boolean {
+  const tokens = text.match(/[A-Za-z0-9_:-]{12,}/g) ?? [];
+  return tokens.some((token) => {
+    const hasIdentifierShape = /[_:-]/.test(token) || /\d/.test(token);
+    const hasEnoughEntropy = /[A-Za-z]/.test(token) && token.length >= 16;
+    return hasIdentifierShape && hasEnoughEntropy;
+  });
+}
+
+function hasKeywordChannel(candidate: RankedCandidate): boolean {
+  return (candidate.candidate.channels ?? []).some((channel) =>
+    channel.channel === "fts" ||
+    channel.channel === "pattern" ||
+    channel.channel === "structural"
+  );
 }
 
 function approxTokens(s: string): number {
