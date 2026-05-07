@@ -1385,7 +1385,10 @@ export function createMemoryCore(
     feedback: Omit<FeedbackDTO, "id" | "ts"> & { ts?: number },
   ): Promise<FeedbackDTO> {
     ensureLive();
-    if (feedback.traceId && !handle.repos.traces.getById(feedback.traceId as TraceId)) {
+    const targetTrace = feedback.traceId
+      ? handle.repos.traces.getById(feedback.traceId as TraceId)
+      : null;
+    if (feedback.traceId && !targetTrace) {
       throw new MemosError(
         "trace_not_found",
         `trace not found: ${feedback.traceId}`,
@@ -1406,13 +1409,41 @@ export function createMemoryCore(
       rationale: feedback.rationale ?? null,
       raw: feedback.raw ?? null,
     };
-    handle.repos.feedback.insert(row);
+    handle.db.tx(() => {
+      handle.repos.feedback.insert(row);
+      if (targetTrace) {
+        const explicitValue = aggregateTraceFeedbackValue(
+          handle.repos.feedback.getForTrace(targetTrace.id),
+        );
+        handle.repos.traces.updateScore(targetTrace.id, {
+          value: explicitValue,
+          alpha: targetTrace.alpha,
+          rHuman: explicitValue,
+          priority: Math.max(targetTrace.priority, Math.abs(explicitValue)),
+        });
+      }
+    });
 
     // Push the human signal into the reward loop via the capture bus.
     // The feedback subscriber also listens for user feedback via its
     // own input channel, but for the JSON-RPC path we go through the
     // repository so every code path persists.
     return toFeedbackDTO(row);
+  }
+
+  function aggregateTraceFeedbackValue(rows: readonly FeedbackRow[]): number {
+    if (rows.length === 0) return 0;
+    let sum = 0;
+    let weight = 0;
+    for (const feedbackRow of rows) {
+      const magnitude = clamp01(feedbackRow.magnitude);
+      if (magnitude === 0 || feedbackRow.polarity === "neutral") continue;
+      const signed = feedbackRow.polarity === "positive" ? magnitude : -magnitude;
+      sum += signed;
+      weight += magnitude;
+    }
+    if (weight === 0) return 0;
+    return clampSigned(sum / weight);
   }
 
   function recordToolOutcome(outcome: {
@@ -1914,7 +1945,10 @@ export function createMemoryCore(
     ensureLive();
     const existing = handle.repos.traces.getById(id);
     if (!existing || !ownedByCurrent(existing)) return { deleted: false };
-    handle.repos.traces.deleteById(id);
+    handle.db.tx(() => {
+      handle.repos.episodes.removeTraceIds(existing.episodeId, [id]);
+      handle.repos.traces.deleteById(id);
+    });
     return { deleted: true };
   }
 
@@ -1926,7 +1960,10 @@ export function createMemoryCore(
     for (const id of ids) {
       const existing = handle.repos.traces.getById(id);
       if (!existing || !ownedByCurrent(existing)) continue;
-      handle.repos.traces.deleteById(id);
+      handle.db.tx(() => {
+        handle.repos.episodes.removeTraceIds(existing.episodeId, [id]);
+        handle.repos.traces.deleteById(id);
+      });
       deleted++;
     }
     return { deleted };
@@ -3759,6 +3796,20 @@ function clampTopK(value: number | undefined, fallback: number): number {
   if (value === undefined) return fallback;
   if (!Number.isFinite(value)) return fallback;
   return Math.min(Math.max(0, Math.trunc(value)), 100);
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+function clampSigned(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (value < -1) return -1;
+  if (value > 1) return 1;
+  return value;
 }
 
 function eventTime(evt: unknown): number {
