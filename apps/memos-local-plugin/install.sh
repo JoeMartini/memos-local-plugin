@@ -86,6 +86,7 @@ NPM_PACKAGE="@memtensor/memos-local-plugin"
 OPENCLAW_PORT="18799"
 HERMES_PORT="18800"
 REQUIRED_NODE_MAJOR=20
+OPENCLAW_RUNTIME_ENTRY="./dist/adapters/openclaw/index.js"
 # Older plugin IDs disabled on install so they don't fight for the
 # memory slot. We never touch the old plugin's data.
 LEGACY_PLUGIN_IDS=("memos-local-openclaw-plugin")
@@ -420,6 +421,9 @@ install_openclaw() {
   fi
 
   deploy_tarball_to_prefix "${prefix}"
+  local runtime_entry="${prefix}/${OPENCLAW_RUNTIME_ENTRY#./}"
+  [[ -f "${runtime_entry}" ]] \
+    || die "OpenClaw runtime entry missing: ${OPENCLAW_RUNTIME_ENTRY}. Reinstall a package built with dist/ runtime output."
 
   step "Configuring runtime environment"
   ensure_runtime_home "openclaw" "${home}" "${prefix}"
@@ -440,7 +444,17 @@ install_openclaw() {
   "version": "${plugin_version}",
   "homepage": "https://github.com/MemTensor/MemOS",
   "requirements": { "node": ">=${REQUIRED_NODE_MAJOR}.0.0" },
-  "extensions": ["./adapters/openclaw/index.ts"],
+  "extensions": ["${OPENCLAW_RUNTIME_ENTRY}"],
+  "contracts": {
+    "tools": [
+      "memory_search",
+      "memory_get",
+      "memory_timeline",
+      "skill_list",
+      "memory_environment",
+      "skill_get"
+    ]
+  },
   "configSchema": {
     "type": "object",
     "additionalProperties": true,
@@ -516,6 +530,11 @@ if (!config.plugins.entries[pluginId] || typeof config.plugins.entries[pluginId]
   config.plugins.entries[pluginId] = {};
 }
 config.plugins.entries[pluginId].enabled = true;
+if (!config.plugins.entries[pluginId].hooks || typeof config.plugins.entries[pluginId].hooks !== 'object' || Array.isArray(config.plugins.entries[pluginId].hooks)) {
+  config.plugins.entries[pluginId].hooks = {};
+}
+config.plugins.entries[pluginId].hooks.allowConversationAccess = true;
+config.plugins.entries[pluginId].hooks.allowPromptInjection = true;
 
 if (!config.plugins.installs || typeof config.plugins.installs !== 'object') config.plugins.installs = {};
 const installsEntry = {
