@@ -419,6 +419,8 @@ const en = {
   "tasks.chat.tool.noPayload": "(no input or output recorded)",
   "tasks.chat.tool.parallelBatch": "⚡ {n} tools in parallel · {ms}ms wall-clock",
   "tasks.chat.tool.parallelBatch.savings": "(would have been {sum}ms in series)",
+  "tasks.chat.expand": "Show more",
+  "tasks.chat.collapse": "Show less",
   "tasks.skipped.default":
     "This conversation was too brief to generate a summary or score — the task won't appear in search results.",
   "tasks.failed.default":
@@ -1094,6 +1096,8 @@ const zh: Record<TranslationKey, string> = {
   "tasks.chat.tool.noPayload": "（未记录输入或输出）",
   "tasks.chat.tool.parallelBatch": "⚡ {n} 个工具并行 · 实际耗时 {ms}ms",
   "tasks.chat.tool.parallelBatch.savings": "（串行需 {sum}ms）",
+  "tasks.chat.expand": "展开全文",
+  "tasks.chat.collapse": "收起",
   "tasks.skipped.default": "对话内容过少，未生成摘要，该任务不会出现在检索结果中。",
   "tasks.failed.default": "任务评分 R={rTask}，被视为失败交互，未来相似任务的检索权重会被下调。",
   "tasks.skip.reason.tooFewTurns": "对话轮次不足，需要至少 2 轮完整的问答交互才能生成摘要。",
