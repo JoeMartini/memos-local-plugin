@@ -125,6 +125,8 @@ export interface BootstrapOptions {
    * client closes over.
    */
   hostLlmBridge?: HostLlmBridge | null;
+  /** Optional telemetry instance for ARMS RUM reporting. */
+  telemetry?: import("../telemetry/index.js").Telemetry | null;
 }
 
 export interface BootstrapResult {
@@ -410,6 +412,7 @@ export async function bootstrapMemoryCoreFull(
   const handle = createPipeline(deps);
 
   const core = createMemoryCore(handle, home, options.pkgVersion ?? "dev", {
+    telemetry: options.telemetry ?? null,
     onShutdown: () => {
       try {
         db.close();
@@ -429,6 +432,8 @@ export async function bootstrapMemoryCoreFull(
 export interface CreateMemoryCoreOptions {
   /** Called after the pipeline has shut down. */
   onShutdown?: () => void | Promise<void>;
+  /** Optional telemetry instance for ARMS RUM reporting. */
+  telemetry?: import("../telemetry/index.js").Telemetry | null;
 }
 
 /**
@@ -447,6 +452,7 @@ export function createMemoryCore(
 ): MemoryCore {
   const bootAt = Date.now();
   const log = rootLogger.child({ channel: "core.pipeline.memory-core" });
+  let telemetry = options.telemetry ?? null;
   let initialized = false;
   let shutDown = false;
   /** Per-episode monotonic step counter for tool outcomes. */
@@ -1068,6 +1074,9 @@ export function createMemoryCore(
     try {
       await handle.shutdown("memory-core.shutdown");
     } finally {
+      if (telemetry) {
+        await telemetry.shutdown();
+      }
       if (options.onShutdown) {
         await options.onShutdown();
       }
@@ -1351,6 +1360,13 @@ export function createMemoryCore(
           err: logErr instanceof Error ? logErr.message : String(logErr),
         });
       }
+      if (telemetry && ok) {
+        telemetry.trackTurnStart(
+          turn.agent,
+          Date.now() - startedAt,
+          packet?.snippets?.length ?? 0,
+        );
+      }
     }
   }
 
@@ -1368,13 +1384,13 @@ export function createMemoryCore(
           ...namespaceMeta(ns),
         },
       });
-    // Return the real row id produced by the synchronous lite capture.
-    // Feedback submits this id as a FK, so a synthetic placeholder would
-    // cause SQLite "FOREIGN KEY constraint failed" later.
     const traceIds = outcome.traceIds.length > 0
       ? outcome.traceIds
       : outcome.episode?.traceIds ?? [];
     const lastTraceId = traceIds[traceIds.length - 1] ?? "";
+    if (telemetry) {
+      telemetry.trackTurnEnd(result.agent, traceIds.length);
+    }
     return {
       traceId: lastTraceId,
       episodeId: outcome.episodeId,
@@ -1424,10 +1440,12 @@ export function createMemoryCore(
       }
     });
 
-    // Push the human signal into the reward loop via the capture bus.
-    // The feedback subscriber also listens for user feedback via its
-    // own input channel, but for the JSON-RPC path we go through the
-    // repository so every code path persists.
+    if (telemetry) {
+      telemetry.trackFeedback(
+        handle.namespace.agentKind,
+        feedback.polarity,
+      );
+    }
     return toFeedbackDTO(row);
   }
 
@@ -1911,6 +1929,13 @@ export function createMemoryCore(
         log.debug("apiLogs.memory_search.skipped", {
           err: logErr instanceof Error ? logErr.message : String(logErr),
         });
+      }
+      if (telemetry && ok) {
+        telemetry.trackMemorySearch(
+          query.agent,
+          Date.now() - startedAt,
+          candidates.length,
+        );
       }
     }
   }
@@ -3253,6 +3278,7 @@ export function createMemoryCore(
     init,
     shutdown,
     health,
+    bindTelemetry(t: import("../telemetry/index.js").Telemetry) { telemetry = t; },
     openSession,
     closeSession,
     openEpisode,
