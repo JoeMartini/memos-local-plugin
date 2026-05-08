@@ -467,7 +467,7 @@ const en = {
   "tasks.skillReason.queued.rewardPending":
     "Reward scoring not yet complete; skill pipeline will start after scoring.",
   "tasks.skillReason.queued.policyPending":
-    "Experience is not yet active — needs more supporting tasks to crystallize into a skill (current support: {support}, required: ≥ 3).",
+    "Experience is not yet active — needs more supporting tasks to crystallize into a skill (current support: {support}, required: ≥ {skillMinSupport}).",
   "tasks.skillReason.queued.ready":
     "Experience is ready (gain={gain}, support={support}); skill crystallization will trigger automatically after the next reward scoring.",
   "tasks.skillReason.skipped":
@@ -475,7 +475,7 @@ const en = {
   "tasks.skillReason.not_generated.belowThreshold":
     "Task score R={rTask} is below the induction threshold (≥ {threshold}) — the conversation was normal, but not strong enough to generalize into an L2 experience; similar tasks will accumulate over time.",
   "tasks.skillReason.not_generated.noPolicy":
-    "No L2 experience induced yet — a single task cannot generalize across tasks; requires at least 2 similar tasks (minEpisodesForInduction) with V ≥ 0.1 to trigger L2 induction, then ≥ 3 supporting tasks to crystallize into a skill.",
+    "No L2 experience induced yet — requires at least {minEpisodesForInduction} similar task(s) (minEpisodesForInduction) with V ≥ {minTraceValue} to trigger L2 induction, then support ≥ {skillMinSupport} and gain ≥ {skillMinGain} to crystallize into a skill.",
   "tasks.skillReason.generated":
     "Skill \"{skillName}\" crystallized from experience {policyId}.",
   "tasks.skillReason.upgraded":
@@ -1152,7 +1152,7 @@ const zh: Record<TranslationKey, string> = {
   "tasks.skillReason.queued.rewardPending":
     "Reward 评分尚未完成，技能流水线将在评分后启动。",
   "tasks.skillReason.queued.policyPending":
-    "经验尚未激活——需要更多支撑任务才能结晶为技能（当前 support={support}，需 ≥3）。",
+    "经验尚未激活——需要更多支撑任务才能结晶为技能（当前 support={support}，需 ≥{skillMinSupport}）。",
   "tasks.skillReason.queued.ready":
     "经验已就绪（gain={gain}，support={support}），技能结晶将在下次 reward 评分后自动触发。",
   "tasks.skillReason.skipped":
@@ -1160,7 +1160,7 @@ const zh: Record<TranslationKey, string> = {
   "tasks.skillReason.not_generated.belowThreshold":
     "任务评分 R={rTask} 未达到沉淀阈值 (≥ {threshold})——对话本身正常，只是还不够强到能泛化成 L2 经验；多做几个相似任务后会自动积累。",
   "tasks.skillReason.not_generated.noPolicy":
-    "暂未归纳出 L2 经验——单个任务无法跨任务泛化；需要至少 2 个相似任务（minEpisodesForInduction），且 V 值 ≥ 0.1 才能触发 L2 诱导，之后支撑 ≥ 3 个相似任务才会结晶为技能。",
+    "暂未归纳出 L2 经验——需要至少 {minEpisodesForInduction} 个相似任务（minEpisodesForInduction），且 V 值 ≥ {minTraceValue} 才能触发 L2 诱导，之后 support ≥ {skillMinSupport} 且 gain ≥ {skillMinGain} 才会结晶为技能。",
   "tasks.skillReason.generated":
     "技能「{skillName}」已从经验 {policyId} 结晶。",
   "tasks.skillReason.upgraded":
