@@ -303,7 +303,7 @@ export function MemoriesView() {
     const lines: string[] = [];
     for (const g of groups) {
       if (!isGroupSelected(g)) continue;
-      const head = pickSummary(g.head);
+      const head = pickGroupSummary(g);
       lines.push(`# ${head}`);
       for (const tr of g.traces) {
         if (tr.userText) lines.push(`[user] ${tr.userText}`);
@@ -532,7 +532,7 @@ export function MemoriesView() {
         <div class="list">
           {groups.map((g) => {
             const isSel = isGroupSelected(g);
-            const line = pickSummary(g.head);
+            const line = pickGroupSummary(g);
             const stepLabel =
               g.traces.length > 1
                 ? t("memories.card.steps", { n: g.traces.length })
@@ -639,13 +639,37 @@ export function MemoriesView() {
 // ─── helpers ─────────────────────────────────────────────────────────────
 
 function pickSummary(trace: TraceDTO): string {
-  const s = (trace.summary ?? "").trim();
+  const s = usableSummary(trace.summary);
   if (s) return s;
   const u = (trace.userText ?? "").replace(/\s+/g, " ").trim();
   if (u) return u.length > 180 ? u.slice(0, 177) + "…" : u;
   const a = (trace.agentText ?? "").replace(/\s+/g, " ").trim();
   if (a) return a.length > 180 ? a.slice(0, 177) + "…" : a;
   return "(empty trace)";
+}
+
+function pickGroupSummary(group: MemoryGroup): string {
+  const headSummary = usableSummary(group.head.summary);
+  if (headSummary) return headSummary;
+
+  for (const trace of group.traces) {
+    if (trace.id === group.head.id) continue;
+    const summary = usableSummary(trace.summary);
+    if (summary) return summary;
+  }
+
+  return pickSummary(group.head);
+}
+
+function usableSummary(summary: string | null | undefined): string {
+  const s = (summary ?? "").trim();
+  if (!s || isPlaceholderSummary(s)) return "";
+  return s;
+}
+
+function isPlaceholderSummary(summary: string): boolean {
+  const s = summary.trim().toLowerCase();
+  return s === "(empty turn)" || s === "(empty trace)" || s === "(empty)";
 }
 
 function detectRole(trace: TraceDTO): "user" | "assistant" | "tool" | "" {
@@ -1033,6 +1057,7 @@ function TraceDrawer({
   onDelete: () => Promise<void> | void;
 }) {
   const head = group.head;
+  const displaySummary = pickGroupSummary(group);
   const [mode, setMode] = useState<"view" | "edit" | "share">("view");
   const [summary, setSummary] = useState(head.summary ?? "");
   const [userText, setUserText] = useState(head.userText ?? "");
@@ -1050,7 +1075,7 @@ function TraceDrawer({
     setScope(head.share?.scope ?? "public");
   }, [head]);
 
-  const title = pickSummary(head).slice(0, 100) || t("memories.detail.fallbackTitle");
+  const title = displaySummary.slice(0, 100) || t("memories.detail.fallbackTitle");
 
   const submitEdit = () => {
     void onSave(head.id, {
@@ -1132,12 +1157,12 @@ function TraceDrawer({
                 </dl>
               </section>
 
-              {head.summary && (
+              {displaySummary !== "(empty trace)" && (
                 <section class="card card--flat">
                   <div class="muted" style="font-size:var(--fs-xs);margin-bottom:4px">
                     {t("memories.field.summary")}
                   </div>
-                  <div style="font-size:var(--fs-sm);line-height:1.55">{head.summary}</div>
+                  <div style="font-size:var(--fs-sm);line-height:1.55">{displaySummary}</div>
                 </section>
               )}
 
