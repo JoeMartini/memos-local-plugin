@@ -149,9 +149,14 @@ function suppressExperiencesCoveredBySkills(
     const experienceUpdatedAt = (c as ExperienceCandidate).updatedAt ?? 0;
     const coveringSkill = ranked.find((slot) => {
       const sk = slot.candidate;
-      return sk.refKind === "skill" && ((sk as SkillCandidate).sourcePolicyIds ?? []).includes(c.refId);
+      return (
+        sk.refKind === "skill" &&
+        ((sk as SkillCandidate).sourcePolicyIds ?? []).includes(c.refId)
+      );
     })?.candidate as SkillCandidate | undefined;
-    return Boolean(coveringSkill?.updatedAt && experienceUpdatedAt > coveringSkill.updatedAt);
+    return Boolean(
+      coveringSkill?.updatedAt && experienceUpdatedAt > coveringSkill.updatedAt,
+    );
   });
 }
 
@@ -168,7 +173,9 @@ function renderSnippet(c: TierCandidate, opts: RenderOpts): InjectionSnippet | n
       return renderSkill(c as SkillCandidate, opts);
     case "tier2":
       if (c.refKind === "trace") return renderTrace(c as TraceCandidate);
-      if (c.refKind === "experience") return renderExperience(c as ExperienceCandidate);
+      if (c.refKind === "experience") {
+        return renderExperience(c as ExperienceCandidate);
+      }
       return renderEpisode(c as EpisodeCandidate);
     case "tier3":
       return renderWorldModel(c as WorldModelCandidate);
@@ -273,16 +280,13 @@ function renderEpisode(c: EpisodeCandidate): InjectionSnippet {
 }
 
 function renderExperience(c: ExperienceCandidate): InjectionSnippet {
-  const kind = c.experienceType.replace(/_/g, " ");
-  const polarity = c.evidencePolarity;
   const parts = [
-    `Experience: ${c.title}`,
-    `Type: ${kind}; evidence=${polarity}; confidence=${c.confidence.toFixed(2)}`,
     c.trigger ? `Trigger: ${c.trigger}` : null,
     c.procedure ? `Do: ${c.procedure}` : null,
     c.decisionGuidance.antiPattern.length > 0
       ? `Avoid: ${c.decisionGuidance.antiPattern.join("; ")}`
       : null,
+    c.boundary ? `Scope: ${c.boundary}` : null,
     c.verification ? `Check: ${c.verification}` : null,
   ].filter(Boolean);
   return {
@@ -352,9 +356,9 @@ function renderWholePacket(
   const traces = snippets.filter(
     (s) =>
       s.refKind === "trace" ||
-      s.refKind === "episode" ||
-      s.refKind === "experience",
+      s.refKind === "episode",
   );
+  const experiences = snippets.filter((s) => s.refKind === "experience");
   const worlds = snippets.filter((s) => s.refKind === "world-model");
 
   if (skills.length > 0) {
@@ -376,6 +380,13 @@ function renderWholePacket(
   if (traces.length > 0) {
     parts.push("## Memories\n");
     traces.forEach((s, i) => {
+      parts.push(renderNumberedSnippet(s, i + 1));
+    });
+  }
+
+  if (experiences.length > 0) {
+    parts.push("## Experiences\n");
+    experiences.forEach((s, i) => {
       parts.push(renderNumberedSnippet(s, i + 1));
     });
   }
