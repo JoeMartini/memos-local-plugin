@@ -2569,6 +2569,7 @@ export function createMemoryCore(
 
   async function listApiLogs(input?: {
     toolName?: string;
+    toolNames?: readonly string[];
     limit?: number;
     offset?: number;
   }): Promise<{ logs: ApiLogDTO[]; total: number }> {
@@ -2577,10 +2578,14 @@ export function createMemoryCore(
     const offset = Math.max(0, input?.offset ?? 0);
     const rows = handle.repos.apiLogs.list({
       toolName: input?.toolName,
+      toolNames: input?.toolNames,
       limit,
       offset,
     });
-    const total = handle.repos.apiLogs.count({ toolName: input?.toolName });
+    const total = handle.repos.apiLogs.count({
+      toolName: input?.toolName,
+      toolNames: input?.toolNames,
+    });
     return {
       logs: rows.map((r) => ({
         id: r.id,

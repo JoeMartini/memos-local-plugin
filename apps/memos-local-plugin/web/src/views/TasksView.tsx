@@ -188,20 +188,6 @@ export function TasksView() {
     setSelected((prev) => toggleIdsInSelection(prev, pageIds));
   };
   const deselectAll = () => setSelected(new Set());
-  const bulkDelete = async () => {
-    if (selected.size === 0) return;
-    if (!confirm(t("common.bulkDelete.confirm", { n: selected.size }))) return;
-    const ids = [...selected];
-    await Promise.all(
-      ids.map((id) =>
-        api
-          .del(`/api/v1/episodes?episodeId=${encodeURIComponent(id)}`)
-          .catch(() => null),
-      ),
-    );
-    setSelected(new Set());
-    loadPage(page);
-  };
 
   return (
     <>
@@ -393,10 +379,6 @@ export function TasksView() {
             <Icon name="check-square" size={14} />
             {isPageSelected ? t("common.deselectPage") : t("common.selectPage")}
           </button>
-          <button class="btn btn--danger btn--sm" onClick={bulkDelete}>
-            <Icon name="trash-2" size={14} />
-            {t("common.bulkDelete")}
-          </button>
           <div class="batch-bar__spacer" />
           <button class="btn btn--ghost btn--sm" onClick={deselectAll}>
             {t("common.deselect")}
@@ -463,7 +445,7 @@ function deriveStatus(r: EpisodeRow): "active" | "completed" | "skipped" | "fail
  * Human-readable explanation for a non-active task status.
  *
  * Resolution order (most specific first):
- *   1. `abandonReason` from the pipeline (pre-localised).
+ *   1. `abandonReason` from the pipeline.
  *   2. Explicit `closeReason === "abandoned"` without a specific
  *      `abandonReason` — e.g. relation classifier closed the old
  *      session via `new_task` and the pipeline is waiting for a
@@ -491,7 +473,7 @@ function statusReason(r: EpisodeRow): string | null {
     if (r.abandonReason.includes("插件上次未正常退出")) {
       return t("tasks.abandonReason.uncleanExit" as any);
     }
-    return r.abandonReason;
+    return localizeKnownSystemReason(r.abandonReason);
   }
 
   if (s === "skipped") {
@@ -499,7 +481,7 @@ function statusReason(r: EpisodeRow): string | null {
       return t("tasks.skip.reason.abandoned");
     }
     if (r.rewardReason && r.rewardReason.trim().length > 0) {
-      return r.rewardReason;
+      return localizeKnownSystemReason(r.rewardReason);
     }
     if (r.hasAssistantReply === false) {
       return t("tasks.skip.reason.noAssistant");
@@ -518,6 +500,52 @@ function statusReason(r: EpisodeRow): string | null {
   }
 
   return null;
+}
+
+function localizeKnownSystemReason(reason: string): string {
+  const text = reason.trim();
+  let match = /^对话轮次不足（(\d+) 轮），需要至少 (\d+) 轮完整的问答交互才能生成摘要。$/.exec(text);
+  if (match) {
+    return t("tasks.skip.reason.tooFewExchanges", {
+      exchanges: match[1]!,
+      min: match[2]!,
+    });
+  }
+
+  if (text === "该任务没有用户消息，仅包含系统或工具自动生成的内容。") {
+    return t("tasks.skip.reason.noUserMessages");
+  }
+
+  match = /^对话内容过短（(\d+) 字符），信息量不足以生成有意义的摘要。$/.exec(text);
+  if (match) {
+    return t("tasks.skip.reason.contentTooShort", { chars: match[1]! });
+  }
+
+  if (text === "对话内容为简单问候或测试数据（如 hello、test、ok），无需生成摘要。") {
+    return t("tasks.skip.reason.trivialUserContent");
+  }
+
+  if (text === "对话内容（用户和助手双方）为简单问候或测试数据，无需生成摘要。") {
+    return t("tasks.skip.reason.trivialBothSides");
+  }
+
+  match = /^该任务主要由工具执行结果组成（(\d+)\/(\d+) 条），缺少足够的用户交互内容。$/.exec(text);
+  if (match) {
+    return t("tasks.skip.reason.toolHeavy", {
+      tools: match[1]!,
+      total: match[2]!,
+    });
+  }
+
+  match = /^对话中存在大量重复内容（(\d+) 条独立消息 \/ (\d+) 条用户消息），无法提取有效信息。$/.exec(text);
+  if (match) {
+    return t("tasks.skip.reason.repeatedContent", {
+      unique: match[1]!,
+      total: match[2]!,
+    });
+  }
+
+  return reason;
 }
 
 function skillBorder(status: NonNullable<EpisodeRow["skillStatus"]>): string {
