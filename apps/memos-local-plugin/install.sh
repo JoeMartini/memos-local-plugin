@@ -533,7 +533,7 @@ config.plugins.entries[pluginId].enabled = true;
 if (!config.plugins.entries[pluginId].hooks || typeof config.plugins.entries[pluginId].hooks !== 'object' || Array.isArray(config.plugins.entries[pluginId].hooks)) {
   config.plugins.entries[pluginId].hooks = {};
 }
-config.plugins.entries[pluginId].hooks.allowConversationAccess = true;
+delete config.plugins.entries[pluginId].hooks.allowConversationAccess;
 config.plugins.entries[pluginId].hooks.allowPromptInjection = true;
 
 if (!config.plugins.installs || typeof config.plugins.installs !== 'object') config.plugins.installs = {};
