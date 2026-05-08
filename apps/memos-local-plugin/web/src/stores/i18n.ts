@@ -926,11 +926,11 @@ const zh: Record<TranslationKey, string> = {
   "overview.live.empty": "暂无事件",
   "overview.live.hint": "Agent 交互后事件会显示在这里。",
 
-  "bridge.connected": "记忆桥接已连接",
-  "bridge.reconnecting": "记忆桥接已连接",
-  "bridge.disconnected": "记忆桥接已断开",
-  "bridge.unknown": "记忆桥接未知",
-  "bridge.tooltip": "记忆桥接：Hermes 与本地记忆核心之间的连接",
+  "bridge.connected": "记忆通道已开启",
+  "bridge.reconnecting": "记忆通道已开启",
+  "bridge.disconnected": "记忆通道已断开",
+  "bridge.unknown": "记忆通道未知",
+  "bridge.tooltip": "记忆通道：Hermes 与本地记忆核心之间的连接",
   "bridge.tooltip.lastOk": "上次成功：{ts}",
   "bridge.tooltip.lastError": "上次错误：{msg}",
 
