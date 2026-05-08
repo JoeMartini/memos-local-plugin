@@ -496,7 +496,7 @@ class MemTensorProvider(MemoryProvider):
 
     @staticmethod
     def _coerce_epoch_ms(value: Any) -> int | None:
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             numeric = float(value)
         elif isinstance(value, str):
             try:
@@ -514,7 +514,7 @@ class MemTensorProvider(MemoryProvider):
 
     @staticmethod
     def _coerce_duration_ms(value: Any) -> int | None:
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             numeric = float(value)
         elif isinstance(value, str):
             try:
@@ -1454,7 +1454,7 @@ class MemTensorProvider(MemoryProvider):
         ]
         timeout_ms = params.get("timeoutMs")
         timeout_s: float | None = None
-        if isinstance(timeout_ms, (int, float)) and timeout_ms > 0:
+        if isinstance(timeout_ms, int | float) and timeout_ms > 0:
             timeout_s = float(timeout_ms) / 1000.0
 
         max_tokens = params.get("maxTokens")
@@ -1470,9 +1470,9 @@ class MemTensorProvider(MemoryProvider):
             # (red light on Overview).
             "main_runtime": main_runtime,
         }
-        if isinstance(max_tokens, (int, float)) and max_tokens > 0:
+        if isinstance(max_tokens, int | float) and max_tokens > 0:
             kwargs["max_tokens"] = int(max_tokens)
-        if isinstance(temperature, (int, float)):
+        if isinstance(temperature, int | float):
             kwargs["temperature"] = float(temperature)
         if timeout_s is not None:
             kwargs["timeout"] = timeout_s
