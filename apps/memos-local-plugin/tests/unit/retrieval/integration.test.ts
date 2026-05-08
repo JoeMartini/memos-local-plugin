@@ -201,7 +201,7 @@ describe("retrieval/integration", () => {
     expect(skillIds).not.toContain("sk_weak");
   });
 
-  it("requires keyword confirmation for long unique identifier queries", async () => {
+  it("keeps abstract memories when long unique identifier queries require keywords", async () => {
     const res = await turnStartRetrieve(makeDeps(handle), {
       reason: "turn_start",
       agent: "openclaw",
@@ -210,8 +210,11 @@ describe("retrieval/integration", () => {
       ts: NOW as never,
     });
 
-    expect(res.packet.snippets).toEqual([]);
-    expect(res.stats.rankedCount).toBe(0);
+    const refKinds = res.packet.snippets.map((s) => s.refKind);
+    expect(refKinds).toContain("skill");
+    expect(refKinds).toContain("world-model");
+    expect(refKinds).not.toContain("trace");
+    expect(refKinds).not.toContain("episode");
   });
 
   it("tool_driven skips tier1 (no skill snippets)", async () => {

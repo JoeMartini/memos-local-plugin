@@ -472,6 +472,12 @@ export function createMemoryCore(
   // `world_model_*` rows with the rest of the triggering episode's
   // pipeline activity in the Logs viewer.
   let l3TriggerEpisodeId: string | undefined;
+  const skillStatusThresholds = {
+    minEpisodesForInduction: String(handle.config.algorithm.l2Induction.minEpisodesForInduction),
+    minTraceValue: formatThreshold(handle.config.algorithm.l2Induction.minTraceValue),
+    skillMinSupport: String(handle.config.algorithm.skill.minSupport),
+    skillMinGain: formatThreshold(handle.config.algorithm.skill.minGain),
+  };
 
   function ensureLive(): void {
     if (shutDown) {
@@ -2459,6 +2465,7 @@ export function createMemoryCore(
         r,
         policiesByEpisode.get(r.id) ?? [],
         skillsByPolicy,
+        skillStatusThresholds,
       );
 
       // `EpisodeManager` stamps `closeReason` and (for abandons)
@@ -4338,6 +4345,17 @@ export function deriveSkillStatus(
   ep: EpisodeRow,
   relatedPolicies: readonly PolicyRow[],
   skillsByPolicy: ReadonlyMap<string, readonly SkillRow[]>,
+  thresholds: {
+    minEpisodesForInduction: string;
+    minTraceValue: string;
+    skillMinSupport: string;
+    skillMinGain: string;
+  } = {
+    minEpisodesForInduction: "2",
+    minTraceValue: "0.1",
+    skillMinSupport: "3",
+    skillMinGain: "0.15",
+  },
 ): {
   status: EpisodeListItemDTO["skillStatus"];
   reason: string | null;
@@ -4386,7 +4404,7 @@ export function deriveSkillStatus(
       status: "not_generated",
       reason: "暂未归纳出 L2 经验",
       reasonKey: "tasks.skillReason.not_generated.noPolicy",
-      reasonParams: null,
+      reasonParams: thresholds,
       linkedSkillId: null,
     };
   }
@@ -4408,7 +4426,7 @@ export function deriveSkillStatus(
       status: "queued",
       reason: `经验 ${best.id.slice(0, 8)} 需要更多支撑任务`,
       reasonKey: "tasks.skillReason.queued.policyPending",
-      reasonParams: { support: String(best.support ?? 0) },
+      reasonParams: { ...thresholds, support: String(best.support ?? 0) },
       linkedSkillId: null,
     };
   }
@@ -4416,9 +4434,14 @@ export function deriveSkillStatus(
     status: "queued",
     reason: `经验 ${best.id.slice(0, 8)} 已就绪`,
     reasonKey: "tasks.skillReason.queued.ready",
-    reasonParams: { gain: best.gain.toFixed(2), support: String(best.support ?? 0) },
+    reasonParams: { ...thresholds, gain: best.gain.toFixed(2), support: String(best.support ?? 0) },
     linkedSkillId: null,
   };
+}
+
+function formatThreshold(n: number): string {
+  if (!Number.isFinite(n)) return String(n);
+  return Number(n.toFixed(3)).toString();
 }
 
 /**
