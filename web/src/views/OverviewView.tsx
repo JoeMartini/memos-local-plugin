@@ -13,16 +13,22 @@
  * "gpt-4.1-mini", not "openai_compatible". When the skill evolver
  * inherits from the main LLM we say so explicitly.
  *
- * Third row = live SSE activity stream (unchanged).
+ * Third row = live activity dashboard. Six per-category tiles
+ * (memory / experience / environment knowledge / skill / retrieval /
+ * feedback) each showing a 5-minute event count, sparkline, and the
+ * most recent event in plain language. Tiles are bucketed off the
+ * same SSE buffer (`recent`) we already maintain. See
+ * `views/overview/ActivityDashboard.tsx` for the renderer and
+ * `views/overview/event-meta.ts` for the event-type → tile mapping.
  */
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../api/client";
 import { openSse } from "../api/sse";
 import { health } from "../stores/health";
 import { t } from "../stores/i18n";
-import { Icon } from "../components/Icon";
 import { navigate } from "../stores/router";
-import type { CoreEvent } from "../api/types";
+import type { ApiLogDTO, CoreEvent, CoreEventType } from "../api/types";
+import { ActivityDashboard } from "./overview/ActivityDashboard";
 
 interface SkillStats {
   total: number;
@@ -65,9 +71,14 @@ interface OverviewSummary {
   skillEvolver?: ModelInfo;
 }
 
+interface ApiLogsResponse {
+  logs: ApiLogDTO[];
+}
+
 export function OverviewView() {
   const [summary, setSummary] = useState<OverviewSummary | null>(null);
   const [recent, setRecent] = useState<CoreEvent[]>([]);
+  const [recentApiLogEvents, setRecentApiLogEvents] = useState<CoreEvent[]>([]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -86,15 +97,45 @@ export function OverviewView() {
   }, []);
 
   useEffect(() => {
+    // The dashboard buckets events into a 5-minute sliding window
+    // (30 buckets × 10 s). Cap the buffer at 256 so we keep enough
+    // history even on chatty agents (trace + retrieval + feedback can
+    // each fire several times per minute) without growing unbounded.
     const handle = openSse("/api/v1/events", (_, data) => {
       try {
         const evt = JSON.parse(data) as CoreEvent;
-        setRecent((prev) => [evt, ...prev].slice(0, 12));
+        setRecent((prev) => [evt, ...prev].slice(0, 256));
       } catch {
         /* skip */
       }
     });
     return () => handle.close();
+  }, []);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const load = () =>
+      api
+        .get<ApiLogsResponse>("/api/v1/api-logs?limit=200&offset=0", {
+          signal: ctrl.signal,
+        })
+        .then((res) => {
+          setRecentApiLogEvents(
+            (res.logs ?? [])
+              .map(apiLogToCoreEvent)
+              .filter((evt): evt is CoreEvent => evt !== null),
+          );
+        })
+        .catch(() => void 0);
+    void load();
+    // api_logs is the durable source behind the Logs page. Polling it
+    // keeps the overview heartbeat alive even when the volatile CoreEvent
+    // SSE stream misses a lifecycle event or the viewer connects late.
+    const id = window.setInterval(load, 10_000);
+    return () => {
+      ctrl.abort();
+      window.clearInterval(id);
+    };
   }, []);
 
   const h = health.value;
@@ -200,39 +241,175 @@ export function OverviewView() {
         />
       </section>
 
+      {/*
+       * Row 3: live activity dashboard. Replaces the previous JSON
+       * `.stream` block with a 3 × 2 grid of category tiles
+       * (memory / experience / environment knowledge / skill /
+       * retrieval / feedback) each showing a 5-minute sparkline plus
+       * the latest event in plain language. The component owns its
+       * own clock tick so sparklines slide left even while the SSE
+       * stream is quiet.
+       */}
       <section class="card">
         <div class="card__header">
           <div>
             <h3 class="card__title">{t("overview.live.title")}</h3>
-            <p class="card__subtitle">{t("overview.live.subtitle")}</p>
           </div>
         </div>
-        {recent.length === 0 ? (
-          <div class="empty">
-            <div class="empty__icon">
-              <Icon name="message-square-text" size={22} />
-            </div>
-            <div class="empty__title">{t("overview.live.empty")}</div>
-            <div class="empty__hint">{t("overview.live.hint")}</div>
-          </div>
-        ) : (
-          <div class="stream">
-            {recent.map((evt) => (
-              <div class="stream__line" key={evt.seq}>
-                <span class="stream__time">{new Date(evt.ts).toLocaleTimeString()}</span>
-                <span class={`stream__level ${evt.type === "system.error" ? "stream__level--warn" : "stream__level--info"}`}>
-                  {evt.type}
-                </span>
-                <span class="stream__body">
-                  {JSON.stringify(evt.payload ?? {}).slice(0, 240)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        <ActivityDashboard events={mergeRecentEvents(recent, recentApiLogEvents)} />
       </section>
     </>
   );
+}
+
+function mergeRecentEvents(
+  liveEvents: readonly CoreEvent[],
+  apiLogEvents: readonly CoreEvent[],
+): CoreEvent[] {
+  const byKey = new Map<string, CoreEvent>();
+  for (const evt of [...apiLogEvents, ...liveEvents]) {
+    const id = evt.correlationId ?? evt.seq;
+    byKey.set(`${evt.type}:${id}:${evt.ts}`, evt);
+  }
+  return [...byKey.values()].sort((a, b) => b.ts - a.ts).slice(0, 512);
+}
+
+function apiLogToCoreEvent(log: ApiLogDTO): CoreEvent | null {
+  const output = parseJsonObject(log.outputJson);
+  const input = parseJsonObject(log.inputJson);
+  const basePayload = {
+    apiLogId: log.id,
+    toolName: log.toolName,
+    success: log.success,
+    durationMs: log.durationMs,
+    input,
+    output,
+  };
+  const type = apiLogEventType(log, output);
+  if (!type) return null;
+  return {
+    type,
+    ts: log.calledAt,
+    seq: -1_000_000 - log.id,
+    correlationId: apiLogCorrelationId(log, input, output),
+    payload: apiLogPayload(log, type, basePayload, input, output),
+  };
+}
+
+function apiLogEventType(
+  log: ApiLogDTO,
+  output: Record<string, unknown>,
+): CoreEventType | null {
+  switch (log.toolName) {
+    case "memory_add":
+      return "trace.created";
+    case "memory_search":
+      return hasRetrievalHits(output) ? "retrieval.tier1.hit" : "retrieval.empty";
+    case "policy_generate":
+      return "l2.induced";
+    case "policy_evolve":
+      return "l2.revised";
+    case "world_model_generate":
+      return "l3.abstracted";
+    case "world_model_evolve":
+      return "l3.revised";
+    case "skill_generate":
+      return "skill.crystallized";
+    case "skill_evolve":
+      return skillEventType(output);
+    default:
+      return null;
+  }
+}
+
+function skillEventType(output: Record<string, unknown>): CoreEventType {
+  const kind = stringField(output, "kind");
+  if (kind === "skill.archived") return "skill.archived";
+  if (kind === "skill.eta.updated") return "skill.eta_updated";
+  return "skill.repaired";
+}
+
+function apiLogCorrelationId(
+  log: ApiLogDTO,
+  input: Record<string, unknown>,
+  output: Record<string, unknown>,
+): string {
+  return (
+    stringField(output, "traceId") ??
+    stringField(output, "policyId") ??
+    stringField(output, "worldModelId") ??
+    stringField(output, "skillId") ??
+    stringField(input, "episodeId") ??
+    stringField(input, "sessionId") ??
+    `api-log-${log.id}`
+  );
+}
+
+function apiLogPayload(
+  log: ApiLogDTO,
+  type: CoreEventType,
+  basePayload: Record<string, unknown>,
+  input: Record<string, unknown>,
+  output: Record<string, unknown>,
+): Record<string, unknown> {
+  if (type === "trace.created") {
+    const details = Array.isArray(output.details) ? output.details : [];
+    const firstDetail =
+      details.find((item): item is Record<string, unknown> => !!item && typeof item === "object") ??
+      {};
+    return {
+      ...basePayload,
+      traceId: stringField(firstDetail, "traceId") ?? `api-log-${log.id}`,
+      episodeId: stringField(input, "episodeId"),
+      sessionId: stringField(input, "sessionId"),
+    };
+  }
+  if (type === "retrieval.tier1.hit" || type === "retrieval.empty") {
+    const hits = retrievalHitCount(output);
+    return {
+      ...basePayload,
+      sessionId: stringField(input, "sessionId"),
+      episodeId: stringField(input, "episodeId"),
+      stats: {
+        hits,
+        latencyMs: log.durationMs,
+      },
+    };
+  }
+  return {
+    ...basePayload,
+    policyId: stringField(output, "policyId") ?? stringField(input, "policyId"),
+    worldModelId: stringField(output, "worldModelId") ?? stringField(input, "worldModelId"),
+    skillId: stringField(output, "skillId") ?? stringField(input, "skillId"),
+    episodeId: stringField(output, "episodeId") ?? stringField(input, "episodeId"),
+    signature: stringField(output, "title") ?? stringField(input, "title"),
+  };
+}
+
+function hasRetrievalHits(output: Record<string, unknown>): boolean {
+  return retrievalHitCount(output) > 0;
+}
+
+function retrievalHitCount(output: Record<string, unknown>): number {
+  const filtered = Array.isArray(output.filtered) ? output.filtered.length : 0;
+  const candidates = Array.isArray(output.candidates) ? output.candidates.length : 0;
+  return filtered || candidates;
+}
+
+function parseJsonObject(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function stringField(obj: Record<string, unknown>, key: string): string | undefined {
+  const value = obj[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function QuantityCard({
