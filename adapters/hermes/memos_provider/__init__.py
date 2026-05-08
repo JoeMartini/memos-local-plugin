@@ -192,13 +192,28 @@ def _feedback_polarity(message: str) -> str:
         return "negative"
     if "反例" in text:
         return "negative"
-    if any(term in text for term in ("failed", "failure", "wrong", "incorrect", "not acceptable", "错误", "失败", "不对")):
+    if any(
+        term in text
+        for term in (
+            "failed",
+            "failure",
+            "wrong",
+            "incorrect",
+            "not acceptable",
+            "错误",
+            "失败",
+            "不对",
+        )
+    ):
         return "negative"
     if re.search(r"r\s*(?:>=|≥)\s*0\.5", text):
         return "positive"
     if "正例" in text:
         return "positive"
-    if any(term in text for term in ("passed", "success", "succeeded", "correct", "great", "成功", "通过", "正确")):
+    if any(
+        term in text
+        for term in ("passed", "success", "succeeded", "correct", "great", "成功", "通过", "正确")
+    ):
         return "positive"
     return "neutral"
 
