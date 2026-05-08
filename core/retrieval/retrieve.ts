@@ -312,7 +312,9 @@ async function runAll(
     });
     const mechanicalRanked = ctx.reason !== "decision_repair" &&
       requiresKeywordConfirmation(compiled.text)
-      ? ranked.ranked.filter(hasKeywordChannel)
+      ? ranked.ranked.filter((candidate) =>
+          bypassesKeywordConfirmation(candidate) || hasKeywordChannel(candidate)
+        )
       : ranked.ranked;
     const fuseLatencyMs = Date.now() - fuseStart;
 
@@ -523,6 +525,11 @@ function hasKeywordChannel(candidate: RankedCandidate): boolean {
     channel.channel === "pattern" ||
     channel.channel === "structural"
   );
+}
+
+function bypassesKeywordConfirmation(candidate: RankedCandidate): boolean {
+  const refKind = candidate.candidate.refKind;
+  return refKind === "skill" || refKind === "world-model";
 }
 
 function approxTokens(s: string): number {
