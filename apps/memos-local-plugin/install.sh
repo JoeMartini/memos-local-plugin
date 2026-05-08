@@ -377,7 +377,7 @@ ensure_runtime_home() {
 wait_for_viewer() {
   local port="$1"
   local url="http://127.0.0.1:${port}"
-  local timeout="${2:-30}"
+  local timeout="${2:-60}"
   local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
   local idx=0
   local elapsed=0
@@ -530,11 +530,9 @@ if (!config.plugins.entries[pluginId] || typeof config.plugins.entries[pluginId]
   config.plugins.entries[pluginId] = {};
 }
 config.plugins.entries[pluginId].enabled = true;
-if (!config.plugins.entries[pluginId].hooks || typeof config.plugins.entries[pluginId].hooks !== 'object' || Array.isArray(config.plugins.entries[pluginId].hooks)) {
-  config.plugins.entries[pluginId].hooks = {};
-}
-delete config.plugins.entries[pluginId].hooks.allowConversationAccess;
-config.plugins.entries[pluginId].hooks.allowPromptInjection = true;
+// Do not write hook capability flags here. Current OpenClaw validates
+// plugin entries strictly and rejects unknown hook keys.
+if (config.plugins.entries[pluginId].hooks) delete config.plugins.entries[pluginId].hooks;
 
 if (!config.plugins.installs || typeof config.plugins.installs !== 'object') config.plugins.installs = {};
 const installsEntry = {
@@ -599,7 +597,7 @@ NODE
     return 0
   fi
 
-  warn "Memory Viewer did not respond within 30s."
+  warn "Memory Viewer did not respond within 60s."
   printf "       ${DIM}Check: /tmp/openclaw-memos-gateway.log or /tmp/openclaw/openclaw-*.log${NC}\n" >&2
   return 1
 }
