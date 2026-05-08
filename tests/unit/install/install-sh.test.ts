@@ -77,7 +77,8 @@ describe("install.sh — CLI surface", () => {
     expect(script).toContain('"extensions": ["${OPENCLAW_RUNTIME_ENTRY}"]');
     expect(script).toContain('"contracts": {');
     expect(script).toContain('"memory_search"');
-    expect(script).toContain("hooks.allowConversationAccess = true");
+    expect(script).toContain("delete config.plugins.entries[pluginId].hooks.allowConversationAccess");
+    expect(script).toContain("hooks.allowPromptInjection = true");
     expect(script).not.toContain('"extensions": ["./adapters/openclaw/index.ts"]');
   });
 
