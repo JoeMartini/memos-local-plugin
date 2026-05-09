@@ -306,7 +306,7 @@ function AuthLogo() {
       ? "hermes-logo.svg"
       : agent === "openclaw"
       ? "openclaw-logo.svg"
-      : "logo.svg";
+      : "memos-logo.svg";
   return (
     <div style="display:flex;align-items:center;justify-content:center;margin-bottom:4px">
       <img

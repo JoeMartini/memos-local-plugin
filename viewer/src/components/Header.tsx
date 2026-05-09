@@ -180,7 +180,7 @@ export function Header() {
       <div class="topbar__brand">
         <span class="topbar__brand-mark" aria-hidden="true">
           <img
-            src="logo.svg"
+            src="memos-logo.svg"
             alt="MemOS"
             width={24}
             height={24}
