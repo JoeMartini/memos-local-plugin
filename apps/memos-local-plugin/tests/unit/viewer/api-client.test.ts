@@ -14,7 +14,7 @@ import { describe, it, expect, afterEach } from "vitest";
   removeItem(k: string) { this._s.delete(k); },
 };
 
-import { api, ApiError } from "../../../web/src/api/client";
+import { api, ApiError } from "../../../viewer/src/api/client";
 
 function okResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

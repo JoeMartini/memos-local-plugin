@@ -614,7 +614,7 @@ describe("HTTP server — REST routes", () => {
   // ─── Connectivity smoke tests ─────────────────────────────────────────
   // These pin the contract between the viewer's REST client and the
   // server. Every endpoint the viewer touches (see
-  // `web/src/**/*.tsx::api.get/post/patch`) is exercised here.
+  // `viewer/src/**/*.tsx::api.get/post/patch`) is exercised here.
 
   it("GET /api/v1/overview returns the summary shape the viewer expects", async () => {
     const r = await fetch(`${handle.url}/api/v1/overview`);

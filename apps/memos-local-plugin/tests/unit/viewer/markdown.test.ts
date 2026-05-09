@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { renderMarkdown } from "../../../web/src/components/Markdown";
+import { renderMarkdown } from "../../../viewer/src/components/Markdown";
 
 describe("Markdown", () => {
   it("escapes raw HTML and drops unsafe link protocols", () => {
