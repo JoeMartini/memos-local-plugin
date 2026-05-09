@@ -201,7 +201,7 @@ async function main(): Promise<void> {
           {
             port: viewerPort,
             host: config.viewer.bindHost,
-            staticRoot: path.resolve(__dirname, "web/dist"),
+            staticRoot: path.resolve(__dirname, "viewer/dist"),
             agent: args.agent,
           },
         );
@@ -271,7 +271,7 @@ async function main(): Promise<void> {
       {
         port: viewerPort,
         host: config.viewer.bindHost,
-        staticRoot: path.resolve(__dirname, "web/dist"),
+        staticRoot: path.resolve(__dirname, "viewer/dist"),
         agent: args.agent,
       },
     );
