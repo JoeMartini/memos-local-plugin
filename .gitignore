@@ -1,7 +1,6 @@
 node_modules/
 dist/
-web/dist/
-site/dist/
+viewer/dist/
 coverage/
 
 # Local builds & artifacts

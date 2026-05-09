@@ -12,9 +12,13 @@
     "allowSyntheticDefaultImports": true,
     "noEmit": true,
     "isolatedModules": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     "types": ["vite/client"]
   },
   "include": [
-    "site/src/**/*.ts"
+    "viewer/src/**/*.ts",
+    "viewer/src/**/*.tsx",
+    "agent-contract/**/*.ts"
   ]
 }

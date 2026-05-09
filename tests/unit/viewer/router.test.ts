@@ -30,7 +30,7 @@ beforeAll(async () => {
     setItem(k: string, v: string) { this._s.set(k, v); },
     removeItem(k: string) { this._s.delete(k); },
   };
-  const mod = await import("../../../web/src/stores/router");
+  const mod = await import("../../../viewer/src/stores/router");
   route = mod.route;
   navigate = mod.navigate;
 });

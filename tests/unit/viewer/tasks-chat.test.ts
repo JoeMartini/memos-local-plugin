@@ -13,7 +13,7 @@ import { describe, it, expect } from "vitest";
 import {
   flattenChat,
   type TimelineTrace,
-} from "../../../web/src/views/tasks-chat-data";
+} from "../../../viewer/src/views/tasks-chat-data";
 
 const T0 = 1_700_000_000_000;
 

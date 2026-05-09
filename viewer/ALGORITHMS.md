@@ -1,4 +1,4 @@
-# `web/` invariants
+# `viewer/` invariants
 
 This file enumerates the invariants the viewer upholds for the
 algorithm core. Violations are considered bugs even if the view
@@ -116,10 +116,10 @@ keeps those ergonomics fixed regardless of log volume.
 ## W10 — Types match the core by construction
 
 **Invariant.** Every DTO used by the viewer is re-exported from
-`../agent-contract` via `web/src/api/types.ts`. New types are never
-declared inline in `web/src/`.
+`../agent-contract` via `viewer/src/api/types.ts`. New types are never
+declared inline in `viewer/src/`.
 
 **Why.** When the contract evolves, the viewer fails to type-check
-rather than rendering stale fields. `tsconfig.web.json` is part of
+rather than rendering stale fields. `tsconfig.viewer.json` is part of
 CI's typecheck matrix; drift surfaces at build time, not at demo
 time.

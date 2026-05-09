@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { effectiveShareScope } from "../../../web/src/utils/share";
+import { effectiveShareScope } from "../../../viewer/src/utils/share";
 
 describe("effectiveShareScope", () => {
   it("shows private when the global sharing switch is off", () => {

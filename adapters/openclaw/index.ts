@@ -85,13 +85,13 @@ interface PluginRuntime {
 /** Locate the bundled viewer static assets relative to the plugin root. */
 function resolveViewerStaticRoot(): string | undefined {
   // Built packages load from `<plugin>/dist/adapters`; source tests load
-  // from `<plugin>/adapters`. The viewer bundle remains at `web/dist`.
+  // from `<plugin>/adapters`. The viewer bundle remains at `viewer/dist`.
   try {
     const thisFile = fileURLToPath(import.meta.url);
     const adapterDir = path.dirname(thisFile); // .../adapters/openclaw
     const candidates = [
-      path.resolve(adapterDir, "..", "..", "..", "web", "dist"),
-      path.resolve(adapterDir, "..", "..", "web", "dist"),
+      path.resolve(adapterDir, "..", "..", "..", "viewer", "dist"),
+      path.resolve(adapterDir, "..", "..", "viewer", "dist"),
     ];
     return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
   } catch {

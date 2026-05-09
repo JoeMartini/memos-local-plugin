@@ -1,4 +1,4 @@
-# `web/` — MemOS Local viewer (Vite + Preact)
+# `viewer/` — MemOS Local viewer (Vite + Preact)
 
 The viewer is the user-facing dashboard for the MemOS Local memory
 plugin. It renders the live state of the algorithm core: sessions,
@@ -22,7 +22,7 @@ The viewer has three design goals, in order of importance:
 ## Layout
 
 ```
-web/
+viewer/
 ├── index.html                # Vite entry
 ├── src/
 │   ├── main.tsx              # Preact render root
@@ -65,7 +65,7 @@ The viewer speaks only two protocols to the core:
    `ReadableStream`. This keeps SSE usable even when an API key is
    required (browsers can't attach headers to native `EventSource`).
 
-All incoming payloads are already typed: `web/src/api/types.ts`
+All incoming payloads are already typed: `viewer/src/api/types.ts`
 re-exports the DTOs from `agent-contract/` so the viewer and the
 algorithm core share the same types by construction.
 
@@ -100,7 +100,7 @@ shifts. All with a smooth overshoot-free easing (`cubic-bezier(0.16, 1,
 
 ```bash
 # From apps/memos-local-plugin
-npm run dev:web
+npm run viewer:dev
 ```
 
 Vite serves from `http://localhost:5173` with HMR. The viewer calls
@@ -111,10 +111,10 @@ need to proxy to another origin).
 ### In production
 
 ```bash
-npm run build:web
+npm run build:viewer
 ```
 
-Outputs `web/dist/` which the plugin's HTTP server serves from `/ui/`.
+Outputs `viewer/dist/` which the plugin's HTTP server serves from `/ui/`.
 The bundle is < 60 kB minified+gzipped (Preact 10 + signals + viewer
 code).
 
@@ -122,17 +122,17 @@ code).
 
 Vitest covers three pieces:
 
-- `tests/unit/web/api-client.test.ts` — verb helpers, error shape,
+- `tests/unit/viewer/api-client.test.ts` — verb helpers, error shape,
   api-key propagation.
-- `tests/unit/web/sse-client.test.ts` — SSE frame parsing, api-key
+- `tests/unit/viewer/sse-client.test.ts` — SSE frame parsing, api-key
   header forwarding, `close()` semantics.
-- `tests/unit/web/router.test.ts` — hash parsing, `navigate()`
+- `tests/unit/viewer/router.test.ts` — hash parsing, `navigate()`
   roundtrip.
 
 Run:
 
 ```bash
-npm test -- tests/unit/web
+npm test -- tests/unit/viewer
 ```
 
 All three files use `globalThis` shims for `window`/`localStorage`
@@ -154,7 +154,7 @@ rather than jsdom, keeping the viewer test surface lightweight.
 
 Adding a new view:
 
-1. Drop `web/src/views/NewView.tsx`.
+1. Drop `viewer/src/views/NewView.tsx`.
 2. Register it in `ContentRouter.tsx`.
 3. Link it from `Sidebar.tsx` (`NAV` array).
 4. If the view needs a new endpoint, add it to `../server/routes/`

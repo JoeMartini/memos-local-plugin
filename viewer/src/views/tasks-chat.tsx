@@ -16,7 +16,7 @@
  *
  * The pure data layer lives in `tasks-chat-data.ts`; that file ships
  * the `flattenChat` function tested in
- * `tests/unit/web/tasks-chat.test.ts` (no Preact dependency).
+ * `tests/unit/viewer/tasks-chat.test.ts` (no Preact dependency).
  */
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";

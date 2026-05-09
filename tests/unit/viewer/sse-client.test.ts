@@ -24,7 +24,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
   location: { hash: "" },
 };
 
-import { openSse } from "../../../web/src/api/sse";
+import { openSse } from "../../../viewer/src/api/sse";
 
 function makeSseResponse(chunks: string[], signal?: AbortSignal): Response {
   const encoder = new TextEncoder();
