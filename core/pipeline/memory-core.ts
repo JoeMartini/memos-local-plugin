@@ -74,9 +74,7 @@ import type {
 } from "../types.js";
 import type { ResolvedConfig, ResolvedHome } from "../config/index.js";
 import { loadConfig, resolveHome, SECRET_FIELD_PATHS } from "../config/index.js";
-import { reflectionAsText } from "../capture/types.js";
 import { feedbackText, runFeedbackExperience } from "../experience/feedback-builder.js";
-import { isRepairCandidatePolicy, mintRepairCandidate } from "../skill/repair-candidate.js";
 import { rootLogger } from "../logger/index.js";
 import type { Logger } from "../logger/types.js";
 import { openDb } from "../storage/connection.js";
@@ -103,11 +101,6 @@ import {
 } from "../runtime/namespace.js";
 import { createHubRuntime, type HubMemorySearchHit, type HubRuntime } from "../hub/runtime.js";
 import { llmFilterCandidates } from "../retrieval/llm-filter.js";
-import {
-  isStandaloneMathFinalAnswerTask,
-  mergeMathFinalAnswerProtocol,
-  STANDALONE_MATH_FINAL_ANSWER_TASK_KIND,
-} from "../retrieval/math-task.js";
 import type { RankedCandidate } from "../retrieval/ranker.js";
 import type {
   RetrievalConfig,
@@ -478,8 +471,6 @@ export function createMemoryCore(
   pkgVersion: string,
   options: CreateMemoryCoreOptions = {},
 ): MemoryCore {
-  // "经验" 列表的 q 过滤是内存子串匹配；扫描深度不足会导致"展示全部"漏项。
-  const POLICY_SCAN_LIMIT = 100_000;
   const bootAt = Date.now();
   const log = rootLogger.child({ channel: "core.pipeline.memory-core" });
   let telemetry = options.telemetry ?? null;
@@ -830,11 +821,6 @@ export function createMemoryCore(
     }));
   }
 
-  function isStandaloneMathFinalAnswerTurn(turn: Parameters<MemoryCore["onTurnStart"]>[0]): boolean {
-    return turn.contextHints?.taskKind === STANDALONE_MATH_FINAL_ANSWER_TASK_KIND ||
-      isStandaloneMathFinalAnswerTask(turn.userText);
-  }
-
   async function ensureHubRuntimeStarted(config: ResolvedConfig): Promise<void> {
     hubRuntimeConfig = config;
     if (!config.hub.enabled) {
@@ -911,7 +897,6 @@ export function createMemoryCore(
             topicState: (ep.meta?.topicState as string | undefined) ?? "interrupted",
             pauseReason: (ep.meta?.pauseReason as string | undefined) ?? "startup_recovered_open_topic",
             recoveredAtStartup: nowMs,
-            pausedAt: typeof ep.meta?.pausedAt === "number" ? ep.meta.pausedAt : nowMs,
           });
         }
         if (stale.length > 0) {
@@ -948,7 +933,7 @@ export function createMemoryCore(
         const details = r.traces.map((tc) => ({
           role: inferTurnRole(tc),
           action: phase === "lite" ? ("stored" as const) : ("reflected" as const),
-          summary: reflectionAsText(tc.reflection?.text ?? null),
+          summary: tc.reflection?.text ?? null,
           content: (
             tc.userText ||
             tc.agentText ||
@@ -1625,18 +1610,11 @@ export function createMemoryCore(
     try {
       hubHits = await searchHubMemoryHits(turn.userText, 5);
       hubCandidates = logCandidatesFromHits(hubHits);
-      const standaloneMathFinalAnswer = isStandaloneMathFinalAnswerTurn(turn);
       const namespacedTurn = {
         ...turn,
         namespace: ns,
         contextHints: {
           ...(turn.contextHints ?? {}),
-          ...(standaloneMathFinalAnswer
-            ? {
-                taskKind: STANDALONE_MATH_FINAL_ANSWER_TASK_KIND,
-                finalAnswerMode: "single_turn",
-              }
-            : {}),
           ...namespaceMeta(ns),
           ...(hubHits.length > 0 ? { __memosDeferLlmFilterToCaller: true } : {}),
         },
@@ -1688,15 +1666,12 @@ export function createMemoryCore(
           }
         : undefined;
       finalHubKept = final.hits.filter((hit) => hit.shareScope === "hub").length;
-      const recalledContext = hubHits.length > 0
-        ? renderFinalHitsContext(final.hits)
-        : packet.rendered;
       return {
         query,
         hits: final.hits,
-        injectedContext: standaloneMathFinalAnswer
-          ? mergeMathFinalAnswerProtocol(recalledContext, turn.userText)
-          : recalledContext,
+        injectedContext: hubHits.length > 0
+          ? renderFinalHitsContext(final.hits)
+          : packet.rendered,
         tierLatencyMs: packet.tierLatencyMs,
       };
     } catch (err) {
@@ -1940,27 +1915,6 @@ export function createMemoryCore(
     try {
       await handle.l2.drain();
       if (policyId) {
-        // A constructive negative (failure + named fix) mints an unproven
-        // repair *candidate* skill that earns trust via trials. The normal
-        // crystallization below skips negatives, so there is no conflict; the
-        // candidate dedups against it via sourcePolicyIds.
-        const pol = handle.repos.policies.getById(policyId);
-        if (pol && isRepairCandidatePolicy(pol)) {
-          // Best-effort: a mint failure must never block crystallization / L3.
-          try {
-            mintRepairCandidate(pol, {
-              repos: handle.repos,
-              embedder: handle.embedder,
-              now: Date.now,
-              log,
-            });
-          } catch (err) {
-            log.warn("feedback.repair_candidate_failed", {
-              policyId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          }
-        }
         await handle.skills.runOnce({ trigger: "manual", policyId });
       }
       if (episode) {
@@ -2636,10 +2590,9 @@ export function createMemoryCore(
     const offset = Math.max(0, input?.offset ?? 0);
     const needle = (input?.q ?? "").trim().toLowerCase();
     const namespaceFiltered = Boolean(input?.ownerAgentKind || input?.ownerProfileId);
-    const shouldDeepScan = namespaceFiltered || needle.length > 0;
     const rows = handle.repos.policies.list({
       status: input?.status,
-      limit: shouldDeepScan ? POLICY_SCAN_LIMIT : limit + offset,
+      limit: namespaceFiltered ? 100_000 : limit + offset + (needle ? 200 : 0),
       offset: 0,
     });
     const visibleRows = rows.filter((r) =>
@@ -2647,7 +2600,7 @@ export function createMemoryCore(
     );
     const filtered = needle
       ? visibleRows.filter((r) =>
-          (r.id + "\n" + r.title + "\n" + r.trigger + "\n" + r.procedure)
+          (r.title + "\n" + r.trigger + "\n" + r.procedure)
             .toLowerCase()
             .includes(needle),
         )
@@ -2672,11 +2625,11 @@ export function createMemoryCore(
     // q is a client-side substring match; mirror `listPolicies` and
     // walk the full filtered result. Caller passes no limit/offset
     // so the natural list pages through everything.
-    const rows = handle.repos.policies.list({ status: input?.status, limit: POLICY_SCAN_LIMIT }).filter((r) =>
+    const rows = handle.repos.policies.list({ status: input?.status }).filter((r) =>
       (input?.includeAllNamespaces || visibleToCurrent(r)) && matchesNamespaceFilter(r, input)
     );
     return rows.filter((r) =>
-      (r.id + "\n" + r.title + "\n" + r.trigger + "\n" + r.procedure)
+      (r.title + "\n" + r.trigger + "\n" + r.procedure)
         .toLowerCase()
         .includes(needle),
     ).length;

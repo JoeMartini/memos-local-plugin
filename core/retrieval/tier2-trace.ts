@@ -24,7 +24,6 @@
  * "single-channel false positive" hole that pure-cosine retrieval has.
  */
 
-import { reflectionAsText } from "../capture/types.js";
 import { rootLogger } from "../logger/index.js";
 import { priorityFor } from "../reward/backprop.js";
 import type { EmbeddingVector, EpisodeId, SessionId, TraceId } from "../types.js";
@@ -465,7 +464,7 @@ function renderEpisodeSummary(_best: TraceCandidate, members: readonly TraceCand
       const a = m.agentText?.trim().replace(/\s+/g, " ") ?? "";
       if (a) parts.push(`agent: ${a.slice(0, 120)}`);
     }
-    const r = reflectionAsText(m.reflection)?.trim() ?? "";
+    const r = m.reflection?.trim() ?? "";
     if (r) parts.push(`reflection: ${r.slice(0, 160)}`);
     return parts.join("\n  ");
   });

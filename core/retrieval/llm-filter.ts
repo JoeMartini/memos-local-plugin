@@ -23,7 +23,6 @@
 import type { LlmClient } from "../llm/index.js";
 import type { Logger } from "../logger/types.js";
 import { RETRIEVAL_FILTER_PROMPT } from "../llm/prompts/index.js";
-import { reflectionAsText } from "../capture/types.js";
 import type { RankedCandidate } from "./ranker.js";
 import type { RetrievalConfig } from "./types.js";
 
@@ -314,10 +313,8 @@ function describeCandidate(r: RankedCandidate, bodyChars: number): string {
         if (tr.userText?.trim()) parts.push(`[user] ${tr.userText.trim()}`);
         if (tr.agentText?.trim())
           parts.push(`[assistant] ${tr.agentText.trim()}`);
-        {
-          const refl = reflectionAsText(tr.reflection)?.trim();
-          if (refl) parts.push(`[note] ${refl}`);
-        }
+        if (tr.reflection?.trim())
+          parts.push(`[note] ${tr.reflection.trim()}`);
         const body = squashBody(parts.join(" "), bodyChars);
         return `[TRACE] ${body}`;
       }

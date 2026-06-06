@@ -48,9 +48,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
-import os
 import re
-import shutil
 import sys
 import threading
 import time
@@ -322,24 +320,7 @@ class MemTensorProvider(MemoryProvider):
             logger.warning("MemOS: viewer daemon check failed — %s", err)
         new_bridge: MemosBridgeClient | None = None
         try:
-            # ── Profile-scoped data isolation ──
-            # Each Hermes profile gets its own memos-plugin home so
-            # multiple gateways can run concurrently without SQLite
-            # contention on the same db file.
-            profile = (self._agent_identity or "default").strip() or "default"
-            memos_home = Path.home() / f".hermes/memos-plugin-{profile}"
-            memos_home.mkdir(parents=True, exist_ok=True)
-
-            # Seed config from the canonical install if this profile
-            # hasn't been initialised yet.
-            config_src = Path.home() / ".hermes/memos-plugin/config.yaml"
-            config_dst = memos_home / "config.yaml"
-            if not config_dst.exists() and config_src.exists():
-                shutil.copy2(config_src, config_dst)
-
-            new_bridge = MemosBridgeClient(
-                extra_env={"MEMOS_HOME": str(memos_home)},
-            )
+            new_bridge = MemosBridgeClient()
             # Register the fallback LLM handler BEFORE we open the
             # session so it is available the very first time the
             # plugin's facade asks for help (e.g. on the first
@@ -1771,15 +1752,8 @@ class MemTensorProvider(MemoryProvider):
                 logger.warning("MemOS: viewer daemon check failed during reconnect — %s", err)
             new_bridge: MemosBridgeClient | None = None
             try:
-                # ── Profile-scoped data isolation (reconnect) ──
-                profile = (self._agent_identity or "default").strip() or "default"
-                memos_home = Path.home() / f".hermes/memos-plugin-{profile}"
-                memos_home.mkdir(parents=True, exist_ok=True)
-
-                new_bridge = MemosBridgeClient(
-                    extra_env={"MEMOS_HOME": str(memos_home)},
-                )
-                logger.info("MemOS: new bridge created (pid=%s) profile=%s", getattr(new_bridge, "pid", "?"), profile)
+                new_bridge = MemosBridgeClient()
+                logger.info("MemOS: new bridge created (pid=%s)", getattr(new_bridge, "pid", "?"))
 
                 new_bridge.register_host_handler(
                     "host.llm.complete",

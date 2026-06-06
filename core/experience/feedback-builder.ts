@@ -11,7 +11,6 @@ import type {
 import type { Embedder } from "../embedding/types.js";
 import type { LlmClient } from "../llm/index.js";
 import { classifyFeedback } from "../feedback/classifier.js";
-import { reflectionAsText } from "../capture/types.js";
 import { createFeedbackRefiner } from "./feedback-refiner.js";
 import { ids } from "../id.js";
 import { ownerFromNamespace } from "../runtime/namespace.js";
@@ -207,9 +206,6 @@ async function buildDraft(args: {
   let procedure: string;
   let verification: string;
   let guidance: ReturnType<typeof guidanceOf>;
-  // The LLM's "what to do" line, when refinement ran — used as the corrective
-  // fix text for a constructive negative (Q6).
-  let llmProcedure: string | null = null;
 
   if (args.llm && (args.trace || args.episode)) {
     try {
@@ -243,7 +239,6 @@ async function buildDraft(args: {
         preference: [],
         antiPattern: refined.caveats,
       };
-      llmProcedure = refined.procedure;
     } catch (err) {
       // Fall back to rule-based extraction
       const fallback = buildDraftFallback(args, type, text);
@@ -261,19 +256,6 @@ async function buildDraft(args: {
     procedure = fallback.procedure;
     verification = fallback.verification;
     guidance = fallback.guidance;
-  }
-
-  // Q6: a constructive negative carries BOTH faces in one record — the
-  // avoidance ("don't do X", already in antiPattern) and the suggested fix
-  // ("do Y") as a preference. Only when the feedback actually names a
-  // corrective direction; a bare verdict ("wrong", reward 0) stays a pure
-  // warning and mints no fix (Q5: 没建设性就不沉淀修法).
-  const fix = fail ? constructiveFix(args.classified, llmProcedure) : null;
-  if (fix) {
-    guidance = {
-      preference: dedupeLines([...guidance.preference, fix]),
-      antiPattern: guidance.antiPattern,
-    };
   }
 
   const boundary = [
@@ -360,72 +342,10 @@ function guidanceOf(
   }
   if (type === "failure_avoidance") antiPattern.push(text);
   if (type === "repair_instruction" || type === "success_pattern") preference.push(text);
-  // Drop punctuation-only / empty captures (the classifier can extract "." from
-  // a soft preference match) so guidance never stores garbage.
   return {
-    preference: dedupeLines(preference.filter(substantive)),
-    antiPattern: dedupeLines(antiPattern.filter(substantive)),
+    preference: dedupeLines(preference),
+    antiPattern: dedupeLines(antiPattern),
   };
-}
-
-// Corrective-direction cues ("do Y"), conservative on purpose: meta prompts
-// like "reflect on what to improve" are NOT cues, so a bare verdict mints no
-// fix. The capture group holds the fix text.
-const CORRECTIVE_CLAUSE_PATTERNS: readonly RegExp[] = [
-  /\binstead[,\s]+\s*(?:use|try|apply|do|switch to)\s+(.{4,240})/i,
-  /\b(?:use|prefer|switch to|apply)\s+(.{4,240}?)\s+instead\b/i,
-  /\b(?:should|must|need to|needs to|have to)\s+(?:use|be|do|switch to|apply)\s+(.{4,240})/i,
-  /\b(?:use|prefer|switch to|apply)\s+(.{4,240})/i,
-  /(?:改用|应该用|应改为|换成|建议用|下次用|应该)\s*(.{2,120})/,
-];
-
-/**
- * Reject only empty / pure-punctuation captures (e.g. the classifier's stray
- * ".") — anything with at least one letter or digit is real content. A higher
- * bar would wrongly drop short CJK guidance like "重复".
- */
-function substantive(s: string | null | undefined): boolean {
-  if (!s) return false;
-  return /[\p{L}\p{N}]/u.test(s);
-}
-
-function extractCorrectiveClause(text: string): string | null {
-  for (const re of CORRECTIVE_CLAUSE_PATTERNS) {
-    const m = re.exec(text);
-    const clause = m?.[1]?.trim();
-    if (clause && substantive(clause)) return clause;
-  }
-  return null;
-}
-
-/**
- * For a failed/negative feedback, extract the *corrective direction* ("do Y")
- * when the feedback actually contains one. Returns null when the feedback only
- * delivers a verdict ("wrong", reward 0, plain TLE) with no reusable fix — those
- * stay a pure avoidance warning and mint no repair candidate downstream
- * (Q5: 没建设性就不沉淀修法).
- *
- * Gates on *substantive corrective text* rather than the classifier shape: the
- * lexical classifier is noisy here (soft "instead/use" hits extract nothing,
- * and pattern captures can grab punctuation like "."). The LLM's refined
- * procedure is preferred when present; otherwise we extract a clause ourselves.
- */
-function constructiveFix(
-  classified: ReturnType<typeof classifyFeedback>,
-  llmProcedure: string | null,
-): string | null {
-  const candidates = [
-    llmProcedure,
-    extractCorrectiveClause(classified.text),
-    classified.prefer,
-    classified.correction,
-    classified.constraint,
-  ];
-  for (const c of candidates) {
-    const s = c?.trim();
-    if (s && substantive(s)) return cleanLine(s, MAX_LINE_CHARS);
-  }
-  return null;
 }
 
 async function embedPolicy(
@@ -654,19 +574,15 @@ function verifierStats(raw: unknown): VerifierStats {
   };
 }
 
-export type ObjectiveOutcome = "pass" | "fail" | "unknown";
+type ObjectiveOutcome = "pass" | "fail" | "unknown";
 
 /**
  * Authoritative success/failure from the verifier payload, falling back to the
  * episode reward. Strict scenarios (coding/math/verifier) treat ONLY a full pass
  * as positive: a partial pass (passed < total) or reward below full credit is a
  * failure, never a positive exemplar.
- *
- * Pass `rTask = null` for a *verifier-only* verdict: with no reward fallback it
- * returns "unknown" when the payload carries no verifier signal. Used by strict
- * repair-candidate trial resolution, which must never pass on a loose reward.
  */
-export function objectiveOutcome(raw: unknown, rTask: number | null | undefined): ObjectiveOutcome {
+function objectiveOutcome(raw: unknown, rTask: number | null | undefined): ObjectiveOutcome {
   const { reward, passed, total } = verifierStats(raw);
   if (passed != null && total != null && total > 0) {
     return passed >= total ? "pass" : "fail";
@@ -691,10 +607,7 @@ function traceHint(trace: TraceRow): string {
   const parts = [
     trace.summary ? `summary=${cleanLine(trace.summary, 140)}` : null,
     trace.userText ? `user=${cleanLine(trace.userText, 140)}` : null,
-    (() => {
-      const refl = reflectionAsText(trace.reflection);
-      return refl ? `note=${cleanLine(refl, 140)}` : null;
-    })(),
+    trace.reflection ? `note=${cleanLine(trace.reflection, 140)}` : null,
   ];
   return parts.filter(Boolean).join(" | ");
 }

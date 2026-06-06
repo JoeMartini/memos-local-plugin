@@ -341,29 +341,19 @@ class MemosBridgeClient:
                 params = msg.get("params") or {}
                 if not isinstance(params, dict):
                     params = {}
-                # Run handler in a background thread so the read loop
-                # never blocks on a slow host LLM call.
-                def _run_host_handler(_self, _rpc_id, _method, _handler, _params):
-                    try:
-                        result = _handler(_params)
-                        _self._send_response(_rpc_id, result=result)
-                    except Exception as err:
-                        logger.warning("host handler %s failed: %s", _method, err)
-                        _self._send_response(
-                            _rpc_id,
-                            error={
-                                "code": -32000,
-                                "message": str(err) or err.__class__.__name__,
-                                "data": {"code": "host_handler_failed"},
-                            },
-                        )
-
-                threading.Thread(
-                    target=_run_host_handler,
-                    args=(self, rpc_id, method, handler, params),
-                    daemon=True,
-                    name=f"memos-host-{method}",
-                ).start()
+                try:
+                    result = handler(params)
+                    self._send_response(rpc_id, result=result)
+                except Exception as err:
+                    logger.warning("host handler %s failed: %s", method, err)
+                    self._send_response(
+                        rpc_id,
+                        error={
+                            "code": -32000,
+                            "message": str(err) or err.__class__.__name__,
+                            "data": {"code": "host_handler_failed"},
+                        },
+                    )
                 continue
 
     def _host_handler_for(

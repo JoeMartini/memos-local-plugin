@@ -31,7 +31,6 @@ import type {
   PolicyRow,
   SkillId,
   SkillRow,
-  TraceRow,
 } from "../types.js";
 import {
   crystallizeDraft,
@@ -39,16 +38,7 @@ import {
   type CrystallizeResult,
 } from "./crystallize.js";
 import { evaluateEligibility } from "./eligibility.js";
-import {
-  gatherCounterExamples,
-  gatherEvidence,
-  gatherIncrementalEvidence,
-  type AnnotatedTrace,
-} from "./evidence.js";
-import { mergeRebuildDraft, procedureFromSkillRow } from "./merge.js";
-import { computeRebuildLevel, type RebuildLevel } from "./rebuild-level.js";
-import { resolveSkillOutputLanguage } from "./language.js";
-import { normalizeSkillName, uniquifySkillName } from "./name.js";
+import { gatherEvidence } from "./evidence.js";
 import {
   applyFeedback,
   recomputeEta,
@@ -113,52 +103,6 @@ export async function runSkill(
       repos,
       config,
     });
-    const incremental =
-      decision.action === "rebuild" && decision.existingSkill
-        ? gatherIncrementalEvidence(decision.policy, decision.existingSkill, {
-            repos,
-            config,
-          })
-        : { traces: [], poolAfterDedupe: 0 };
-
-    const rebuildMeta =
-      decision.action === "rebuild" && decision.existingSkill
-        ? computeRebuildLevel({
-            policy: decision.policy,
-            existingSkill: decision.existingSkill,
-            incrementalEvidence: incremental.traces.map((a) => a.trace),
-          })
-        : null;
-    const outputLanguage = resolveSkillOutputLanguage(decision.policy, config);
-    const existingProc = decision.existingSkill
-      ? procedureFromSkillRow(decision.existingSkill.procedureJson)
-      : null;
-    const renameAllowed = Boolean(
-      decision.action === "rebuild" &&
-      decision.existingSkill?.repairOrigin &&
-      rebuildMeta?.level === "L2" &&
-      !(existingProc?.graduatedFromRepairName ?? false),
-    );
-
-    if (rebuildMeta) {
-      log.info("skill.rebuild.level", {
-        policyId: decision.policy.id,
-        skillId: decision.existingSkill!.id,
-        level: rebuildMeta.level,
-        incrementalCount: rebuildMeta.incrementalCount,
-        evidencePoolAfterDedupe: evidence.poolAfterDedupe,
-        incrementalPoolAfterDedupe: incremental.poolAfterDedupe,
-        evidence_outcome_counts: evidence.outcomeCounts,
-        evidence_pool_excluded_failure_count: evidence.excludedFailureCount,
-      });
-    } else if (decision.action === "crystallize") {
-      log.info("skill.crystallize.evidence", {
-        policyId: decision.policy.id,
-        evidence_outcome_counts: evidence.outcomeCounts,
-        evidence_pool_excluded_failure_count: evidence.excludedFailureCount,
-      });
-    }
-
     if (evidence.traces.length === 0) {
       warnings.push({ policyId: decision.policy.id, reason: "no-evidence" });
       bus.emit({
@@ -184,22 +128,14 @@ export async function runSkill(
     // context. Empty when no negatives exist — that's fine; the
     // crystallizer still produces a valid skill, just without bonus
     // anti-pattern guidance derived from contrast.
-    const counterExamples = gatherCounterExamples(decision.policy, { repos, config });
+    const counterExamples = gatherCounterExamples(decision.policy, repos);
 
     const tCrystallize = nowMs();
     const crystResult = await runCrystallize(
-      {
-        policy: decision.policy,
-        evidence: evidence.traces,
-        counterExamples,
-        skillsByPolicy,
-        action: decision.action,
-        existingSkill: decision.existingSkill,
-        incremental: incremental.traces,
-        rebuildLevel: rebuildMeta?.level,
-        outputLanguage,
-        renameAllowed,
-      },
+      decision.policy,
+      evidence.traces,
+      counterExamples,
+      skillsByPolicy,
       deps,
     );
     timings.crystallize += nowMs() - tCrystallize;
@@ -221,28 +157,9 @@ export async function runSkill(
       continue;
     }
 
-    let draft = crystResult.draft;
-    if (decision.action === "rebuild" && decision.existingSkill && rebuildMeta) {
-      draft = mergeRebuildDraft(draft, existingProc, {
-        level: rebuildMeta.level,
-        lockName: renameAllowed ? undefined : decision.existingSkill.name,
-        changedSections: crystResult.changedSections,
-      });
-    }
-    if (renameAllowed) {
-      const existingNames = new Set(
-        repos.skills.list({ limit: 500 }).map((s) => s.name),
-      );
-      existingNames.delete(decision.existingSkill!.name);
-      draft.name = uniquifySkillName(
-        normalizeSkillName(draft.name || decision.existingSkill!.name),
-        existingNames,
-      );
-    }
-
     const tVerify = nowMs();
     const verdict = verifyDraft(
-      { draft, evidence: evidence.traces.map((a) => a.trace) },
+      { draft: crystResult.draft, evidence: evidence.traces },
       { log: log.child({ channel: "core.skill.verifier" }) },
     );
     timings.verify += nowMs() - tVerify;
@@ -263,22 +180,16 @@ export async function runSkill(
     }
 
     const tPersist = nowMs();
-    const evidenceUserTexts = evidence.traces
-      .map((a) => a.trace.userText?.trim())
-      .filter((q) => q.length > 0);
-
     const built = await buildSkillRow(
       {
-        draft,
+        draft: crystResult.draft,
         policy: decision.policy,
         evidenceEpisodeIds: evidence.episodeIds,
         // V7 §2.1 — persist the L1 trace ids so the viewer can render
         // click-through "evidence" chips back to MemoriesView and
         // future audits / rebuilds don't have to re-mine evidence.
-        evidenceTraceIds: evidence.traces.map((a) => a.trace.id),
-        evidenceUserTexts,
+        evidenceTraceIds: evidence.traces.map((t) => t.id),
         existing: decision.existingSkill,
-        outputLanguage,
       },
       {
         embedder: deps.embedder,
@@ -289,22 +200,12 @@ export async function runSkill(
     // Candidate always — verifier ok is not enough to auto-promote.
     // Lifecycle transitions happen via feedback, never on insert.
     const row: SkillRow = { ...built.row, status: "candidate" };
-    if (renameAllowed && row.procedureJson && typeof row.procedureJson === "object") {
-      (row.procedureJson as { graduatedFromRepairName?: boolean }).graduatedFromRepairName = true;
-    }
 
     // If rebuilding, start from the existing skill's trial counters but
     // reset η toward the recomputed value — existing practitioner skills
     // lose credibility when the underlying policy shifts materially.
     if (decision.action === "rebuild" && decision.existingSkill) {
-      const recomputed = recomputeEta(decision.existingSkill, decision.policy, config);
-      // Q4: a repair candidate that earned trust via real trials must not have
-      // it wiped when a later positive feedback rebuilds it into a success-
-      // backed skill — take the higher of earned vs. recomputed η. (The
-      // rebuilt row drops `repairOrigin`, so it graduates on normal thresholds.)
-      row.eta = decision.existingSkill.repairOrigin
-        ? Math.max(recomputed, decision.existingSkill.eta)
-        : recomputed;
+      row.eta = recomputeEta(decision.existingSkill, decision.policy, config);
     }
 
     repos.skills.upsert(row);
@@ -457,45 +358,26 @@ function buildSkillIndex(repos: Repos): Map<string, SkillRow> {
   return out;
 }
 
-interface RunCrystallizeArgs {
-  policy: PolicyRow;
-  evidence: AnnotatedTrace[];
-  counterExamples: AnnotatedTrace[];
-  skillsByPolicy: Map<string, SkillRow>;
-  action: "crystallize" | "rebuild";
-  existingSkill: SkillRow | null;
-  incremental: AnnotatedTrace[];
-  rebuildLevel?: RebuildLevel;
-  outputLanguage: "zh" | "en";
-  renameAllowed: boolean;
-}
-
 async function runCrystallize(
-  args: RunCrystallizeArgs,
+  policy: PolicyRow,
+  evidence: Parameters<typeof verifyDraft>[0]["evidence"],
+  counterExamples: Parameters<typeof verifyDraft>[0]["evidence"],
+  skillsByPolicy: Map<string, SkillRow>,
   deps: RunSkillDeps,
 ): Promise<CrystallizeResult> {
-  const { policy, evidence, counterExamples, skillsByPolicy, action, existingSkill } =
-    args;
   const namingSpace = Array.from(
     new Set(Array.from(skillsByPolicy.values()).map((s) => s.name)),
   );
+  // The most recent contributing episode is the natural "trigger" the
+  // user expects to see on the Logs page (skill events appear right
+  // after the episode they were synthesised from). Falls back to the
+  // policy's first source episode when no recency ordering is
+  // available.
   const triggerEpisodeId =
     policy.sourceEpisodeIds[policy.sourceEpisodeIds.length - 1] ??
     policy.sourceEpisodeIds[0];
   return crystallizeDraft(
-    {
-      policy,
-      evidence,
-      counterExamples,
-      namingSpace,
-      episodeId: triggerEpisodeId,
-      mode: action === "rebuild" ? "rebuild" : "crystallize",
-      existingSkill,
-      incrementalEvidence: args.incremental,
-      rebuildLevel: args.rebuildLevel,
-      outputLanguage: args.outputLanguage,
-      renameAllowed: args.renameAllowed,
-    },
+    { policy, evidence, counterExamples, namingSpace, episodeId: triggerEpisodeId },
     {
       llm: deps.llm,
       log: deps.log.child({ channel: "core.skill.crystallize" }),
@@ -503,4 +385,28 @@ async function runCrystallize(
       validate: defaultDraftValidator,
     },
   );
+}
+
+/**
+ * Pull traces from the policy's source episodes that scored V < 0.
+ * These are the failures the policy is supposed to prevent — perfect
+ * raw material for `decision_guidance.anti_pattern`. We cap the count
+ * at 5 (matching `evidenceLimit` order of magnitude) so the prompt
+ * stays bounded.
+ */
+function gatherCounterExamples(
+  policy: PolicyRow,
+  repos: Repos,
+): Parameters<typeof verifyDraft>[0]["evidence"] {
+  if (policy.sourceEpisodeIds.length === 0) return [];
+  const out: ReturnType<typeof repos.traces.list> = [];
+  for (const episodeId of policy.sourceEpisodeIds) {
+    const traces = repos.traces.list({ episodeId, limit: 20 });
+    for (const t of traces) {
+      if (Number.isFinite(t.value) && t.value < 0) out.push(t);
+    }
+  }
+  // Lowest V first — the worst failures get spoken about loudest.
+  out.sort((a, b) => a.value - b.value);
+  return out.slice(0, 5);
 }
