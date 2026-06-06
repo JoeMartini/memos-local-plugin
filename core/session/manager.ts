@@ -186,7 +186,6 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
           topicState: "paused",
           pauseReason: `session_closed:${reason}`,
           sessionCloseReason: reason,
-          pausedAt: now(),
         });
         continue;
       }
@@ -200,7 +199,6 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
         topicState: "paused",
         pauseReason: `session_closed:${reason}`,
         sessionCloseReason: reason,
-        pausedAt: now(),
       });
     }
     live.delete(id);
@@ -385,7 +383,6 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
           topicState: "paused",
           pauseReason: `shutdown:${reason}`,
           sessionCloseReason: `shutdown:${reason}`,
-          pausedAt: now(),
         });
       }
     }

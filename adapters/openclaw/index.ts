@@ -89,28 +89,6 @@ interface PluginRuntime {
   shutdown: () => Promise<void>;
 }
 
-interface SharedRuntimeState {
-  registrations: number;
-  runtime: PluginRuntime | null;
-  bootstrapError: Error | null;
-  bootstrapPromise: Promise<void>;
-}
-
-const SHARED_RUNTIME_KEY = "__memos_local_openclaw_runtime_v1__";
-
-function readSharedRuntimeState(): SharedRuntimeState | null {
-  const g = globalThis as Record<string, unknown>;
-  const state = g[SHARED_RUNTIME_KEY];
-  if (!state || typeof state !== "object") return null;
-  return state as SharedRuntimeState;
-}
-
-function writeSharedRuntimeState(state: SharedRuntimeState | null): void {
-  const g = globalThis as Record<string, unknown>;
-  if (state) g[SHARED_RUNTIME_KEY] = state;
-  else delete g[SHARED_RUNTIME_KEY];
-}
-
 /**
  * Locate the plugin source root (the directory holding `package.json`,
  * `bridge.cts`, etc.). Two layouts to support: built tarball
@@ -298,7 +276,9 @@ async function closeViewerAfterFailedBootstrap(
   }
 }
 
-function createSharedRuntimeState(api: OpenClawPluginApi): SharedRuntimeState {
+// ─── Registration ──────────────────────────────────────────────────────────
+
+function register(api: OpenClawPluginApi): void {
   let runtimeLock: OpenClawRuntimeLockHandle;
   try {
     runtimeLock = acquireOpenClawRuntimeLock({
@@ -315,40 +295,6 @@ function createSharedRuntimeState(api: OpenClawPluginApi): SharedRuntimeState {
     });
     throw err;
   }
-
-  const state: SharedRuntimeState = {
-    registrations: 0,
-    runtime: null,
-    bootstrapError: null,
-    bootstrapPromise: Promise.resolve(),
-  };
-  state.bootstrapPromise = createRuntime(api, runtimeLock)
-    .then((runtime) => {
-      state.runtime = runtime;
-      api.logger.info("memos-local: plugin ready");
-    })
-    .catch((err) => {
-      state.bootstrapError = err instanceof Error ? err : new Error(String(err));
-      const duplicate = err instanceof DuplicateOpenClawRuntimeError;
-      api.logger.error("memos-local: bootstrap failed", {
-        err: state.bootstrapError.message,
-        code: duplicate ? err.code : (err as { code?: unknown }).code,
-      });
-    });
-  return state;
-}
-
-// ─── Registration ──────────────────────────────────────────────────────────
-
-function register(api: OpenClawPluginApi): void {
-  let state = readSharedRuntimeState();
-  if (!state) {
-    state = createSharedRuntimeState(api);
-    writeSharedRuntimeState(state);
-  } else {
-    api.logger.info("memos-local: reusing in-process shared runtime");
-  }
-  state.registrations += 1;
 
   // 1. Memory capability (prompt prelude) — register synchronously so the
   //    host immediately knows who owns the memory slot, even if bootstrap
@@ -370,7 +316,7 @@ function register(api: OpenClawPluginApi): void {
       ];
       if (hasSearch) {
         lines.push(
-          "- `memos_search` — search prior traces, policies, world models, and skills when prior experience is likely relevant.",
+          "- `memos_search` — search prior traces, policies, world models, and skills.",
         );
       }
       if (hasEnv) {
@@ -395,7 +341,7 @@ function register(api: OpenClawPluginApi): void {
         );
       }
       lines.push(
-        "- Prefer concrete recalled memory when it is present. For standalone math tasks with no recalled memory, solve directly instead of searching an empty store.",
+        "- Prefer recalled memory over assuming prior context is unavailable.",
         "",
       );
       return lines;
@@ -405,10 +351,26 @@ function register(api: OpenClawPluginApi): void {
   // 2. Kick off core bootstrap. OpenClaw only accepts tool / hook
   //    registration during the synchronous `register(api)` window, so
   //    tools register a shell now and wait for runtime inside execute().
+  let runtime: PluginRuntime | null = null;
+  let bootstrapError: Error | null = null;
+  const bootstrapPromise = createRuntime(api, runtimeLock)
+    .then((r) => {
+      runtime = r;
+      api.logger.info("memos-local: plugin ready");
+    })
+    .catch((err) => {
+      bootstrapError = err instanceof Error ? err : new Error(String(err));
+      const duplicate = err instanceof DuplicateOpenClawRuntimeError;
+      api.logger.error("memos-local: bootstrap failed", {
+        err: bootstrapError.message,
+        code: duplicate ? err.code : (err as { code?: unknown }).code,
+      });
+    });
+
   const ensureRuntime = async (): Promise<PluginRuntime | null> => {
-    if (state.runtime) return state.runtime;
-    await state.bootstrapPromise;
-    return state.runtime;
+    if (runtime) return runtime;
+    await bootstrapPromise;
+    return runtime;
   };
 
   registerOpenClawTools(api, {
@@ -486,15 +448,11 @@ function register(api: OpenClawPluginApi): void {
     id: "memos-local",
     name: "memos-local",
     async start() {
-      await state.bootstrapPromise;
-      if (state.bootstrapError) throw state.bootstrapError;
+      await bootstrapPromise;
+      if (bootstrapError) throw bootstrapError;
     },
     async stop() {
-      state.registrations = Math.max(0, state.registrations - 1);
-      if (state.registrations > 0) return;
-      const runtimeToStop = state.runtime;
-      writeSharedRuntimeState(null);
-      if (runtimeToStop) await runtimeToStop.shutdown();
+      if (runtime) await runtime.shutdown();
     },
   });
 }

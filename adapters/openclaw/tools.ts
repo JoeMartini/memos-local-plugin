@@ -18,7 +18,6 @@ import { Type, type Static } from "@sinclair/typebox";
 
 import type { AgentKind, RuntimeNamespace, SkillId, TraceId } from "../../agent-contract/dto.js";
 import type { MemoryCore } from "../../agent-contract/memory-core.js";
-import { reflectionAsText } from "../../core/capture/types.js";
 
 import { bridgeSessionId } from "./bridge.js";
 import type {
@@ -184,7 +183,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
       label: "Memory Search",
       description:
         "Search MemOS memory (local traces + policies + world models + skills, plus connected Team Hub memories). " +
-        "Returns a ranked list of grounded snippets. Use when prior experience is likely relevant; for standalone math tasks with no recalled memory, solve directly instead of probing an empty store.",
+        "Returns a ranked list of grounded snippets. Prefer this before claiming prior context is unavailable.",
       parameters: MemorySearchParams,
       async execute(_toolCallId: string, params: MemorySearchParamsT) {
         const started = Date.now();
@@ -243,7 +242,7 @@ export function registerOpenClawTools(api: OpenClawPluginApi, opts: ToolsOptions
               episodeId: trace.episodeId,
               ts: trace.ts,
               value: trace.value,
-              reflection: clip(reflectionAsText(trace.reflection) ?? undefined, bodyCap),
+              reflection: clip(trace.reflection, bodyCap),
               userText: clip(trace.userText, bodyCap),
               toolCalls: trace.toolCalls.map((tc) => ({
                 name: tc.name,
