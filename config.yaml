@@ -1,0 +1,26 @@
+algorithm:
+  lightweightMemory:
+    enabled: false
+embedding:
+  api_key: sk-bremvmswxewsxrdfarrqlptgwymypmixppbhqkfyandnamao
+  base_url: https://api.siliconflow.cn/v1
+  dimensions: 4096
+  model: Qwen/Qwen3-Embedding-8B
+  provider: openai_compatible
+hub:
+  address: ''
+  enabled: false
+  teamToken: ''
+llm:
+  api_key: sk-bremvmswxewsxrdfarrqlptgwymypmixppbhqkfyandnamao
+  base_url: https://api.siliconflow.cn/v1
+  model: Qwen/Qwen3-8B
+  provider: openai_compatible
+logging:
+  detailedView: false
+  level: info
+telemetry:
+  enabled: false
+version: 1
+viewer:
+  port: 18800
