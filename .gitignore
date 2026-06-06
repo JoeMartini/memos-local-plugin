@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# Runtime data
+data/
+logs/
+memos-local/
+scripts/export/
+scripts/.bridge_state.json
+bridge-status.json
+telemetry.credentials.json
+
+# Python
+*.pyc
+__pycache__/
+
+# OS
+.DS_Store
+
+# Local config overrides
+config.yaml
+config.yaml.bak.camel

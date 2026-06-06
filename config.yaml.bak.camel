@@ -1,0 +1,33 @@
+version: 1
+
+viewer:
+  port: 18800
+
+embedding:
+  provider: openai_compatible
+  apiKey: "sk-REDACTED"
+  baseUrl: "https://api.siliconflow.cn/v1"
+  model: "BAAI/bge-m3"
+  dimensions: 1024
+
+llm:
+  provider: openai_compatible
+  apiKey: "sk-REDACTED"
+  baseUrl: "https://api.siliconflow.cn/v1"
+  model: "Qwen/Qwen3-8B"
+
+algorithm:
+  lightweightMemory:
+    enabled: false
+
+hub:
+  enabled: false
+  address: ""
+  teamToken: ""
+
+telemetry:
+  enabled: false
+
+logging:
+  level: info
+  detailedView: false
