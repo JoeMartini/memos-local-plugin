@@ -280,6 +280,11 @@ class MemTensorProvider(MemoryProvider):
         self._last_trace_id: str = ""
         self._tool_failure_streaks: dict[str, int] = {}
 
+        # Heartbeat: updated on every turn_start. The keepalive thread uses
+        # this to detect stale providers whose agent was LRU-evicted without
+        # a proper shutdown — the #1 cause of orphaned bridge processes.
+        self._last_activity_ts: float = time.time()
+
     def __del__(self) -> None:
         """Safety net: close bridge if the provider is GC'd without shutdown.
 
