@@ -52,6 +52,7 @@ import re
 import sys
 import threading
 import time
+import weakref
 
 from pathlib import Path
 from typing import Any
@@ -279,7 +280,21 @@ class MemTensorProvider(MemoryProvider):
         self._last_trace_id: str = ""
         self._tool_failure_streaks: dict[str, int] = {}
 
-    # ─── Identity ─────────────────────────────────────────────────────────
+    def __del__(self) -> None:
+        """Safety net: close bridge if the provider is GC'd without shutdown.
+
+        The keepalive thread uses weakref, so when the gateway's LRU cache
+        evicts the agent and drops the provider reference, the keepalive
+        loop exits and this destructor closes the orphaned bridge subprocess.
+        """
+        try:
+            self._bridge_keepalive_stop.set()
+            if self._bridge:
+                pid = getattr(self._bridge, "pid", "?")
+                logger.debug("MemOS: __del__ closing bridge (pid=%s)", pid)
+                self._bridge.close()
+        except Exception:
+            pass
 
     @property
     def name(self) -> str:  # type: ignore[override]
@@ -318,6 +333,13 @@ class MemTensorProvider(MemoryProvider):
             ensure_viewer_daemon()
         except Exception as err:
             logger.warning("MemOS: viewer daemon check failed — %s", err)
+        # Close any existing bridge before spawning a new one
+        # (prevents process leaks when initialize() is called per session)
+        if self._bridge:
+            with contextlib.suppress(Exception):
+                self._bridge.close()
+            self._bridge = None
+
         new_bridge: MemosBridgeClient | None = None
         try:
             new_bridge = MemosBridgeClient()
@@ -1508,6 +1530,21 @@ class MemTensorProvider(MemoryProvider):
         # into the same task later.
         with contextlib.suppress(Exception):
             self._bridge.request("session.close", {"sessionId": self._session_id})
+        # Stop the keepalive thread to prevent it from respawning a bridge
+        # after we close this one.  The gateway's LRU eviction path calls
+        # on_session_end but NOT shutdown(), so the keepalive would
+        # otherwise spin up a new bridge subprocess via _reconnect_bridge
+        # — the exact process leak we are fixing.
+        self._bridge_keepalive_stop.set()
+        # Close the bridge subprocess so the child Node process does not
+        # outlive the session.  _ensure_bridge (called on the next turn)
+        # will spawn a fresh bridge if needed, so this is safe for
+        # session-rotation paths (commit_memory_session) too.
+        pid = getattr(self._bridge, "pid", "?")
+        logger.info("MemOS: closing bridge subprocess in on_session_end (pid=%s)", pid)
+        with contextlib.suppress(Exception):
+            self._bridge.close()
+        self._bridge = None
 
     def shutdown(self) -> None:  # type: ignore[override]
         self._bridge_keepalive_stop.set()
@@ -1790,18 +1827,43 @@ class MemTensorProvider(MemoryProvider):
             return
         self._bridge_keepalive_stop.clear()
 
+        # Cooldown: prevent reconnect storms after external bridge cleanup
+        _last_reconnect_at: list[float] = [0.0]
+        _RECONNECT_COOLDOWN_SEC = 120.0
+
+        # Use weakref so the keepalive thread doesn't prevent GC of the
+        # provider when the gateway's LRU cache evicts the agent. Without
+        # this, the daemon thread's closure holds a strong ref to ``self``,
+        # keeping the provider (and its bridge subprocess) alive forever.
+        provider_ref = weakref.ref(self)
+
         def _run() -> None:
             while not self._bridge_keepalive_stop.wait(5.0):
-                if not self._ensure_bridge(self._session_id, timeout=10.0):
+                provider = provider_ref()
+                if provider is None:
+                    # Provider was garbage-collected — exit the keepalive loop.
+                    logger.debug("MemOS: provider GC'd, keepalive exiting")
+                    return
+                if not provider._ensure_bridge(provider._session_id, timeout=10.0):
                     continue
                 try:
-                    assert self._bridge is not None
-                    self._bridge.request("core.health", {}, timeout=10.0)
+                    bridge = provider._bridge
+                    if bridge is None:
+                        continue
+                    bridge.request("core.health", {}, timeout=10.0)
                 except Exception as err:
-                    if self._is_transport_closed(err):
+                    if provider._is_transport_closed(err):
+                        now = time.time()
+                        if now - _last_reconnect_at[0] < _RECONNECT_COOLDOWN_SEC:
+                            logger.debug(
+                                "MemOS: bridge keepalive skipping reconnect (cooldown %.0fs)",
+                                now - _last_reconnect_at[0],
+                            )
+                            continue
+                        _last_reconnect_at[0] = now
                         logger.info("MemOS: bridge keepalive reconnecting after transport close")
                         with contextlib.suppress(Exception):
-                            self._reconnect_bridge(self._session_id, timeout=10.0)
+                            provider._reconnect_bridge(provider._session_id, timeout=10.0)
                     else:
                         logger.debug("MemOS: bridge keepalive failed — %s", err)
 
