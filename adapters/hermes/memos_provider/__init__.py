@@ -1842,13 +1842,26 @@ class MemTensorProvider(MemoryProvider):
         # keeping the provider (and its bridge subprocess) alive forever.
         provider_ref = weakref.ref(self)
 
+        _STALE_TIMEOUT_SEC = 600.0  # 10 minutes
+
         def _run() -> None:
             while not self._bridge_keepalive_stop.wait(5.0):
                 provider = provider_ref()
                 if provider is None:
-                    # Provider was garbage-collected — exit the keepalive loop.
                     logger.debug("MemOS: provider GC'd, keepalive exiting")
                     return
+                idle = time.time() - provider._last_activity_ts
+                if idle > _STALE_TIMEOUT_SEC:
+                    if provider._bridge:
+                        pid = getattr(provider._bridge, "pid", "?")
+                        logger.info(
+                            "MemOS: provider stale (%.0fs idle), closing bridge (pid=%s)",
+                            idle, pid,
+                        )
+                        with contextlib.suppress(Exception):
+                            provider._bridge.close()
+                        provider._bridge = None
+                    continue
                 if not provider._ensure_bridge(provider._session_id, timeout=10.0):
                     continue
                 try:
