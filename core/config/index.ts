@@ -18,7 +18,8 @@ import { MemosError } from "../../agent-contract/errors.js";
 import type { ResolvedHome } from "./paths.js";
 import { resolveHome } from "./paths.js";
 import { ConfigSchema, type ResolvedConfig } from "./schema.js";
-import { DEFAULT_CONFIG } from "./defaults.js";
+import { DEFAULT_CONFIG, effectiveViewerPort } from "./defaults.js";
+import { migrateHermesViewerPort } from "./migrations.js";
 import { parseYaml } from "./yaml.js";
 
 export type { ResolvedConfig } from "./schema.js";
@@ -36,10 +37,12 @@ export interface LoadConfigResult {
   source: string;
 }
 
-export async function loadConfig(home: ResolvedHome): Promise<LoadConfigResult> {
+export async function loadConfig(home: ResolvedHome, agent?: string): Promise<LoadConfigResult> {
   let raw: unknown = {};
   let fromDisk = false;
   const warnings: string[] = [];
+
+  if (agent === "hermes") await migrateHermesViewerPort(home);
 
   try {
     const text = await fs.readFile(home.configFile, "utf8");
@@ -48,7 +51,11 @@ export async function loadConfig(home: ResolvedHome): Promise<LoadConfigResult> 
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
     if (e.code === "ENOENT") {
-      warnings.push(`config file not found at ${home.configFile}; using defaults`);
+      warnings.push(
+        `config file not found at ${home.configFile}; using defaults. ` +
+        `To fix: set MEMOS_HOME or MEMOS_CONFIG_FILE env var, or use --home CLI flag. ` +
+        `See: https://github.com/MemTensor/MemOS/tree/main/apps/memos-local-plugin#configuration`
+      );
     } else if (MemosError.is(err)) {
       throw err;
     } else {
@@ -58,7 +65,7 @@ export async function loadConfig(home: ResolvedHome): Promise<LoadConfigResult> 
     }
   }
 
-  const config = resolveConfig(raw, warnings);
+  const config = resolveConfig(raw, warnings, agent);
   return { config, fromDisk, warnings, source: home.configFile };
 }
 
@@ -66,10 +73,14 @@ export async function loadConfig(home: ResolvedHome): Promise<LoadConfigResult> 
  * Merge an arbitrary raw object over `DEFAULT_CONFIG` and validate. Used in
  * tests and by `writer.ts`. `warnings` is mutated in place if provided.
  */
-export function resolveConfig(raw: unknown, warnings?: string[]): ResolvedConfig {
+export function resolveConfig(raw: unknown, warnings?: string[], agent?: string): ResolvedConfig {
   const cleaned = pruneUnknown(raw, DEFAULT_CONFIG, "", warnings);
   const merged = deepMerge(DEFAULT_CONFIG as Record<string, unknown>, cleaned);
   stripUnsupportedEmbeddingDimensions(merged);
+  const viewerPort = effectiveViewerPort(agent);
+  if (viewerPort !== undefined && isPlainObject(merged.viewer)) {
+    merged.viewer.port = viewerPort;
+  }
 
   // Apply Typebox defaults + coerce types as much as possible.
   const completed = Value.Default(ConfigSchema, merged) as ResolvedConfig;
@@ -80,6 +91,12 @@ export function resolveConfig(raw: unknown, warnings?: string[]): ResolvedConfig
       errorCount: errors.length,
       first: errors.slice(0, 5).map((e) => ({ path: e.path, message: e.message })),
     });
+  }
+
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: completed.logging.timezone }).format(0);
+  } catch {
+    throw new MemosError("config_invalid", `invalid logging.timezone: ${completed.logging.timezone}`);
   }
 
   return Object.freeze(completed) as ResolvedConfig;
@@ -178,7 +195,7 @@ export async function loadConfigForAgent(
   defaultHome?: string,
 ): Promise<{ home: ResolvedHome } & LoadConfigResult> {
   const home = resolveHome(agent, defaultHome);
-  const result = await loadConfig(home);
+  const result = await loadConfig(home, agent);
   return { home, ...result };
 }
 
