@@ -139,6 +139,43 @@ function killExistingBridge(pidPath: string, timeoutMs = 5000): void {
   }
 }
 
+/**
+ * Resolve MemOS home for a Hermes gateway based on $HERMES_HOME, so each
+ * profile (martini, sky, default) gets its own database and namespace.
+ * Falls back to the built-in default when no HERMES_HOME override is set.
+ */
+function resolveHermesProfileHome(): { root: string; configFile: string; dataDir: string; dbFile: string; logsDir: string; daemonDir: string; skillsDir: string; profileId: string } {
+  const home = (process.env.HERMES_HOME ?? "").trim();
+  const baseHome = process.env.HOME ?? "/tmp";
+  let profileId = "default";
+  let root = path.join(baseHome, ".hermes", "memos-plugin");
+
+  if (home) {
+    // HERMES_HOME=/home/xxx/.hermes/profiles/martini  => profileId=martini
+    // HERMES_HOME=/home/xxx/.hermes                   => profileId=default
+    const normalized = path.resolve(home);
+    const profilesDir = path.join(baseHome, ".hermes", "profiles");
+    if (normalized.startsWith(profilesDir + path.sep)) {
+      profileId = path.basename(normalized);
+      root = path.join(baseHome, ".hermes", `memos-plugin-${profileId}`);
+    } else if (normalized === path.join(baseHome, ".hermes")) {
+      profileId = "default";
+      root = path.join(baseHome, ".hermes", "memos-plugin-default");
+    }
+  }
+
+  return {
+    root,
+    configFile: path.join(root, "config.yaml"),
+    dataDir: path.join(root, "data"),
+    dbFile: path.join(root, "data", "memos.db"),
+    logsDir: path.join(root, "logs"),
+    daemonDir: path.join(root, "daemon"),
+    skillsDir: path.join(root, "skills"),
+    profileId,
+  };
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
@@ -155,9 +192,17 @@ async function main(): Promise<void> {
 
   // Lazy-import ESM core. Using dynamic import so this file remains
   // CommonJS and stays `require`-able.
-  const { bootstrapMemoryCoreFull } = (await importEsm(
-    runtimeModule("core/pipeline/index.ts", "dist/core/pipeline/index.js")
-  )) as typeof import("./core/pipeline/index.js");
+  const { bootstrapMemoryCoreFull, resolveHome } = (await Promise.all([
+    importEsm(
+      runtimeModule("core/pipeline/index.ts", "dist/core/pipeline/index.js")
+    ) as Promise<typeof import("./core/pipeline/index.js")>,
+    importEsm(
+      runtimeModule("core/config/paths.ts", "dist/core/config/paths.js")
+    ) as Promise<typeof import("./core/config/paths.js")>,
+  ])).reduce(
+    (acc, mod) => ({ ...acc, ...mod }),
+    {} as { bootstrapMemoryCoreFull: typeof import("./core/pipeline/index.js").bootstrapMemoryCoreFull; resolveHome: typeof import("./core/config/paths.js").resolveHome },
+  );
   const { startStdioServer, waitForShutdown } = (await importEsm(
     runtimeModule("bridge/stdio.ts", "dist/bridge/stdio.js")
   )) as typeof import("./bridge/stdio.js");
@@ -235,9 +280,28 @@ async function main(): Promise<void> {
     runtimeModule("core/telemetry/index.ts", "dist/core/telemetry/index.js")
   )) as typeof import("./core/telemetry/index.js");
 
+  // Per-profile home + namespace derived from $HERMES_HOME.
+  const profileHome =
+    args.agent === "hermes" ? resolveHermesProfileHome() : null;
+  const memosHome = profileHome
+    ? ({
+        root: profileHome.root,
+        configFile: profileHome.configFile,
+        dataDir: profileHome.dataDir,
+        dbFile: profileHome.dbFile,
+        skillsDir: profileHome.skillsDir,
+        logsDir: profileHome.logsDir,
+        daemonDir: profileHome.daemonDir,
+      } as import("./core/config/paths.js").ResolvedHome)
+    : resolveHome(args.agent);
+  const memosNamespace = profileHome
+    ? { agentKind: args.agent, profileId: profileHome.profileId }
+    : { agentKind: args.agent, profileId: "default" };
+
   const { core, config, home } = await bootstrapMemoryCoreFull({
     agent: args.agent,
-    namespace: { agentKind: args.agent, profileId: "default" },
+    namespace: memosNamespace,
+    home: memosHome,
     pkgVersion,
     hostLlmBridge: args.daemon ? null : lazyHostLlmBridge,
   });
@@ -398,8 +462,14 @@ async function main(): Promise<void> {
     const shutdownDaemon = async (sig: string) => {
       process.stderr.write(`bridge: daemon received ${sig}, shutting down\n`);
       removeOwnedPidFile();
+      const _forceExit = setTimeout(() => {
+        process.stderr.write(`bridge: daemon shutdown timed out after 3s, forcing exit\n`);
+        process.exit(1);
+      }, 3_000);
+      _forceExit.unref?.();
       try { await viewer!.close(); } catch { /* best-effort */ }
       await core.shutdown();
+      clearTimeout(_forceExit);
       process.exit(0);
     };
     process.on("SIGINT", () => void shutdownDaemon("SIGINT"));
@@ -463,19 +533,41 @@ async function main(): Promise<void> {
   const shutdown = async (sig: string) => {
     process.stderr.write(`bridge: received ${sig}, shutting down\n`);
     removeOwnedPidFile();
-    if (viewer) {
-      try {
-        await viewer.close();
-      } catch {
-        /* best-effort */
+
+    // Force-exit guard: if graceful shutdown hangs (e.g. core.shutdown()
+    // awaits an HTTP server.close() that never resolves due to lingering
+    // connections), force-exit after 3s so the process cannot leak.
+    const forceExitTimer = setTimeout(() => {
+      process.stderr.write(`bridge: shutdown timed out after 3s, forcing exit\n`);
+      process.exit(1);
+    }, 3_000);
+    forceExitTimer.unref();
+
+    try {
+      if (viewer) {
+        try {
+          await viewer.close();
+        } catch {
+          /* best-effort */
+        }
       }
+      await waitForShutdown(core, activeStdio);
+    } catch {
+      /* swallow — forceExitTimer will ensure we exit regardless */
     }
-    await waitForShutdown(core, activeStdio);
+    clearTimeout(forceExitTimer);
     process.exit(0);
   };
 
-  process.on("SIGINT", () => void shutdown("SIGINT"));
-  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  // Guard against duplicate signal handlers (re-init after reconnect)
+  const sigHandlers = new Set<string>();
+  const installSigHandler = (sig: string) => {
+    if (sigHandlers.has(sig)) return;
+    sigHandlers.add(sig);
+    process.on(sig, () => void shutdown(sig));
+  };
+  installSigHandler("SIGINT");
+  installSigHandler("SIGTERM");
 
   // Keep the process alive until stdin ends (client disconnects).
   await activeStdio.done;
