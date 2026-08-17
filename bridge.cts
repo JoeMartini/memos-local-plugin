@@ -503,11 +503,6 @@ async function main(): Promise<void> {
     const shutdownDaemon = async (sig: string) => {
       process.stderr.write(`bridge: daemon received ${sig}, shutting down\n`);
       removeOwnedPidFile();
-      const _forceExit = setTimeout(() => {
-        process.stderr.write(`bridge: daemon shutdown timed out after 3s, forcing exit\n`);
-        process.exit(1);
-      }, 3_000);
-      _forceExit.unref?.();
       try { await viewer!.close(); } catch { /* best-effort */ }
       try {
         await withShutdownTimeout(core.shutdown());
@@ -515,9 +510,7 @@ async function main(): Promise<void> {
         // clear-data already shuts the core down before removing SQLite.
         // The signal still has to terminate the daemon so the supervisor
         // can replace it.
-        /* swallow — _forceExit will ensure we exit regardless */
       } finally {
-        clearTimeout(_forceExit);
         process.exit(0);
       }
     };
@@ -582,29 +575,14 @@ async function main(): Promise<void> {
   const shutdown = async (sig: string) => {
     process.stderr.write(`bridge: received ${sig}, shutting down\n`);
     removeOwnedPidFile();
-
-    // Force-exit guard: if graceful shutdown hangs (e.g. core.shutdown()
-    // awaits an HTTP server.close() that never resolves due to lingering
-    // connections), force-exit after 3s so the process cannot leak.
-    const forceExitTimer = setTimeout(() => {
-      process.stderr.write(`bridge: shutdown timed out after 3s, forcing exit\n`);
-      process.exit(1);
-    }, 3_000);
-    forceExitTimer.unref?.();
-
-    try {
-      if (viewer) {
-        try {
-          await viewer.close();
-        } catch {
-          /* best-effort */
-        }
+    if (viewer) {
+      try {
+        await viewer.close();
+      } catch {
+        /* best-effort */
       }
-      await withShutdownTimeout(waitForShutdown(core, activeStdio));
-    } catch {
-      /* swallow — forceExitTimer will ensure we exit regardless */
     }
-    clearTimeout(forceExitTimer);
+    await withShutdownTimeout(waitForShutdown(core, activeStdio));
     process.exit(0);
   };
 

@@ -118,19 +118,6 @@ def _bridge_script(plugin_root: Path) -> Path:
     return plugin_root / "bridge.cts"
 
 
-def _is_process_alive(pid: int) -> bool:
-    """Check if a process with the given PID is still alive."""
-    try:
-        os.kill(pid, 0)  # signal 0 = check existence
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True  # process exists but we can't signal it
-    except OSError:
-        return False
-    return True
-
-
 class BridgeError(RuntimeError):
     """Raised when the bridge returns a JSON-RPC error object."""
 
@@ -447,21 +434,7 @@ class MemosBridgeClient:
                 except subprocess.TimeoutExpired:
                     logger.error("MemOS: bridge process %d could not be killed", pid)
 
-        # 5. Verify the process is actually dead (defence-in-depth against
-        #    zombie/leak: wait() can return spuriously if the event loop
-        #    hasn't reaped the child yet, or if the async SIGTERM handler
-        #    in the bridge hasn't reached process.exit()).
-        if pid and _is_process_alive(pid):
-            logger.warning(
-                "MemOS: bridge process %d still alive after close(), sending SIGKILL", pid
-            )
-            with contextlib.suppress(ProcessLookupError, OSError):
-                os.kill(pid, 9)  # SIGKILL
-            # Final reap
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                self._proc.wait(timeout=2.0)
-
-        # 6. Clean up pending requests
+        # 5. Clean up pending requests
         self._abort_pending("bridge closed")
 
     # ─── Internals ──
