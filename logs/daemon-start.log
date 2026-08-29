@@ -1,0 +1,520 @@
+10:11:41.239 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+10:11:41.239 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+10:11:41.248 INFO  [storage] sqlite.open filepath="/home/martini/.hermes/memos-plugin/data/memos.db" agent="hermes" readonly=false wal=true busyTimeoutMs=5000
+10:11:41.254 INFO  [storage.migration] migrations.summary total=12 applied=0 skipped=12
+10:11:41.264 INFO  [embedding] init provider="local" model="Xenova/all-MiniLM-L6-v2" dimensions=384 cacheEnabled=true batchSize=32
+10:11:41.265 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+10:11:41.265 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+10:11:41.269 INFO  [core.pipeline.bootstrap] pipeline.lightweight_mode.enabled skipped=[5] agent="hermes"
+10:11:41.296 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
+10:11:41.303 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:11:41.586 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
+bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
+10:11:52.080 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:11:52.080 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:11:52.081 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:11:52.081 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:11:52.084 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_kjt0415w" targetKind="trace" targetId="tr_c0nwc2en31k1" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443232083 agent="hermes"
+10:11:52.084 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_kjt0415w" targetKind="trace" targetId="tr_c0nwc2en31k1" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443232083 agent="hermes"
+10:12:41.305 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:12:51.803 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:12:51.803 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:12:51.804 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:12:51.804 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:12:51.807 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_1yxrrar7" targetKind="trace" targetId="tr_ffd03cyybsz8" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443291807 agent="hermes"
+10:12:51.807 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_1yxrrar7" targetKind="trace" targetId="tr_ffd03cyybsz8" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443291807 agent="hermes"
+10:12:51.811 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:13:02.313 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:13:02.313 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:13:02.313 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:13:02.313 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:13:02.315 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_tb25ezft" targetKind="trace" targetId="tr_xwa4k34tnm94" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443242315 agent="hermes"
+10:13:02.315 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_tb25ezft" targetKind="trace" targetId="tr_xwa4k34tnm94" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443242315 agent="hermes"
+10:13:02.317 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:13:12.818 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:13:12.818 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:13:12.818 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:13:12.818 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:13:12.820 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_etxvh30s" targetKind="trace" targetId="tr_kgb29hv1b403" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443432820 agent="hermes"
+10:13:12.820 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_etxvh30s" targetKind="trace" targetId="tr_kgb29hv1b403" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443432820 agent="hermes"
+10:13:41.334 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:13:51.833 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:13:51.833 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:13:51.834 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:13:51.834 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:13:51.836 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_ywhzqwh7" targetKind="trace" targetId="tr_jvqz5gvw6ekp" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443471836 agent="hermes"
+10:13:51.836 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_ywhzqwh7" targetKind="trace" targetId="tr_jvqz5gvw6ekp" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443471836 agent="hermes"
+10:14:41.364 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:14:51.864 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:14:51.864 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:14:51.865 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:14:51.865 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:14:51.865 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_kjt0415w" targetKind="trace" targetId="tr_c0nwc2en31k1" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443531865 agent="hermes"
+10:14:51.865 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_kjt0415w" targetKind="trace" targetId="tr_c0nwc2en31k1" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443531865 agent="hermes"
+10:14:51.866 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:15:02.359 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:15:02.359 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:15:02.359 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:15:02.359 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:15:02.360 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_tb25ezft" targetKind="trace" targetId="tr_xwa4k34tnm94" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443422360 agent="hermes"
+10:15:02.360 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_tb25ezft" targetKind="trace" targetId="tr_xwa4k34tnm94" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443422360 agent="hermes"
+10:15:41.394 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:15:51.891 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:15:51.891 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:15:51.891 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:15:51.891 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:15:51.893 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_1yxrrar7" targetKind="trace" targetId="tr_ffd03cyybsz8" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443591893 agent="hermes"
+10:15:51.893 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_1yxrrar7" targetKind="trace" targetId="tr_ffd03cyybsz8" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443591893 agent="hermes"
+10:17:41.455 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:17:51.954 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:17:51.954 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:17:51.955 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:17:51.955 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:17:51.958 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_tb25ezft" targetKind="trace" targetId="tr_xwa4k34tnm94" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443711957 agent="hermes"
+10:17:51.958 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_tb25ezft" targetKind="trace" targetId="tr_xwa4k34tnm94" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443711957 agent="hermes"
+10:17:51.960 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:18:02.459 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:18:02.459 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:18:02.460 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:18:02.460 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:18:02.461 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_etxvh30s" targetKind="trace" targetId="tr_kgb29hv1b403" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443962460 agent="hermes"
+10:18:02.461 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_etxvh30s" targetKind="trace" targetId="tr_kgb29hv1b403" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786443962460 agent="hermes"
+10:34:32.351 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+10:34:32.351 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+10:34:32.360 INFO  [storage] sqlite.open filepath="/home/martini/.hermes/memos-plugin/data/memos.db" agent="hermes" readonly=false wal=true busyTimeoutMs=5000
+10:34:32.368 INFO  [storage.migration] migrations.summary total=12 applied=0 skipped=12
+10:34:32.379 INFO  [embedding] init provider="local" model="Xenova/all-MiniLM-L6-v2" dimensions=384 cacheEnabled=true batchSize=32
+10:34:32.379 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+10:34:32.379 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+10:34:32.383 INFO  [core.pipeline.bootstrap] pipeline.lightweight_mode.enabled skipped=[5] agent="hermes"
+10:34:32.405 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
+10:34:32.425 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
+bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
+10:35:32.421 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:35:43.219 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:35:43.219 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:35:43.221 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:35:43.221 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:35:43.227 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_s0efzpeq" targetKind="trace" targetId="tr_9tfapgpc99yy" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786444603225 agent="hermes"
+10:35:43.227 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_s0efzpeq" targetKind="trace" targetId="tr_9tfapgpc99yy" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786444603225 agent="hermes"
+10:37:32.450 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:37:42.949 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:37:42.949 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:37:42.949 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:37:42.949 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:37:42.950 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_s0efzpeq" targetKind="trace" targetId="tr_9tfapgpc99yy" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786444782950 agent="hermes"
+10:37:42.950 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_s0efzpeq" targetKind="trace" targetId="tr_9tfapgpc99yy" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786444782950 agent="hermes"
+10:44:32.646 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:44:43.141 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:44:43.141 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:44:43.142 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:44:43.142 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:44:43.142 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_s0efzpeq" targetKind="trace" targetId="tr_9tfapgpc99yy" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786445563142 agent="hermes"
+10:44:43.142 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_s0efzpeq" targetKind="trace" targetId="tr_9tfapgpc99yy" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786445563142 agent="hermes"
+10:48:46.162 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+10:48:46.162 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+10:48:46.170 INFO  [storage] sqlite.open filepath="/home/martini/.hermes/memos-plugin/data/memos.db" agent="hermes" readonly=false wal=true busyTimeoutMs=5000
+10:48:46.177 INFO  [storage.migration] migrations.summary total=12 applied=0 skipped=12
+10:48:46.186 INFO  [embedding] init provider="local" model="Xenova/all-MiniLM-L6-v2" dimensions=384 cacheEnabled=true batchSize=32
+10:48:46.187 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+10:48:46.187 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+10:48:46.190 INFO  [core.pipeline.bootstrap] pipeline.lightweight_mode.enabled skipped=[5] agent="hermes"
+10:48:46.208 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
+10:48:46.232 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
+bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
+10:49:46.217 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:49:56.956 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:49:56.956 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:49:56.957 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:49:56.957 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:49:56.960 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_sr3a3vvz" targetKind="trace" targetId="tr_q6h41m7ttnsp" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786445456959 agent="hermes"
+10:49:56.960 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_sr3a3vvz" targetKind="trace" targetId="tr_q6h41m7ttnsp" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786445456959 agent="hermes"
+10:52:46.300 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:52:56.798 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:52:56.798 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:52:56.798 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:52:56.798 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:52:56.799 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_s0efzpeq" targetKind="trace" targetId="tr_9tfapgpc99yy" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786446536798 agent="hermes"
+10:52:56.799 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_s0efzpeq" targetKind="trace" targetId="tr_9tfapgpc99yy" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786446536798 agent="hermes"
+10:53:46.332 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:53:56.835 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:53:56.835 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:53:56.836 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:53:56.836 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:53:56.838 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_sr3a3vvz" targetKind="trace" targetId="tr_q6h41m7ttnsp" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786445876837 agent="hermes"
+10:53:56.838 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_sr3a3vvz" targetKind="trace" targetId="tr_q6h41m7ttnsp" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786445876837 agent="hermes"
+11:06:46.700 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+11:06:57.200 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+11:06:57.200 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+11:06:57.201 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+11:06:57.201 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+11:06:57.203 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_sr3a3vvz" targetKind="trace" targetId="tr_q6h41m7ttnsp" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786447377203 agent="hermes"
+11:06:57.203 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_sr3a3vvz" targetKind="trace" targetId="tr_q6h41m7ttnsp" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786447377203 agent="hermes"
+01:51:11.255 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+01:51:11.572 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+01:51:11.572 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+01:51:11.572 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+01:51:11.572 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+01:51:11.573 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_m9v97n2p" targetKind="trace" targetId="tr_bz5nrr7m58a1" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786499531573 agent="hermes"
+01:51:11.573 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_m9v97n2p" targetKind="trace" targetId="tr_bz5nrr7m58a1" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786499531573 agent="hermes"
+03:31:13.895 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+03:31:24.389 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+03:31:24.389 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+03:31:24.390 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+03:31:24.390 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+03:31:24.392 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_mk9mbha1" targetKind="trace" targetId="tr_5gdv9m2wn26b" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786505724391 agent="hermes"
+03:31:24.392 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_mk9mbha1" targetKind="trace" targetId="tr_5gdv9m2wn26b" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786505724391 agent="hermes"
+04:00:14.608 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+04:00:25.106 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+04:00:25.106 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+04:00:25.107 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+04:00:25.107 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+04:00:25.111 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_mk9mbha1" targetKind="trace" targetId="tr_5gdv9m2wn26b" vectorField="vec_summary" attempts=6 maxAttempts=6 terminal=true message="local failed: fetch failed" agent="hermes"
+04:00:25.111 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_mk9mbha1" targetKind="trace" targetId="tr_5gdv9m2wn26b" vectorField="vec_summary" attempts=6 maxAttempts=6 terminal=true message="local failed: fetch failed" agent="hermes"
+16:57:32.679 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+16:57:43.179 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+16:57:43.179 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+16:57:43.180 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+16:57:43.180 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+16:57:43.183 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_24622pwh" targetKind="trace" targetId="tr_bhessdatz4qg" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786554103182 agent="hermes"
+16:57:43.183 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_24622pwh" targetKind="trace" targetId="tr_bhessdatz4qg" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786554103182 agent="hermes"
+17:26:33.201 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+17:26:43.701 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+17:26:43.701 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+17:26:43.702 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+17:26:43.702 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+17:26:43.705 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_24622pwh" targetKind="trace" targetId="tr_bhessdatz4qg" vectorField="vec_summary" attempts=6 maxAttempts=6 terminal=true message="local failed: fetch failed" agent="hermes"
+17:26:43.705 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_24622pwh" targetKind="trace" targetId="tr_bhessdatz4qg" vectorField="vec_summary" attempts=6 maxAttempts=6 terminal=true message="local failed: fetch failed" agent="hermes"
+06:11:44.890 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+06:11:55.389 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+06:11:55.389 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+06:11:55.390 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+06:11:55.390 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+06:11:55.392 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_hjtvtpvq" targetKind="trace" targetId="tr_xfywse1e23j7" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786601575392 agent="hermes"
+06:11:55.392 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_hjtvtpvq" targetKind="trace" targetId="tr_xfywse1e23j7" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786601575392 agent="hermes"
+06:15:44.997 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+06:15:55.495 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+06:15:55.495 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+06:15:55.496 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+06:15:55.496 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+06:15:55.498 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_hjtvtpvq" targetKind="trace" targetId="tr_xfywse1e23j7" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786601995497 agent="hermes"
+06:15:55.498 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_hjtvtpvq" targetKind="trace" targetId="tr_xfywse1e23j7" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786601995497 agent="hermes"
+06:28:45.377 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+06:28:55.871 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+06:28:55.871 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+06:28:55.872 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+06:28:55.872 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+06:28:55.879 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_hjtvtpvq" targetKind="trace" targetId="tr_xfywse1e23j7" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786603495878 agent="hermes"
+06:28:55.879 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_hjtvtpvq" targetKind="trace" targetId="tr_xfywse1e23j7" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786603495878 agent="hermes"
+08:16:48.300 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+08:16:58.792 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+08:16:58.792 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+08:16:58.792 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+08:16:58.792 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+08:16:58.793 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_re50ngh3" targetKind="trace" targetId="tr_hv6enzy8e8c1" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786609078793 agent="hermes"
+08:16:58.793 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_re50ngh3" targetKind="trace" targetId="tr_hv6enzy8e8c1" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786609078793 agent="hermes"
+08:20:48.393 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+08:20:58.890 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+08:20:58.890 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+08:20:58.891 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+08:20:58.891 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+08:20:58.892 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_re50ngh3" targetKind="trace" targetId="tr_hv6enzy8e8c1" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786609498891 agent="hermes"
+08:20:58.892 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_re50ngh3" targetKind="trace" targetId="tr_hv6enzy8e8c1" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786609498891 agent="hermes"
+08:33:48.766 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+08:33:59.263 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+08:33:59.263 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+08:33:59.264 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+08:33:59.264 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+08:33:59.264 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_re50ngh3" targetKind="trace" targetId="tr_hv6enzy8e8c1" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786610999264 agent="hermes"
+08:33:59.264 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_re50ngh3" targetKind="trace" targetId="tr_hv6enzy8e8c1" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786610999264 agent="hermes"
+04:20:33.601 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+04:20:33.601 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+04:20:33.615 INFO  [storage] sqlite.open filepath="/home/martini/.hermes/memos-plugin/data/memos.db" agent="hermes" readonly=false wal=true busyTimeoutMs=5000
+04:20:33.624 INFO  [storage.migration] migrations.summary total=12 applied=0 skipped=12
+04:20:33.634 INFO  [embedding] init provider="local" model="Xenova/all-MiniLM-L6-v2" dimensions=384 cacheEnabled=true batchSize=32
+04:20:33.635 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+04:20:33.635 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+04:20:33.645 INFO  [core.pipeline.bootstrap] pipeline.lightweight_mode.enabled skipped=[5] agent="hermes"
+04:20:33.667 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
+04:20:33.689 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
+bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
+04:38:34.164 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+04:38:44.920 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+04:38:44.920 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+04:38:44.921 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+04:38:44.921 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+04:38:44.924 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_fbm23z27" targetKind="trace" targetId="tr_x98w4k05mnfp" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786682384923 agent="hermes"
+04:38:44.924 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_fbm23z27" targetKind="trace" targetId="tr_x98w4k05mnfp" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786682384923 agent="hermes"
+04:42:34.260 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+04:42:44.760 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+04:42:44.760 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+04:42:44.761 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+04:42:44.761 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+04:42:44.763 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_fbm23z27" targetKind="trace" targetId="tr_x98w4k05mnfp" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786682804762 agent="hermes"
+04:42:44.763 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_fbm23z27" targetKind="trace" targetId="tr_x98w4k05mnfp" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786682804762 agent="hermes"
+04:51:01.377 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+04:51:01.377 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+04:51:01.390 INFO  [storage] sqlite.open filepath="/home/martini/.hermes/memos-plugin/data/memos.db" agent="hermes" readonly=false wal=true busyTimeoutMs=5000
+04:51:01.398 INFO  [storage.migration] migrations.summary total=12 applied=0 skipped=12
+04:51:01.416 INFO  [embedding] init provider="local" model="Xenova/all-MiniLM-L6-v2" dimensions=384 cacheEnabled=true batchSize=32
+04:51:01.417 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+04:51:01.417 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+04:51:01.422 INFO  [core.pipeline.bootstrap] pipeline.lightweight_mode.enabled skipped=[5] agent="hermes"
+04:51:01.444 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
+04:51:01.466 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
+bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
+04:55:01.527 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+04:55:12.284 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+04:55:12.284 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+04:55:12.285 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+04:55:12.285 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+04:55:12.287 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_fbm23z27" targetKind="trace" targetId="tr_x98w4k05mnfp" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684272286 agent="hermes"
+04:55:12.287 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_fbm23z27" targetKind="trace" targetId="tr_x98w4k05mnfp" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684272286 agent="hermes"
+05:08:01.902 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+05:08:12.405 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:08:12.405 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:08:12.406 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:08:12.406 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:08:12.407 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_sa879m5s" targetKind="trace" targetId="tr_x58yngrammvz" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684572407 agent="hermes"
+05:08:12.407 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_sa879m5s" targetKind="trace" targetId="tr_x58yngrammvz" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684572407 agent="hermes"
+05:11:01.995 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+05:11:12.491 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:11:12.491 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:11:12.491 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:11:12.491 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:11:12.492 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_vxmee62r" targetKind="trace" targetId="tr_0nahj9a7z8hq" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684392492 agent="hermes"
+05:11:12.492 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_vxmee62r" targetKind="trace" targetId="tr_0nahj9a7z8hq" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684392492 agent="hermes"
+05:14:02.066 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+05:14:12.563 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:14:12.563 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:14:12.564 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:14:12.564 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:14:12.566 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_vxmee62r" targetKind="trace" targetId="tr_0nahj9a7z8hq" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684692565 agent="hermes"
+05:14:12.566 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_vxmee62r" targetKind="trace" targetId="tr_0nahj9a7z8hq" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684692565 agent="hermes"
+05:20:02.220 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+05:20:02.490 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:20:02.490 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:20:02.491 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:20:02.491 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:20:02.492 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_esqxtqjv" targetKind="trace" targetId="tr_b0j5twsbqhhd" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684862492 agent="hermes"
+05:20:02.492 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_esqxtqjv" targetKind="trace" targetId="tr_b0j5twsbqhhd" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684862492 agent="hermes"
+05:20:02.493 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+05:20:02.767 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:20:02.767 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:20:02.767 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:20:02.767 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:20:02.768 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_9yswd2ge" targetKind="trace" targetId="tr_gvwcx8kr055v" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684922767 agent="hermes"
+05:20:02.768 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_9yswd2ge" targetKind="trace" targetId="tr_gvwcx8kr055v" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786684922767 agent="hermes"
+05:27:02.424 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+05:27:12.923 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:27:12.923 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:27:12.924 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:27:12.924 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:27:12.927 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_9yswd2ge" targetKind="trace" targetId="tr_gvwcx8kr055v" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786685712927 agent="hermes"
+05:27:12.927 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_9yswd2ge" targetKind="trace" targetId="tr_gvwcx8kr055v" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786685712927 agent="hermes"
+05:27:12.929 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+05:27:23.424 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:27:23.424 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:27:23.424 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:27:23.424 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:27:23.425 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_1tza47jw" targetKind="trace" targetId="tr_a2539qz2rzv2" vectorField="vec_summary" attempts=6 maxAttempts=6 terminal=true message="local failed: fetch failed" agent="hermes"
+05:27:23.425 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_1tza47jw" targetKind="trace" targetId="tr_a2539qz2rzv2" vectorField="vec_summary" attempts=6 maxAttempts=6 terminal=true message="local failed: fetch failed" agent="hermes"
+05:27:23.427 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+05:27:33.921 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:27:33.921 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:27:33.922 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:27:33.922 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:27:33.923 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_vxmee62r" targetKind="trace" targetId="tr_0nahj9a7z8hq" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786686213922 agent="hermes"
+05:27:33.923 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_vxmee62r" targetKind="trace" targetId="tr_0nahj9a7z8hq" vectorField="vec_summary" attempts=5 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786686213922 agent="hermes"
+05:28:02.451 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+05:28:12.943 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:28:12.943 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:28:12.944 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:28:12.944 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:28:12.944 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_esqxtqjv" targetKind="trace" targetId="tr_b0j5twsbqhhd" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786685772944 agent="hermes"
+05:28:12.944 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_esqxtqjv" targetKind="trace" targetId="tr_b0j5twsbqhhd" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786685772944 agent="hermes"
+05:33:02.596 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+05:33:13.090 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:33:13.090 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+05:33:13.090 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:33:13.090 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+05:33:13.091 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_sa879m5s" targetKind="trace" targetId="tr_x58yngrammvz" vectorField="vec_summary" attempts=6 maxAttempts=6 terminal=true message="local failed: fetch failed" agent="hermes"
+05:33:13.091 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_sa879m5s" targetKind="trace" targetId="tr_x58yngrammvz" vectorField="vec_summary" attempts=6 maxAttempts=6 terminal=true message="local failed: fetch failed" agent="hermes"
+11:50:12.938 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+11:50:23.434 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+11:50:23.434 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+11:50:23.434 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+11:50:23.434 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+11:50:23.438 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_4xy8z6qa" targetKind="trace" targetId="tr_t237g6eayvpb" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786708283437 agent="hermes"
+11:50:23.438 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_4xy8z6qa" targetKind="trace" targetId="tr_t237g6eayvpb" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786708283437 agent="hermes"
+11:54:13.055 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+11:54:23.550 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+11:54:23.550 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+11:54:23.551 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+11:54:23.551 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+11:54:23.553 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_4xy8z6qa" targetKind="trace" targetId="tr_t237g6eayvpb" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786708703553 agent="hermes"
+11:54:23.553 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_4xy8z6qa" targetKind="trace" targetId="tr_t237g6eayvpb" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786708703553 agent="hermes"
+14:18:13.962 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+14:18:13.962 WARN  [core.pipeline.bootstrap] config.warning message="config file not found at /home/martini/.hermes/memos-plug…" agent="hermes"
+14:18:13.974 INFO  [storage] sqlite.open filepath="/home/martini/.hermes/memos-plugin/data/memos.db" agent="hermes" readonly=false wal=true busyTimeoutMs=5000
+14:18:13.981 INFO  [storage.migration] migrations.summary total=12 applied=0 skipped=12
+14:18:13.992 INFO  [embedding] init provider="local" model="Xenova/all-MiniLM-L6-v2" dimensions=384 cacheEnabled=true batchSize=32
+14:18:13.993 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+14:18:13.993 WARN  [core.pipeline.bootstrap] llm.unavailable err="Unknown llm provider: " agent="hermes"
+14:18:13.997 INFO  [core.pipeline.bootstrap] pipeline.lightweight_mode.enabled skipped=[5] agent="hermes"
+14:18:14.035 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
+14:18:14.058 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
+bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
+14:21:14.092 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+14:21:24.876 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+14:21:24.876 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+14:21:24.877 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+14:21:24.877 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+14:21:24.879 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_ae0j8evs" targetKind="trace" targetId="tr_vtjmsd2zy8bm" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786717404878 agent="hermes"
+14:21:24.879 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_ae0j8evs" targetKind="trace" targetId="tr_vtjmsd2zy8bm" vectorField="vec_summary" attempts=2 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786717404878 agent="hermes"
+14:28:14.268 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+14:28:24.763 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+14:28:24.763 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+14:28:24.764 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+14:28:24.764 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+14:28:24.764 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_ae0j8evs" targetKind="trace" targetId="tr_vtjmsd2zy8bm" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786718184764 agent="hermes"
+14:28:24.764 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_ae0j8evs" targetKind="trace" targetId="tr_vtjmsd2zy8bm" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786718184764 agent="hermes"
+10:30:14.746 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+10:30:25.258 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:30:25.258 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+10:30:25.258 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:30:25.258 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+10:30:25.260 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_5g06vgzr" targetKind="trace" targetId="tr_hq5r62qpy90t" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786876285260 agent="hermes"
+10:30:25.260 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_5g06vgzr" targetKind="trace" targetId="tr_hq5r62qpy90t" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786876285260 agent="hermes"
+14:07:20.829 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+14:07:31.323 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+14:07:31.323 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+14:07:31.323 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+14:07:31.323 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+14:07:31.326 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_2pcj0sta" targetKind="trace" targetId="tr_a8n9fqcneynd" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786889311326 agent="hermes"
+14:07:31.326 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_2pcj0sta" targetKind="trace" targetId="tr_a8n9fqcneynd" vectorField="vec_summary" attempts=1 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786889311326 agent="hermes"
+14:15:21.048 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+14:15:31.542 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+14:15:31.542 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+14:15:31.542 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+14:15:31.542 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+14:15:31.544 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_2pcj0sta" targetKind="trace" targetId="tr_a8n9fqcneynd" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786890211544 agent="hermes"
+14:15:31.544 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_2pcj0sta" targetKind="trace" targetId="tr_a8n9fqcneynd" vectorField="vec_summary" attempts=4 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786890211544 agent="hermes"
+00:36:37.364 INFO  [embedding.local] loading model="Xenova/all-MiniLM-L6-v2"
+00:36:47.863 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+00:36:47.863 ERROR [embedding.local] load_failed model="Xenova/all-MiniLM-L6-v2"
+  Error: {"name":"TypeError","message":"fetch failed"}
+00:36:47.863 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+00:36:47.863 WARN  [embedding] provider.failed provider="local" model="Xenova/all-MiniLM-L6-v2" role="document" count=1 err={name,message}
+00:36:47.865 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_vcemc4v3" targetKind="trace" targetId="tr_3jy5w43098de" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786927247865 agent="hermes"
+00:36:47.865 WARN  [core.embedding.retry] embedding_retry.failed kind="embedding.retry_failed" jobId="er_sp_vcemc4v3" targetKind="trace" targetId="tr_3jy5w43098de" vectorField="vec_summary" attempts=3 maxAttempts=6 terminal=false message="local failed: fetch failed" nextAttemptAt=1786927247865 agent="hermes"
+13:01:09.542 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'llm.extra_body' (kept as-is for forwa…" agent="hermes"
+13:01:09.542 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'llm.extra_body' (kept as-is for forwa…" agent="hermes"
+13:01:09.547 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'skillEvolver.extra_body' (kept as-is …" agent="hermes"
+13:01:09.547 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'skillEvolver.extra_body' (kept as-is …" agent="hermes"
+13:01:09.564 INFO  [storage] sqlite.open filepath="/home/martini/.hermes/memos-plugin/data/memos.db" agent="hermes" readonly=false wal=true busyTimeoutMs=5000
+13:01:09.584 INFO  [storage.migration] migrations.summary total=12 applied=0 skipped=12
+13:01:09.598 INFO  [embedding] init provider="openai_compatible" model="Qwen/Qwen3-Embedding-8B" dimensions="auto" cacheEnabled=true batchSize=32 maxInputTokens=0
+13:01:09.599 INFO  [llm] init provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" temperature=0 timeoutMs=30000 maxRetries=3 fallbackToHost=true circuitBreaker={enabled,cooldownMs}
+13:01:09.599 INFO  [llm] init provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" temperature=0 timeoutMs=60000 maxRetries=3 fallbackToHost=true circuitBreaker={enabled,cooldownMs}
+13:01:09.600 INFO  [core.pipeline.bootstrap] reflectLlm.ready provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" source="skillEvolver" agent="hermes"
+13:01:09.690 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
+13:01:09.717 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
+bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)

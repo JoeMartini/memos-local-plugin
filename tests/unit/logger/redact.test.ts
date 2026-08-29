@@ -30,7 +30,7 @@ describe("logger/redact", () => {
   it("masks Bearer tokens, JWTs, OpenAI-style keys, emails", () => {
     const out = r().redact({
       ts: 1, level: "info", kind: "app", channel: "x",
-      msg: "look ma a key sk-REDACTED and a Bearer abcdefghijklmnopqrstuvwx and jane@example.com",
+      msg: "look ma a key sk-1234567890abcdefghij and a Bearer abcdefghijklmnopqrstuvwx and jane@example.com",
     });
     expect(out.msg).not.toContain("sk-1234");
     expect(out.msg).not.toContain("Bearer abcdefghij");

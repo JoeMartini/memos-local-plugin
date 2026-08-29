@@ -1,0 +1,50 @@
+version: 1
+algorithm:
+  lightweightMemory:
+    enabled: false
+embedding:
+  provider: openai_compatible
+  endpoint: https://api.siliconflow.cn/v1
+  model: Qwen/Qwen3-Embedding-8B
+  apiKey: sk-bremvmswxewsxrdfarrqlptgwymypmixppbhqkfyandnamao
+  cache:
+    enabled: true
+    maxItems: 20000
+llm:
+  provider: openai_compatible
+  endpoint: https://api.siliconflow.cn/v1
+  model: deepseek-ai/DeepSeek-V4-Flash
+  apiKey: sk-bremvmswxewsxrdfarrqlptgwymypmixppbhqkfyandnamao
+  temperature: 0
+  fallbackToHost: true
+  timeoutMs: 30000
+  maxRetries: 3
+  extra_body:
+    enable_thinking: false
+skillEvolver:
+  provider: openai_compatible
+  endpoint: https://api.siliconflow.cn/v1
+  model: deepseek-ai/DeepSeek-V4-Flash
+  apiKey: sk-bremvmswxewsxrdfarrqlptgwymypmixppbhqkfyandnamao
+  temperature: 0
+  timeoutMs: 60000
+  extra_body:
+    enable_thinking: false
+hub:
+  enabled: false
+  role: client
+  port: 18912
+  address: ''
+  teamName: ''
+  teamToken: ''
+  userToken: ''
+  nickname: ''
+telemetry:
+  enabled: false
+logging:
+  level: info
+  detailedView: false
+viewer:
+  port: 18800
+  bindHost: 127.0.0.1
+  openOnFirstTurn: false
