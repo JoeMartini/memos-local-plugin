@@ -26,12 +26,3 @@ AGENTS_*.md
 # git. Counters the repo-root `.gitignore`'s `!apps/**/*.json`
 # allow-rule.
 telemetry.credentials.json
-
-
-# Runtime data — never commit
-data/
-logs/
-memos-local/
-daemon/
-bridge-status.json
-config.yaml
