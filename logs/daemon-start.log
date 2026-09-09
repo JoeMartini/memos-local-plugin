@@ -518,3 +518,45 @@ bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
 13:01:09.690 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
 13:01:09.717 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
 bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
+06:35:47.306 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'llm.extra_body' (kept as-is for forwa…" agent="hermes"
+06:35:47.306 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'llm.extra_body' (kept as-is for forwa…" agent="hermes"
+06:35:47.311 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'skillEvolver.extra_body' (kept as-is …" agent="hermes"
+06:35:47.311 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'skillEvolver.extra_body' (kept as-is …" agent="hermes"
+06:35:47.353 INFO  [storage] sqlite.open filepath="/home/martini/.hermes/memos-plugin/data/memos.db" agent="hermes" readonly=false wal=true busyTimeoutMs=5000
+06:35:47.566 INFO  [storage.migration] migration.applied version=18 name="traces-ts-index" durationMs=168 file="018-traces-ts-index.sql"
+06:35:47.567 INFO  [storage.migration] migrations.summary total=13 applied=1 skipped=12
+06:35:47.584 INFO  [embedding] init provider="openai_compatible" model="Qwen/Qwen3-Embedding-8B" dimensions="auto" cacheEnabled=true batchSize=32 maxInputTokens=0
+06:35:47.585 INFO  [llm] init provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" temperature=0 timeoutMs=30000 maxRetries=3 fallbackToHost=true circuitBreaker={enabled,cooldownMs}
+06:35:47.585 INFO  [llm] init provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" temperature=0 timeoutMs=60000 maxRetries=3 fallbackToHost=true circuitBreaker={enabled,cooldownMs}
+06:35:47.586 INFO  [core.pipeline.bootstrap] reflectLlm.ready provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" source="skillEvolver" agent="hermes"
+06:35:47.874 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
+06:35:47.902 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
+bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
+12:27:28.822 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'llm.extra_body' (kept as-is for forwa…" agent="hermes"
+12:27:28.822 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'llm.extra_body' (kept as-is for forwa…" agent="hermes"
+12:27:28.826 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'skillEvolver.extra_body' (kept as-is …" agent="hermes"
+12:27:28.826 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'skillEvolver.extra_body' (kept as-is …" agent="hermes"
+12:27:28.831 INFO  [storage] sqlite.open filepath="/home/martini/.hermes/memos-plugin/data/memos.db" agent="hermes" readonly=false wal=true busyTimeoutMs=5000
+12:27:28.839 INFO  [storage.migration] migrations.summary total=13 applied=0 skipped=13
+12:27:28.848 INFO  [embedding] init provider="openai_compatible" model="Qwen/Qwen3-Embedding-8B" dimensions="auto" cacheEnabled=true batchSize=32 maxInputTokens=0
+12:27:28.848 INFO  [llm] init provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" temperature=0 timeoutMs=30000 maxRetries=3 fallbackToHost=true circuitBreaker={enabled,cooldownMs}
+12:27:28.849 INFO  [llm] init provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" temperature=0 timeoutMs=60000 maxRetries=3 fallbackToHost=true circuitBreaker={enabled,cooldownMs}
+12:27:28.849 INFO  [core.pipeline.bootstrap] reflectLlm.ready provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" source="skillEvolver" agent="hermes"
+12:27:28.880 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
+12:27:28.903 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
+bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
+15:21:12.155 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'llm.extra_body' (kept as-is for forwa…" agent="hermes"
+15:21:12.155 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'llm.extra_body' (kept as-is for forwa…" agent="hermes"
+15:21:12.159 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'skillEvolver.extra_body' (kept as-is …" agent="hermes"
+15:21:12.159 WARN  [core.pipeline.bootstrap] config.warning message="unknown config key 'skillEvolver.extra_body' (kept as-is …" agent="hermes"
+15:21:12.165 INFO  [storage] sqlite.open filepath="/home/martini/.hermes/memos-plugin/data/memos.db" agent="hermes" readonly=false wal=true busyTimeoutMs=5000
+15:21:12.179 INFO  [storage.migration] migrations.summary total=13 applied=0 skipped=13
+15:21:12.188 INFO  [embedding] init provider="openai_compatible" model="Qwen/Qwen3-Embedding-8B" dimensions="auto" cacheEnabled=true batchSize=32 maxInputTokens=0
+15:21:12.189 INFO  [llm] init provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" temperature=0 timeoutMs=30000 maxRetries=3 fallbackToHost=true circuitBreaker={enabled,cooldownMs}
+15:21:12.189 INFO  [llm] init provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" temperature=0 timeoutMs=60000 maxRetries=3 fallbackToHost=true circuitBreaker={enabled,cooldownMs}
+15:21:12.189 INFO  [core.pipeline.bootstrap] reflectLlm.ready provider="openai_compatible" model="deepseek-ai/DeepSeek-V4-Flash" source="skillEvolver" agent="hermes"
+15:21:12.224 INFO  [core.pipeline.bootstrap] pipeline.ready agent="hermes" home="/home/martini/.hermes/memos-plugin" algorithm={captureEmbed,rewardDecayDays,l2MinSim,…} agent="hermes"
+15:21:12.247 INFO  [server.http] server.started url="http://127.0.0.1:18800" port=18800
+bridge: daemon viewer live at http://127.0.0.1:18800 (agent=hermes)
+00:45:54.523 INFO  [embedding] dimensions.inferred provider="openai_compatible" model="Qwen/Qwen3-Embedding-8B" dimensions=4096
+00:45:54.529 INFO  [core.embedding.retry] embedding_retry.succeeded jobId="er_sp_000jpp5x" targetKind="skill" targetId="sk_w8tgx1nykyj9" vectorField="vec" attempts=1 agent="hermes"
