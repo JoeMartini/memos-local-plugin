@@ -1,344 +1,328 @@
-<div align="center">
-  <h1 align="center">
-    <a href="https://memos.openmem.net/">
-      <img src="https://statics.memtensor.com.cn/logo/memos_color_m.png" alt="MemOS Logo" width="48"/>
-    </a>&nbsp;
-    MemOS 2.0&ensp;Stardust（星尘）
-  </h1>
+# @memtensor/memos-local-plugin
 
-  <p align="center">
-    <a href="https://memos-docs.openmem.net/home/overview/"><img src="https://img.shields.io/badge/Docs-Get--Start-002FA7?labelColor=gray&style=for-the-badge&logo=googledocs&logoColor=white" alt="Docs"></a>
-    <a href="https://arxiv.org/abs/2507.03724"><img src="https://img.shields.io/badge/ArXiv-2507.03724-B31B1B?labelColor=gray&style=for-the-badge&logo=arxiv&logoColor=white" alt="ArXiv"></a>
-    <a href="https://x.com/MemOS_dev"><img src="https://img.shields.io/badge/Follow-MemOS-000000?labelColor=gray&style=for-the-badge&logo=x&logoColor=white" alt="X"></a>
-    <a href="https://discord.gg/Txbx3gebZR"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv10%2Finvites%2FTxbx3gebZR%3Fwith_counts%3Dtrue&query=%24.approximate_presence_count&suffix=%20online&label=Discord&color=404EED&labelColor=gray&style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-    <br>
-    <a href="https://github.com/IAAR-Shanghai/Awesome-AI-Memory"><img src="https://img.shields.io/badge/Resources-Awesome--AI--Memory-8A2BE2?labelColor=gray&style=for-the-badge&logo=awesomelists&logoColor=white" alt="Resources"></a>
-  </p>
+> Reflect2Evolve memory plugin for AI agents.
+> One algorithm core, with adapters for OpenClaw, Hermes Agent, and DeepSeek
+> Harness.
 
-  <p align="center">
-    <strong>Give your Agent persistent memory and the ability to grow.</strong><br/>
-  </p>
+## What it is
 
-  <p align="center">
-    <strong>English</strong> | <a href="README_ZH.md">中文</a>
-  </p>
-</div>
+A local-first, file-backed memory system that gives an agent four cooperating
+layers of memory and a feedback-driven self-evolution loop:
 
+- **L1 trace** — step-level grounded records (action + observation + reflection + value).
+- **L2 policy** — sub-task strategies induced across many traces.
+- **L3 world model** — compressed environmental cognition derived from L2 + L1.
+- **Skill** — callable, crystallized capabilities the agent can invoke directly.
 
-<div align="center">
-  <img width="1660" alt="MemOS agent ecosystem: OpenClaw, Hermes, and DeepSeek Harness" src="./assets/readme/memos-agent-ecosystem.png" />
-</div>
+The plugin learns continuously from two feedback channels:
 
-> [!TIP]
-> **New: Connect MemOS to DeepSeek Harness (`dsh`)**
->
-> Add automatic recall, background capture, hybrid retrieval, and a local Memory Viewer to DeepSeek Harness—powered by the same MemOS core used across agent ecosystems.
->
-> **[Get started →](#memos-plugin)**
+- **Step-level** — model ↔ environment (tool result, observation deltas).
+- **Task-level** — human ↔ model (explicit ratings + implicit signals).
 
----
+Reflection-weighted reward is back-propagated along each trace, and high-value
+patterns crystallize into reusable Skills. At inference time, a three-tier
+retriever (Skill → trace/episode → world model) injects the right context at
+the right time.
 
-## 👾 MemOS: Memory Operating System for LLM & AI Agents
+## Layout (high-level)
 
-**MemOS** is a Memory Operating System for LLMs and AI agents that unifies **store / retrieve / manage** for long-term memory, enabling **context-aware and personalized** interactions with **KB**, **multi-modal**, **tool memory**, and **enterprise-grade** optimizations built in.
-
-### Key Features
-
-- **Unified Memory API**: A single API to add, retrieve, edit, and delete memory—structured as a graph, inspectable and editable by design, not a black-box embedding store.
-- **Multi-Modal Memory**: Natively supports text, images, tool traces, and personas, retrieved and reasoned together in one memory system.
-- **Multi-Cube Knowledge Base Management**: Manage multiple knowledge bases as composable memory cubes, enabling isolation, controlled sharing, and dynamic composition across users, projects, and agents.
-- **Asynchronous Ingestion via MemScheduler**: Run memory operations asynchronously with millisecond-level latency for production stability under high concurrency.
-- **Memory Feedback & Correction**: Refine memory with natural-language feedback—correcting, supplementing, or replacing existing memories over time.
-
-
-### News
-
-- **2026-08-17** · 🐋 **MemOS Connects with DeepSeek Harness**
-  MemOS now brings persistent memory to **DeepSeek Harness** through both local and cloud plugins. DSH can automatically recall relevant context before a task and retain new experience after a successful turn, without modifying its core.
-
-- **2026-07-02** · 🏆 **MemOS Advances Agent and User Memory Benchmarks**
-  With MemOS, **OpenClaw** improves average task completion from **36.63% to 50.87%** across five agent tasks. MemOS also achieves **88.83 on LoCoMo** and **89.20 on LongMemEval**, and leads in **OmniMemEval**, a unified evaluation of 14 commercial memory products across ten datasets.
-
-- **2026-05-09** · 🧠 **memos-local-plugin 2.0**
-  Official local memory plugin for **Hermes Agent** and **OpenClaw**. One core powers self-evolving memory across L1 traces, L2 policies, L3 world models, and crystallized Skills, with local-first storage and feedback-driven retrieval.
-
-- **2026-04-10** · 👧🏻 **MemOS Hermes Agent Local Plugin**
-  Official Hermes Agent memory plugins launched: Hybrid retrieval (FTS5 + vector), smart dedup, tiered skill evolution, multi-agent collaboration. 100% local, zero cloud dependency.
-
-- **2026-03-08** · 🦞 **MemOS OpenClaw Plugin — Cloud & Local**
-  Official OpenClaw memory plugins launched. **Cloud Plugin**: hosted memory service with 72% lower token usage and multi-agent memory sharing ([MemOS-Cloud-OpenClaw-Plugin](https://github.com/MemTensor/MemOS-Cloud-OpenClaw-Plugin)). **Local Plugin** (`v1.0.0`): 100% on-device memory with persistent SQLite, hybrid search (FTS5 + vector), task summarization & skill evolution, multi-agent collaboration, and a full Memory Viewer dashboard.
-
-## 📊 Performance
-
-MemOS leads across multiple benchmarks — evaluated against mainstream commercial memory products across 5 user memory and 5 agent memory tasks.
-
-
-| Benchmark       | Score |
-| --------------- | ----- |
-| LoCoMo          | 88.83 |
-| LongMemEval     | 89.20 |
-| PersonaMem v2   | 40.58 |
-| HaluMem         | 80.91 |
-| BEAM-10M        | 56.75 |
-| GDPVal          | 62.07 |
-| LiveCodeBench   | 64.96 |
-| OmniMath        | 61.00 |
-| SWE-Bench       | 38.46 |
-| BrowseComp-Plus | 23.85 |
-
-
-Evaluated via OmniMemEval — [https://github.com/MemTensor/OmniMemEval](https://github.com/MemTensor/OmniMemEval).
-
-## 🎯 What MemOS Is For
-
-MemOS gives AI agents long-term memory. Common uses:
-
-- AI assistants with consistent, context-rich conversations
-- Customer support that recalls past tickets and user history
-- Personalized agents that adapt to individual preferences
-- Multi-agent collaboration with shared or isolated memory
-
-## 🚀 Quick Start
-
-MemOS is built around four entry points. Pick the one that matches your scenario.
-
-
-|              | Cloud API               | Self-Host          | MemOS Cloud Plugin       | Local Plugin                                     |
-| ------------ | ----------------------- | ------------------ | ------------------------ | ------------------------------------------------ |
-| Best for     | Your app, fully managed | Teams on own infra | OpenClaw users, zero ops | DeepSeek Harness, Hermes, or OpenClaw; on-device |
-| Setup        | Get an API key          | docker compose up  | openclaw plugins install | npm install + agent-specific setup               |
-| Infra needed | None (hosted)           | Neo4j + Qdrant     | None (uses MemOS Cloud)  | None (local SQLite)                              |
-| Data lives   | MemOS Cloud             | Your servers       | MemOS Cloud              | Your machine                                     |
-
-### ☁️ Use the Cloud API (Hosted)
-
-You want to add memory to your app through a fully managed service — no infrastructure to run.
-
-**1. Get an API key:**
-
-- Sign up on the [MemOS dashboard](https://memos-dashboard.openmem.net/cn/quickstart/?source=landing).
-- Go to **API Keys** and copy your key (starts with `mpg-`). Keep it server-side.
-
-**2. Add and search memories:**
-
-```python
-import requests
-
-API_KEY = "mpg-..."                  # keep this server-side
-base = "https://memos.memtensor.cn/api/openmem/v1"
-headers = {"Authorization": f"Token {API_KEY}", "Content-Type": "application/json"}
-
-# 1. Add a memory
-requests.post(f"{base}/add/message", headers=headers, json={
-    "user_id": "alice",
-    "conversation_id": "conv_001",
-    "messages": [{"role": "user", "content": "I like strawberry"}],
-})
-
-# 2. Search memories
-res = requests.post(f"{base}/search/memory", headers=headers, json={
-    "query": "What do I like?",
-    "user_id": "alice",
-})
-print(res.json())
+```
+apps/memos-local-plugin/
+├── agent-contract/      # Stable types + JSON-RPC protocol shared with adapters
+├── core/                # Agent-agnostic algorithm (memory, reward, retrieval, skill, hub, …)
+├── server/              # HTTP + SSE server (powers the viewer)
+├── bridge.cts + bridge/ # JSON-RPC bridge (used by Hermes Python adapter)
+├── adapters/openclaw/   # In-process TS adapter for OpenClaw
+├── adapters/hermes/     # Python adapter that talks to bridge.cts
+├── adapters/deepseek-harness/ # In-process Cordis bundle for DSH
+├── templates/           # config.yaml templates copied to the user's home on install
+├── viewer/              # Runtime viewer (Vite, served by server/)
+├── docs/                # Developer-facing docs (algorithm, data model, prompts, …)
+├── scripts/             # Build / packaging / release helpers
+└── tests/               # unit / integration / e2e (vitest)
 ```
 
-**Next steps:**
+For the full structural breakdown read [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-- [MemOS Cloud Getting Started](https://memos-docs.openmem.net/memos_cloud/quick_start/) — connect to MemOS Cloud and enable memory in minutes.
-- [MemOS Cloud Platform](https://memos.openmem.net/?from=/quickstart/) — explore the Cloud dashboard, features, and workflows.
+## Where data lives
 
-### 🖥️ Self-Host the MemOS Service
+Runtime code and user state stay separate. `install.sh` creates the OpenClaw
+and Hermes homes; DSH installs the package into a profile with `dsh plugin`
+and initializes its runtime home on first boot:
 
-You want to run MemOS as a REST service on your own machine or cluster.
 
-**Option A — Docker (recommended):**
+| Agent | Code installed to | Runtime data + config in |
+| --- | --- | --- |
+| OpenClaw | `~/.openclaw/plugins/memos-local-plugin/` | `~/.openclaw/memos-plugin/` |
+| Hermes | `~/.hermes/plugins/memos-local-plugin/` | `~/.hermes/memos-plugin/` |
+| DeepSeek Harness | Profile dependency managed by `dsh plugin` | `$DSH_HOME/memos-plugin/` (default `~/.dsh/memos-plugin/`) |
+
+
+Inside the runtime folder:
+
+```
+config.yaml      # MemOS core config (includes API keys; chmod 600 when written)
+data/memos.db    # SQLite (L1/L2/L3/Skill/Episode/Feedback/…)
+skills/          # crystallized skill packages
+logs/            # rotating logs (memos.log, error.log, audit.log, llm.jsonl, perf.jsonl, events.jsonl)
+daemon/          # bridge pid/port files
+```
+
+An adapter creates only the directories it uses. DSH runs `MemoryCore` and the
+existing HTTP/SSE Viewer in the DSH Node.js process, without a JSON-RPC bridge
+or sidecar daemon. The Viewer listens on `http://127.0.0.1:18801` by default;
+set `viewerEnabled: false` in the DSH Cordis row to run without that listener.
+DSH still leaves MemOS file logging to the host, so its normal runtime surface
+is an optional `config.yaml`, `data/`, and `skills/` when skills are produced.
+
+Uninstalling the plugin does not delete `data/`, `skills/`, `logs/`, or
+`config.yaml`. Startup after an upgrade may migrate the SQLite schema, so back
+up the runtime directory before upgrading.
+
+## Quick start
+
+> [!IMPORTANT]
+> **Do not run `npm install -g @memtensor/memos-local-plugin`.**
+> This is an agent plugin package, not a standalone CLI. A global
+> npm install only downloads the published tarball into your `node_modules`
+> tree; it does not wire OpenClaw, Hermes, or DSH. The tarball ships the built
+> runtime plus the source and metadata required by the agent installers; the
+> `viewer/` source, `website/`, tests, and other development-only files remain
+> in this repository.
+> Use `install.sh` / `install.ps1` for OpenClaw or Hermes. For DeepSeek
+> Harness, use the Unix installer's `--agent dsh` target or DSH's
+> lower-level `dsh plugin` command.
+
+For OpenClaw and Hermes, the installer downloads the package from npm, deploys
+it to the right agent directory, installs production dependencies, writes the
+initial `config.yaml`, and restarts the agent runtime when needed.
+
+From this repository:
 
 ```bash
-git clone https://github.com/MemTensor/MemOS.git
-cd MemOS
-cp docker/.env.example .env          # fill in your API keys in .env
-cd docker
-docker compose up                    # starts MemOS API + Neo4j + Qdrant
+cd apps/memos-local-plugin
+bash install.sh --version 2.0.0
 ```
 
-The API is served at `http://localhost:8000`.
-
-**Option B — Run with uvicorn (without Docker):**
+Or run against the latest published package:
 
 ```bash
-git clone https://github.com/MemTensor/MemOS.git
-cd MemOS
-cp docker/.env.example .env          # fill in your API keys in .env
-# Ensure Neo4j and Qdrant are running, then:
-cd src
-uvicorn memos.api.server_api:app --host 0.0.0.0 --port 8000 --workers 1
+bash install.sh
 ```
 
-See [`docker/.env.example-full`](./docker/.env.example-full) for all configuration options (LLM provider, embedder, vector DB, graph DB, scheduler). The full deployment guide is at [https://memos-docs.openmem.net/open_source/getting_started/rest_api_server/](https://memos-docs.openmem.net/open_source/getting_started/rest_api_server/).
-
-**Try the API:**
-
-```python
-import requests, json
-
-headers = {"Content-Type": "application/json"}
-base = "http://localhost:8000/product"
-
-# 1. Create a memory cube
-requests.post(f"{base}/create_cube", headers=headers, data=json.dumps({
-    "cube_name": "Alice's memory",
-    "owner_id": "alice",
-    "cube_id": "alice_cube",
-}))
-
-# 2. Add a memory
-requests.post(f"{base}/add", headers=headers, data=json.dumps({
-    "user_id": "alice",
-    "writable_cube_ids": ["alice_cube"],
-    "messages": [{"role": "user", "content": "I like strawberry"}],
-    "async_mode": "sync",
-}))
-
-# 3. Search memories
-res = requests.post(f"{base}/search", headers=headers, data=json.dumps({
-    "query": "What do I like?",
-    "user_id": "alice",
-    "readable_cube_ids": ["alice_cube"],
-}))
-print(res.json())
-```
-
-<a id="memos-plugin"></a>
-
-### 🧠 MemOS Plugin: Persistent Memory for Your AI Agents ✨
-
-MemOS gives OpenClaw, Hermes, and DeepSeek Harness a shared local memory core; the managed ***MemOS Cloud Plugin*** is available for OpenClaw and DeepSeek Harness 🏃🏻
-
-| 🔌 Plugin                                                                                                     | 💡 Core Features | 🧩 Resources                                                                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 🧠 **[memos-local-plugin 2.0](https://github.com/MemTensor/MemOS/tree/main/apps/memos-local-plugin)**         |                  | 🌐 [Website](https://memos-claw.openmem.net/) · 📖 [Docs](https://memos-docs.openmem.net/cn/openclaw/local_plugin) · 🐙 [GitHub](https://github.com/MemTensor/MemOS/tree/main/apps/memos-local-plugin) · 📦 [NPM](https://www.npmjs.com/package/@memtensor/memos-local-plugin) |
-| ☁️ **[MemOS Cloud Plugin](https://github.com/MemTensor/MemOS/tree/main/apps/MemOS-Cloud-OpenClaw-Plugin)**    |                  | 🖥️ [MemOS Dashboard](https://memos-dashboard.openmem.net/login/) · 📖 [Full Tutorial](https://memos-docs.openmem.net/openclaw/guide#_4-update-plugin)                                                                                                                         |
-
-#### 1. MemOS Cloud Plugin
-
-Use MemOS Cloud for persistent memory in OpenClaw or DeepSeek Harness — no infrastructure to run.
-
-- **Repo:** [MemTensor/MemOS ·](https://github.com/MemTensor/MemOS/tree/main/apps/MemOS-Cloud-OpenClaw-Plugin) `apps/MemOS-Cloud-OpenClaw-Plugin`
-- **NPM:** `[@memtensor/memos-cloud-openclaw-plugin](https://www.npmjs.com/package/@memtensor/memos-cloud-openclaw-plugin)`
-- **Dashboard:** [https://memos-dashboard.openmem.net/](https://memos-dashboard.openmem.net/)
-- **Tutorial:** [https://memos-docs.openmem.net/openclaw/guide](https://memos-docs.openmem.net/openclaw/guide)
-
-Install:
+The installer auto-detects OpenClaw and Hermes. In an interactive terminal it
+asks which agent to install for; in non-interactive environments it installs for
+the detected agent(s). To test a local package before publishing, pass the
+tarball path instead of a registry version:
 
 ```bash
-openclaw plugins install @memtensor/memos-cloud-openclaw-plugin@latest
-openclaw gateway restart
+npm pack
+bash install.sh --version ./memtensor-memos-local-plugin-1.0.0-beta.1.tgz
 ```
 
-The plugin recalls memories from MemOS Cloud before each agent run and saves new messages back after the run ends.
-
-##### DeepSeek Harness
-
-Connect DeepSeek Harness to MemOS Cloud through its native plugin mechanism. Before the first model step of each user request, the plugin recalls relevant cloud memories; after a successful turn, it saves the new user and assistant messages back to MemOS Cloud.
-
-1. [Create a MemOS API Key](https://memos-dashboard.openmem.net/cn/apikeys/).
-2. Install the cloud plugin into the default DSH `web` profile:
-
-   ```bash
-   npx @deepseek-ai/dsh plugin --profile web add @memtensor/memos-cloud-dsh-plugin@latest
-   ```
-
-3. Add the API Key to `~/.dsh/.credentials.yaml`:
-
-   ```yaml
-   MEMOS_API_KEY: mpg-your-key
-   ```
-
-4. Add the minimal plugin configuration to `~/.dsh/settings.yaml`:
-
-   ```yaml
-   memos-cloud:
-     apiKeyEnv: MEMOS_API_KEY
-   ```
-
-5. Restart the DSH Web profile:
-
-   ```bash
-   npx @deepseek-ai/dsh web
-   ```
-
-The cloud plugin is fail-open: a temporary MemOS Cloud outage does not interrupt the current DSH task.
-
-#### 2. Local Plugin (OpenClaw, Hermes, and DeepSeek Harness)
-
-You use DeepSeek Harness, Hermes Agent, or OpenClaw and want 100% on-device memory — nothing leaves your machine.
-
-- **Repo:** [MemTensor/MemOS ·](https://github.com/MemTensor/MemOS/tree/main/apps/memos-local-plugin) `apps/memos-local-plugin`
-- **NPM:** `[@memtensor/memos-local-plugin](https://www.npmjs.com/package/@memtensor/memos-local-plugin)`
-- **Docs:** [https://memos-docs.openmem.net/cn/openclaw/local_plugin](https://memos-docs.openmem.net/cn/openclaw/local_plugin)
-- **DeepSeek Harness:** [integration details](./apps/memos-local-plugin/adapters/deepseek-harness/README.md)
-- **Viewer dashboard:** see `apps/memos-local-plugin/viewer/`
-
-Install for DeepSeek Harness (macOS / Linux):
+For OpenClaw, use the installer for local archives too:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MemTensor/MemOS/main/apps/memos-local-plugin/install.sh | bash -s -- --agent dsh --profile web
+bash install.sh --agent openclaw --version ./memtensor-memos-local-plugin-2.0.16-beta.1.tgz
 ```
 
-Install for OpenClaw or Hermes (macOS / Linux):
+Do not substitute `openclaw plugins install ./package.tgz` for this command:
+that raw-archive path can resolve development-only DeepSeek peer dependencies
+and fail with `ERESOLVE`, including on OpenClaw 2026.9.1 and 2026.9.2.
+The installer stages production dependencies and rebuilds `better-sqlite3`.
+OpenClaw's newer `npm-pack:` path avoids the peer-resolution conflict, but a
+successful managed install alone does not verify native bindings or initialize
+MemOS runtime configuration; the installer above remains the supported setup.
+
+When upgrading OpenClaw itself, migrate retired host configuration with
+`openclaw doctor --fix` before installing MemOS. The MemOS installer removes its
+own legacy `plugins.installs` records, preserves other plugins' old-host records,
+and uses the host CLI for capability consent when available. It does not rewrite
+the host's internal installation database. See
+[the compatibility test results](docs/OPENCLAW-COMPATIBILITY.md) for tested versions
+and limits.
+
+On Windows, run `install.ps1` from PowerShell instead of `install.sh` for
+OpenClaw or Hermes. The DSH one-command target currently supports macOS/Linux;
+Windows users can use DSH's lower-level `dsh plugin` flow.
+
+### DeepSeek Harness
+
+DSH support is an out-of-tree Cordis bundle. The one-command installer keeps
+DSH in control of its profile while handling pnpm's reviewed native dependency
+build policy non-interactively. If `pnpm` is not already on `PATH`, it prepares
+an isolated `pnpm@11.7.0` for that installer run without changing the user's
+global package-manager setup:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MemTensor/MemOS/main/apps/memos-local-plugin/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MemTensor/MemOS/main/apps/memos-local-plugin/install.sh \
+  | bash -s -- --agent dsh --profile web --version 2.0.16
 ```
 
-Install (Windows PowerShell):
+The installer delegates package ownership and bundle reconciliation to
+`dsh plugin`. If pnpm reports the reviewed build-script set, it enables
+`better-sqlite3`, `esbuild`, `onnxruntime-node`, and `sharp`, explicitly
+disables the unnecessary `protobufjs` and MemOS hint scripts, retries the same
+package spec, and verifies the composed `memos-local-memory` row. Any unknown
+build-script package fails closed for manual review; the installer never uses
+`approve-builds --all`.
 
-```powershell
-irm https://raw.githubusercontent.com/MemTensor/MemOS/main/apps/memos-local-plugin/install.ps1 -OutFile "$env:TEMP\memos-install.ps1"; powershell -ExecutionPolicy Bypass -File "$env:TEMP\memos-install.ps1"
+The temporary pnpm is removed when the installer exits. It is not needed for
+normal `dsh --profile ...` runtime use. Users who later run lower-level
+`dsh plugin` commands directly still need pnpm on `PATH`; install the DSH-pinned
+version persistently with `npm install -g pnpm@11.7.0` if desired.
+
+To develop from a local checkout instead, build it and add it to the desired
+DSH profile directly:
+
+```bash
+cd /path/to/MemOS/apps/memos-local-plugin
+npm install
+npm run build:package
+dsh plugin --profile web add .
 ```
 
-Requires Node.js and an already-installed DeepSeek Harness, OpenClaw, or Hermes. The installer deploys MemOS to the selected agent runtime; the DeepSeek Harness target installs it as an out-of-tree DSH bundle, while the OpenClaw and Hermes targets write the initial `config.yaml` in their respective agent homes.
+The adapter reuses the provider/model and credentials already configured in
+DSH for MemOS auxiliary LLM calls by default; no second API key is required.
+For bounded structured helper calls it uses a model-advertised `off` reasoning
+effort when available, without changing the agent conversation's selection.
+An explicit MemOS LLM provider remains available as an override.
 
-Features: hybrid retrieval (FTS5 + vector), smart dedup, tiered skill evolution (L1 traces / L2 policies / L3 world model), multi-agent collaboration, local-first SQLite storage.
+Every accepted, non-empty direct-user DSH turn performs one automatic recall,
+including greetings; there is no greeting or intent-classification exception,
+and re-entry in the same logical turn is de-duplicated. The query is ordered
+before the source-labeled `memos-local-memory` context, although other DSH
+context contributions can appear between them. Restored sessions and forks
+follow the same per-turn rule, while plugin and tool messages do not
+trigger automatic recall. The model can additionally call `memos_search` for a
+shorter or reformulated lookup.
 
-## 🤝 Community
+Automatic recall and explicit `memos_search` share one absolute deadline:
+`min(recallTimeoutMs, 3000)` ms. The default is 3,000 ms, and configuration may
+shorten but cannot extend this DSH foreground bound. DSH retrieval
+filtering does not retry malformed JSON; malformed output, provider failure,
+or a cancellable timeout falls back to the mechanical
+`safeCutoff` over ranked candidates. With no ranked candidates, automatic
+recall injects nothing and the tool returns an empty result. A completely
+non-cancellable provider hits the hard guard at the same effective deadline;
+automatic recall preserves the original query path, while `memos_search`
+returns an empty result marked `timedOut: true`. DSH awaits `agent/pre-step`,
+so a query bubble can still appear only after that turn's bounded recall, but the
+final order remains query then context. Capture, relation, intent, summaries,
+and embeddings remain background work, and the next turn never waits for the
+previous turn's queue. These DSH-specific policies do not change OpenClaw or
+Hermes behavior.
 
-- **GitHub Issues:** [https://github.com/MemTensor/MemOS/issues](https://github.com/MemTensor/MemOS/issues)
-- **GitHub Discussions:** [https://github.com/MemTensor/MemOS/discussions](https://github.com/MemTensor/MemOS/discussions)
-- **Discord:** [https://discord.gg/Txbx3gebZR](https://discord.gg/Txbx3gebZR)
-- **WeChat:** scan the QR code to join the group.
+After the DSH profile starts, open the existing MemOS Viewer at
+`http://127.0.0.1:18801`. The server shares the adapter's in-process
+`MemoryCore`; it is not a second memory runtime or a sidecar process. The
+Cordis fields `viewerEnabled` and `viewerPort` control whether it starts and
+which port it uses; the shared `config.yaml` field `viewer.bindHost` defaults
+the bind interface to `127.0.0.1`. The DSH Viewer is currently supported for
+local-machine use only and accepts only `localhost` or an IPv4 `127.*`
+loopback address. A normal one-`Ctrl+C`/`SIGINT` or `SIGTERM` restart needs no
+MemOS-specific stop command or port wait: active Viewer SSE streams are closed,
+and a transient busy Viewer port retries in the background.
 
-<div align="center">
-  <img src="https://statics.memtensor.com.cn/memos/qr-code.png" alt="QR Code" width="300" />
-</div>
+See the [DeepSeek Harness adapter guide](./adapters/deepseek-harness/README.md)
+for exact Node compatibility, `DSH_HOME`, restart/uninstall steps, and the
+reviewed pnpm approval flow for native/transitive dependency install scripts,
+Viewer lifecycle, and port-conflict behavior.
 
+### Troubleshooting
 
+**`npm install -g @memtensor/memos-local-plugin` says "not found" or "404".**
+You are likely on an old version of this README, or trying to install the
+package as if it were a standalone CLI. The package is published under the
+`@memtensor` scope on the public npm registry, but it is intended to be pulled
+in by an agent-specific installer, not installed globally. Use
+`bash install.sh` for OpenClaw/Hermes or `dsh plugin` for DSH as shown above.
 
-## 📚 Citation
+**I cloned this repo and the `web/` or `site/` directory only contains a
+README.md (no `src/`, no `vite.config.ts`, no `index.html`).**
+Those directory names are stale. The runtime viewer source lives in `viewer/`
+(formerly `web/`), and the unfinished marketing-site scaffolding at `site/`
+has been removed entirely. If you see a `web/` or `site/` directory with only
+a README, you are looking at a published npm tarball (which only ships
+`viewer/dist/`), not a fresh `git clone` of this repository. Clone the repo
+to get the full source tree, or just run `install.sh` to deploy the prebuilt
+viewer.
 
-If you use MemOS in your research, please cite:
+## Configuration
 
-```bibtex
-@article{li2025memos_long,
-  title={MemOS: A Memory OS for AI System},
-  author={Li, Zhiyu and Song, Shichao and Xi, Chenyang and Wang, Hanyu and Tang, Chen and Niu, Simin and Chen, Ding and Yang, Jiawei and Li, Chunyu and Yu, Qingchen and Zhao, Jihao and Wang, Yezhaohui and Liu, Peng and Lin, Zehao and Wang, Pengyuan and Huo, Jiahao and Chen, Tianyi and Chen, Kai and Li, Kehang and Tao, Zhen and Ren, Junpeng and Lai, Huayi and Wu, Hao and Tang, Bo and Wang, Zhenren and Fan, Zhaoxin and Zhang, Ningyu and Zhang, Linfeng and Yan, Junchi and Yang, Mingchuan and Xu, Tong and Xu, Wei and Chen, Huajun and Wang, Haofeng and Yang, Hongkang and Zhang, Wentao and Xu, Zhi-Qin John and Chen, Siheng and Xiong, Feiyu},
-  journal={arXiv preprint arXiv:2507.03724},
-  year={2025},
-  url={https://arxiv.org/abs/2507.03724}
-}
+The shared MemOS core reads `config.yaml` from the runtime directory. DSH host
+controls such as `viewerEnabled` and `viewerPort` live in the profile's Cordis
+row; shared Viewer settings such as `viewer.bindHost` remain in `config.yaml`.
+The runtime/config location is resolved in the following priority order:
 
-@article{li2025memos_short,
-  title={MemOS: An Operating System for Memory-Augmented Generation (MAG) in Large Language Models},
-  author={Li, Zhiyu and Song, Shichao and Wang, Hanyu and Niu, Simin and Chen, Ding and Yang, Jiawei and Xi, Chenyang and Lai, Huayi and Zhao, Jihao and Wang, Yezhaohui and others},
-  journal={arXiv preprint arXiv:2505.22101},
-  year={2025},
-  url={https://arxiv.org/abs/2505.22101}
-}
+1. **`MEMOS_HOME` environment variable** — points to the runtime root directory (e.g., `/opt/data/.hermes/memos-plugin`)
+2. **`MEMOS_CONFIG_FILE` environment variable** — points directly to the config file (e.g., `/opt/data/.hermes/memos-plugin/config.yaml`)
+3. **Adapter-specific explicit home** — the DSH Cordis `home` field or the `--home` bridge flag
+4. **`DSH_HOME`** (DSH only) — defaults the DSH memory root to `$DSH_HOME/memos-plugin/`
+5. **Default path** — `~/.hermes/memos-plugin/`, `~/.openclaw/memos-plugin/`, or `~/.dsh/memos-plugin/` based on the agent
+
+### Docker Deployment
+
+When running the daemon in a Docker container, you must explicitly specify the config location if it differs from the default path. There are three ways to do this:
+
+#### Option 1: Environment Variable (Recommended)
+
+Set `MEMOS_HOME` to point to the runtime directory:
+
+```dockerfile
+ENV MEMOS_HOME=/opt/data/home/.hermes/memos-plugin
+CMD ["node", "bridge.cts", "--agent=hermes", "--daemon"]
 ```
 
+#### Option 2: CLI Flag
 
+Pass `--home` directly to the bridge command:
 
-## ⚖️ License
+```dockerfile
+CMD ["node", "bridge.cts", "--agent=hermes", "--daemon", "--home=/opt/data/home/.hermes/memos-plugin"]
+```
 
-MemOS is licensed under the [Apache 2.0 License](./LICENSE).
+#### Option 3: Config File Path
+
+Set `MEMOS_CONFIG_FILE` to point directly to the config file:
+
+```dockerfile
+ENV MEMOS_CONFIG_FILE=/opt/data/home/.hermes/memos-plugin/config.yaml
+CMD ["node", "bridge.cts", "--agent=hermes", "--daemon"]
+```
+
+### Example Docker Deployment
+
+For the Hermes Agent Docker image:
+
+```dockerfile
+FROM nousresearch/hermes-agent:latest
+
+# Install memos-local-plugin
+RUN bash -c "$(curl -fsSL https://raw.githubusercontent.com/MemTensor/MemOS/main/apps/memos-local-plugin/install.sh)"
+
+# Set the config location
+ENV MEMOS_HOME=/opt/data/.hermes/memos-plugin
+
+# Start daemon in background, then run Hermes
+CMD node /opt/data/.hermes/plugins/memos-local-plugin/bridge.cts --agent=hermes --daemon && hermes chat
+```
+
+### Troubleshooting
+
+If you see warnings like:
+
+```
+config file not found at /opt/data/.hermes/memos-plugin/config.yaml; using defaults
+```
+
+This means the bridge process is looking in the wrong location. Check:
+
+1. Verify your `config.yaml` exists: `ls -la ~/.hermes/memos-plugin/config.yaml`
+2. Set `MEMOS_HOME` or use `--home` to point to the correct directory
+3. Ensure the path matches the location where `install.sh` created the config
+
+When config is missing, the plugin falls back to defaults (local embedding,
+no LLM provider). Lightweight trace memory still works; LLM-dependent
+reflection and evolution are skipped or degraded until a provider is
+configured.
