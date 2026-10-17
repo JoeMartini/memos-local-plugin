@@ -1887,7 +1887,8 @@ class MemTensorProvider(MemoryProvider):
         # main runtime guarantees we hit the same endpoint the user
         # already authenticated for chat.
         try:
-            runtime = resolve_runtime_provider()
+            with self._profile_secret_scope():
+                runtime = resolve_runtime_provider()
         except Exception as err:
             raise RuntimeError(f"could not resolve hermes main runtime: {err}") from err
 
@@ -1932,7 +1933,8 @@ class MemTensorProvider(MemoryProvider):
 
         started = time.time()
         try:
-            response = call_llm(**kwargs)
+            with self._profile_secret_scope():
+                response = call_llm(**kwargs)
         except Exception as err:
             # Surface the original failure verbatim — the LlmClient
             # will tag this as a "host fallback failed" terminal error
@@ -1994,7 +1996,8 @@ class MemTensorProvider(MemoryProvider):
                 resolve_runtime_provider,
             )
 
-            runtime = resolve_runtime_provider()
+            with self._profile_secret_scope():
+                runtime = resolve_runtime_provider()
         except Exception:
             return dict(self._last_host_runtime)
 
@@ -2012,6 +2015,41 @@ class MemTensorProvider(MemoryProvider):
         if out:
             self._last_host_runtime = dict(out)
         return out
+
+    @contextlib.contextmanager
+    def _profile_secret_scope(self):
+        """Install this profile's secret scope around host-side LLM resolution.
+
+        Reverse-RPC host handlers (``host.llm.complete``, runtime snapshots) run
+        on the bridge client's worker thread, which does not inherit the
+        per-turn ContextVar secret scope a multiplexed gateway installs. Without
+        it ``get_secret`` raises ``UnscopedSecretError`` ("could not read this
+        profile's OPENROUTER_BASE_URL") and the host fallback dies instead of
+        rescuing the bridge's own LLM failure.
+        """
+        home = self._hermes_home or os.environ.get("HERMES_HOME") or str(Path.home() / ".hermes")
+        try:
+            from agent.secret_scope import (  # type: ignore[import-not-found]
+                build_profile_secret_scope,
+                reset_secret_scope,
+                set_secret_scope,
+            )
+        except Exception:
+            yield
+            return
+        try:
+            token = set_secret_scope(
+                build_profile_secret_scope(Path(home)), profile_home=str(home)
+            )
+        except Exception:
+            logger.debug("host scope install failed", exc_info=True)
+            yield
+            return
+        try:
+            yield
+        finally:
+            with contextlib.suppress(Exception):
+                reset_secret_scope(token)
 
     def _bridge_request(
         self,
