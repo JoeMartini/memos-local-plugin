@@ -26,3 +26,14 @@ AGENTS_*.md
 # git. Counters the repo-root `.gitignore`'s `!apps/**/*.json`
 # allow-rule.
 telemetry.credentials.json
+
+# 运行时数据与日志（框架/数据分离：绝不入仓，含记忆内容）
+data/
+logs/
+memos-local/
+daemon/
+bridge-status.json
+*.db
+*.db-wal
+*.db-shm
+*.jsonl
