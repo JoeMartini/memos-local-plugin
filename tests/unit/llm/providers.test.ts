@@ -96,6 +96,28 @@ describe("llm/providers", () => {
       expect(body.response_format).toEqual({ type: "json_object" });
     });
 
+    it("merges config.extraBody into the body, core fields winning", async () => {
+      const cap = captureFetch({ choices: [{ message: { content: "{}" } }] });
+      const p = new OpenAiLlmProvider();
+      await p.complete(
+        msgs,
+        call(),
+        ctxFor(
+          cfg({
+            endpoint: "https://x.com/v1",
+            // SiliconFlow DeepSeek defaults to reasoning mode; the extra
+            // body switch disables it. `model` here must NOT win — it is a
+            // core field and belongs to config.model.
+            extraBody: { enable_thinking: false, model: "hijack" },
+          }),
+        ),
+      );
+      const body = JSON.parse(cap.init!.body as string);
+      expect(body.enable_thinking).toBe(false);
+      expect(body.model).toBe("m");
+      expect(body.messages).toEqual(msgs);
+    });
+
     it("requires apiKey", async () => {
       const p = new OpenAiLlmProvider();
       await expect(p.complete(msgs, call(), ctxFor(cfg({ apiKey: "" })))).rejects.toBeInstanceOf(MemosError);

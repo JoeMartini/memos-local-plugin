@@ -380,7 +380,7 @@ export function createLlmClientWithProvider(
           const normalizedHostErr = normalizeError(
             hostErr,
             ERROR_CODES.LLM_UNAVAILABLE,
-            `host fallback failed (primary: ${summarizeErr(err)})`,
+            `host fallback failed (primary: ${summarizeErrMessage(err)})`,
           );
           failures++;
           const failAt = markFail(normalizedHostErr);

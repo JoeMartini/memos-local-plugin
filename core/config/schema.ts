@@ -86,6 +86,7 @@ const ReasoningSchema = Type.Object({
   ])),
   /** Optional token budget for reasoning-capable providers. */
   maxTokens: Type.Optional(Type.Number({ minimum: 1 })),
+  extraBody: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
 }, { default: {} });
 
 const LlmSchema = Type.Object({

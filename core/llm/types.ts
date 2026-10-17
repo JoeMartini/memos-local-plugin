@@ -43,6 +43,13 @@ export interface LlmConfig {
   reasoning?: ReasoningConfig;
   /** Optional per-call default. Default: 1024. */
   maxTokens?: number;
+  /**
+   * Extra keys merged verbatim into every provider request body (e.g.
+   * `{ enable_thinking: false }` for OpenAI-compatible gateways such as
+   * SiliconFlow whose DeepSeek models default to reasoning mode).
+   * Core fields (model / messages / temperature / max_tokens) always win.
+   */
+  extraBody?: Record<string, unknown>;
   /** Extra HTTP headers for outgoing requests. */
   headers?: Record<string, string>;
   /**

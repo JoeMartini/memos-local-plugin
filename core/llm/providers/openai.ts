@@ -67,7 +67,12 @@ export class OpenAiLlmProvider implements LlmProvider {
     }
     const model = config.model && config.model.length > 0 ? config.model : "gpt-4o-mini";
 
+    // `extraBody` first, core fields after: callers may add gateway
+    // switches (enable_thinking: false on SiliconFlow DeepSeek, …) but
+    // must never be able to clobber model / messages / temperature /
+    // max_tokens by accident.
     const body: Record<string, unknown> = {
+      ...(config.extraBody ?? {}),
       model,
       messages,
       temperature: opts.temperature,
