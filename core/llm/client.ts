@@ -191,6 +191,27 @@ export function createLlmClientWithProvider(
   }
 
   /**
+   * Host fallback needs a real time budget to have any chance: the call
+   * travels out over stdio, runs on the host, and comes back. Several
+   * call sites (e.g. the retrieval LLM filter) deliberately pin their
+   * call to a couple of seconds to protect turn latency; retrying those
+   * through the host only burns another doomed round-trip and paints
+   * `system_error` rows red. Only fall back when the call actually has
+   * room to finish.
+   */
+  const HOST_FALLBACK_MIN_BUDGET_MS = 15_000;
+
+  function hasFallbackBudget(opts: LlmCallOptions | undefined): boolean {
+    // Only an *explicitly* latency-capped call site (opts.timeoutMs set
+    // below the floor — e.g. the retrieval filter's 2 s cap) is refused:
+    // its budget cannot cover a stdio round-trip plus a host LLM call, so
+    // the retry is guaranteed to fail and only adds a red `system_error`
+    // row. Calls that simply inherit `config.timeoutMs` keep the fallback.
+    if (opts?.timeoutMs === undefined) return true;
+    return opts.timeoutMs >= HOST_FALLBACK_MIN_BUDGET_MS;
+  }
+
+  /**
    * Mark a successful primary-provider call. We **do not** clear
    * `lastError` / `lastFallbackAt` here — the viewer picks the most
    * recent event by timestamp to colour the overview card, so an
@@ -311,7 +332,7 @@ export function createLlmClientWithProvider(
     // Overview can surface that suppression is happening.
     if (breakerIsOpen()) {
       maybeEmitCircuitOpenStatus(opts, op);
-      if (canUseHostFallback()) {
+      if (canUseHostFallback() && hasFallbackBudget(opts)) {
         return callHostFallback(makeBreakerOpenError(), messages, input, opts, op, {
           keepBreakerOpen: true,
           notifyError: false,
@@ -347,7 +368,7 @@ export function createLlmClientWithProvider(
       });
       return { completion };
     } catch (err) {
-      if (shouldFallback(err, config, provider.name)) {
+      if (shouldFallback(err, config, provider.name) && hasFallbackBudget(opts)) {
         const primaryTerminal = breakerIsTerminal(err);
         if (primaryTerminal) breakerTrip(err);
         try {
@@ -356,7 +377,11 @@ export function createLlmClientWithProvider(
             notifyError: true,
           });
         } catch (hostErr) {
-          const normalizedHostErr = normalizeError(hostErr, ERROR_CODES.LLM_UNAVAILABLE, "host fallback failed");
+          const normalizedHostErr = normalizeError(
+            hostErr,
+            ERROR_CODES.LLM_UNAVAILABLE,
+            `host fallback failed (primary: ${summarizeErr(err)})`,
+          );
           failures++;
           const failAt = markFail(normalizedHostErr);
           facadeLog.error("host.fallback_failed", {

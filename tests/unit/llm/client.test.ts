@@ -244,6 +244,32 @@ describe("llm/client", () => {
     expect(client.stats().hostFallbacks).toBe(1);
   });
 
+  it("skips host fallback when the call is explicitly capped below the fallback floor", async () => {
+    // The retrieval LLM filter pins its call to ~2 s to protect turn
+    // latency. Retrying that through the host is a guaranteed round-trip
+    // failure, so no host call must be attempted.
+    const thrower = new ThrowingProvider(
+      new MemosError(ERROR_CODES.LLM_TIMEOUT, "deadline-capped"),
+    );
+    let hostCalls = 0;
+    registerHostLlmBridge({
+      id: "test.host.v1",
+      async complete() {
+        hostCalls += 1;
+        return { text: "host", model: "host-m", durationMs: 1 };
+      },
+    });
+    const client = createLlmClientWithProvider(
+      cfg({ fallbackToHost: true, timeoutMs: 30_000 }),
+      thrower,
+    );
+    await expect(
+      client.complete("ping", { timeoutMs: 2_000 }),
+    ).rejects.toBeInstanceOf(MemosError);
+    expect(hostCalls).toBe(0);
+    expect(client.stats().hostFallbacks).toBe(0);
+  });
+
   it("does NOT fall back when primary throws a non-transient error", async () => {
     const thrower = new ThrowingProvider(
       new MemosError(ERROR_CODES.INVALID_ARGUMENT, "bad payload"),
