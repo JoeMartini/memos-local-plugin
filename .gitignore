@@ -37,3 +37,7 @@ bridge-status.json
 *.db-wal
 *.db-shm
 *.jsonl
+__pycache__/
+*.pyc
+*.bak.*
+*.bak-*
