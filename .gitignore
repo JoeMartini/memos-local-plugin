@@ -41,3 +41,6 @@ __pycache__/
 *.pyc
 *.bak.*
 *.bak-*
+
+# 运行时配置（含凭据引用 ${VAR}）：不入库——模板见 config.example.yaml
+config.yaml
